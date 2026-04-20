@@ -1,6 +1,45 @@
+/* Brand typeface — loaded once, used app-wide. Display=swap avoids FOIT. */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap");
+
 /* Import POS Table component styles */
 @import url("./posapp/components/pos/invoice/items-table-styles.css");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Space Grotesk everywhere inside the POS app. Scoped to the POS route and
+   the .posapp container so we don't restyle the surrounding Frappe desk.
+   Overriding --v-font-family makes Vuetify components pick it up too. */
+:root {
+	--posa-font-family:
+		"Space Grotesk",
+		ui-sans-serif,
+		system-ui,
+		-apple-system,
+		"Segoe UI",
+		Roboto,
+		"Helvetica Neue",
+		Arial,
+		sans-serif;
+}
+
+body[data-page-route="posapp"],
+body[data-page-route="posapp"] .v-application,
+.posapp,
+.posapp .v-application {
+	--v-font-family: var(--posa-font-family);
+	font-family: var(--posa-font-family) !important;
+}
+
+/* Vuetify renders overlays (menus, dialogs, tooltips) into a teleport
+   container outside .posapp, so target it explicitly. */
+body[data-page-route="posapp"] .v-overlay-container,
+body[data-page-route="posapp"] .v-overlay-container .v-overlay__content,
+body[data-page-route="posapp"] .v-overlay-container .v-card,
+body[data-page-route="posapp"] .v-overlay-container .v-list,
+body[data-page-route="posapp"] .v-overlay-container .v-menu,
+body[data-page-route="posapp"] .v-overlay-container .v-tooltip {
+	--v-font-family: var(--posa-font-family);
+	font-family: var(--posa-font-family) !important;
+}

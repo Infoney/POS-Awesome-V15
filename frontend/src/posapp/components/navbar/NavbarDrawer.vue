@@ -202,7 +202,7 @@ function closeDrawer() {
 	font-weight: 500;
 	font-size: 1rem;
 	color: #0097a7;
-	font-family: "Roboto", sans-serif;
+	font-family: inherit;
 }
 
 /* Styling for icons within the navigation drawer list items */
@@ -217,7 +217,7 @@ function closeDrawer() {
 	font-weight: 500;
 	font-size: 0.95rem;
 	color: var(--pos-text-primary) !important;
-	font-family: "Roboto", sans-serif;
+	font-family: inherit;
 }
 
 /* Hover effect for all list items in the navigation drawer */
@@ -302,7 +302,7 @@ function closeDrawer() {
 	color: var(--pos-text-primary) !important;
 	font-weight: 500;
 	font-size: 0.95rem;
-	font-family: "Roboto", sans-serif;
+	font-family: inherit;
 }
 
 :deep([data-theme="dark"]) .drawer-company,
@@ -310,7 +310,7 @@ function closeDrawer() {
 	color: var(--text-primary, #ffffff) !important;
 	font-weight: 500;
 	font-size: 1rem;
-	font-family: "Roboto", sans-serif;
+	font-family: inherit;
 }
 
 :deep([data-theme="dark"]) .drawer-icon,
