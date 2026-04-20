@@ -21,8 +21,8 @@
 			/>
 
 			<v-img
-				:src="posLogo"
-				alt="POS Awesome"
+				:src="brandLogo"
+				:alt="brandLogoAlt"
 				:max-width="isMobile ? 24 : 32"
 				:class="['pos-navbar-logo', isRtl ? 'rtl-logo' : 'ltr-logo']"
 				loading="lazy"
@@ -40,7 +40,10 @@
 				:aria-label="__('Go to Frappe Desk')"
 				role="button"
 			>
-				<template v-if="isMobile">
+				<template v-if="customBrandName">
+					<span class="pos-navbar-title-bold pos-navbar-title-custom">{{ customBrandName }}</span>
+				</template>
+				<template v-else-if="isMobile">
 					<span class="pos-navbar-title-compact">{{ __("POS") }}</span>
 				</template>
 				<template v-else>
@@ -345,6 +348,25 @@ export default {
 		isDesktop() {
 			return this.windowWidth >= 1024;
 		},
+
+		// Per-POS-Profile brand overrides. When a profile sets a custom brand name
+		// or logo, those win over the bundled "POS Awesome" defaults.
+		customBrandName() {
+			const raw = this.posProfile?.posa_brand_name;
+			return typeof raw === "string" ? raw.trim() : "";
+		},
+
+		brandLogo() {
+			const raw = this.posProfile?.posa_brand_logo;
+			if (typeof raw === "string" && raw.trim()) {
+				return raw.trim();
+			}
+			return this.posLogo;
+		},
+
+		brandLogoAlt() {
+			return this.customBrandName || "POS Awesome";
+		},
 	},
 
 	methods: {
@@ -630,6 +652,16 @@ export default {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+}
+
+.pos-navbar-title-custom {
+	max-width: 240px;
+}
+
+@media (max-width: 600px) {
+	.pos-navbar-title-custom {
+		max-width: 140px;
+	}
 }
 
 /* RTL Title Spacing */
