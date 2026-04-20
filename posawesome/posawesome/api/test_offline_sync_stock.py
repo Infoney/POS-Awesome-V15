@@ -27,13 +27,15 @@ def _install_stubs():
 		}
 	)
 
+	# Test scenarios mutate these via setUp.
+	frappe_module._fake_bin_rows = []
+	frappe_module._fake_sle_rows = []
+
 	def fake_get_all(doctype, **kwargs):
 		if doctype == "Bin":
-			return [
-				{"item_code": "ITEM-001", "modified": "2026-04-09T10:02:00"},
-				{"item_code": "ITEM-002", "modified": "2026-04-09T10:03:00"},
-				{"item_code": "ITEM-003", "modified": "2026-04-09T10:04:00"},
-			]
+			return list(frappe_module._fake_bin_rows)
+		if doctype == "Stock Ledger Entry":
+			return list(frappe_module._fake_sle_rows)
 		return []
 
 	frappe_module.get_all = fake_get_all
@@ -76,11 +78,23 @@ def _load_module():
 	return module
 
 
+_BIN_ROWS = [
+	{"item_code": "ITEM-001", "modified": "2026-04-09T10:02:00"},
+	{"item_code": "ITEM-002", "modified": "2026-04-09T10:03:00"},
+	{"item_code": "ITEM-003", "modified": "2026-04-09T10:04:00"},
+]
+
+
 class TestOfflineSyncStock(unittest.TestCase):
 	@classmethod
 	def setUpClass(cls):
 		_install_stubs()
 		cls.module = _load_module()
+
+	def setUp(self):
+		import frappe as _frappe
+		_frappe._fake_bin_rows = list(_BIN_ROWS)
+		_frappe._fake_sle_rows = []
 
 	def test_sync_stock_returns_scoped_actual_qty_changes(self):
 		response = self.module.sync_stock(
@@ -111,6 +125,65 @@ class TestOfflineSyncStock(unittest.TestCase):
 		)
 		self.assertTrue(response["has_more"])
 		self.assertEqual(response["next_watermark"], "2026-04-09T10:03:00")
+
+	def test_sync_stock_picks_up_sle_changes_when_bin_lags(self):
+		"""Repost-lag scenario: SLE recorded a change but Bin hasn't been refreshed yet.
+
+		The sync must still surface the affected items so clients are not stuck on
+		stale qty until an unrelated Bin write happens.
+		"""
+		import frappe as _frappe
+		_frappe._fake_bin_rows = []
+		_frappe._fake_sle_rows = [
+			{"item_code": "ITEM-007", "modified": "2026-04-09T10:10:00"},
+		]
+
+		response = self.module.sync_stock(
+			pos_profile="POS-TEST",
+			watermark="2026-04-09T09:59:00",
+			limit=5,
+		)
+
+		self.assertEqual(
+			[item["key"] for item in response["changes"]],
+			["stock::ITEM-007"],
+		)
+		self.assertEqual(response["next_watermark"], "2026-04-09T10:10:00")
+
+	def test_sync_stock_dedupes_overlap_between_bin_and_sle(self):
+		"""Bin row wins on duplicates so we don't emit two changes for the same item."""
+		import frappe as _frappe
+		_frappe._fake_bin_rows = [
+			{"item_code": "ITEM-009", "modified": "2026-04-09T10:20:00"},
+		]
+		_frappe._fake_sle_rows = [
+			{"item_code": "ITEM-009", "modified": "2026-04-09T10:25:00"},
+			{"item_code": "ITEM-010", "modified": "2026-04-09T10:26:00"},
+		]
+
+		response = self.module.sync_stock(
+			pos_profile="POS-TEST",
+			watermark="2026-04-09T09:59:00",
+			limit=5,
+		)
+
+		self.assertEqual(
+			[item["key"] for item in response["changes"]],
+			["stock::ITEM-009", "stock::ITEM-010"],
+		)
+		# Watermark advances to the newest signal across both sources so the next
+		# poll never re-pulls already-synced rows.
+		self.assertEqual(response["next_watermark"], "2026-04-09T10:26:00")
+
+	def test_sync_stock_full_resync_when_schema_version_mismatches(self):
+		response = self.module.sync_stock(
+			pos_profile="POS-TEST",
+			watermark="2026-04-09T09:59:00",
+			limit=5,
+			schema_version="1999-01-01",
+		)
+
+		self.assertTrue(response.get("full_resync_required"))
 
 
 if __name__ == "__main__":

@@ -230,6 +230,16 @@ def _normalize_warehouses(warehouse: Optional[str]) -> Tuple[str, ...]:
     return (warehouse,)
 
 
+# Cap IN-clauses so we never blow MariaDB's max_allowed_packet on big POS profiles.
+_BATCH_SQL_CHUNK_SIZE = 500
+
+
+def _chunk_codes(codes: Sequence[str], size: int = _BATCH_SQL_CHUNK_SIZE):
+    codes = list(codes)
+    for i in range(0, len(codes), size):
+        yield tuple(codes[i:i + size])
+
+
 def _fetch_batches(warehouse: str, item_codes: Tuple[str, ...]):
     """Collect batch information (including expired entries) for the given warehouse."""
 
@@ -240,77 +250,82 @@ def _fetch_batches(warehouse: str, item_codes: Tuple[str, ...]):
     if not warehouses:
         return []
 
-    batch_docs = frappe.get_all(
-        "Batch",
-        filters={"item": ["in", item_codes], "disabled": 0},
-        fields=[
-            "name as batch_no",
-            "item as item_code",
-            "expiry_date",
-            "manufacturing_date",
-            "posa_batch_price",
-        ],
-        order_by="expiry_date asc, creation asc",
-    )
+    batch_docs: List[Any] = []
+    for chunk in _chunk_codes(item_codes):
+        batch_docs.extend(
+            frappe.get_all(
+                "Batch",
+                filters={"item": ["in", list(chunk)], "disabled": 0},
+                fields=[
+                    "name as batch_no",
+                    "item as item_code",
+                    "expiry_date",
+                    "manufacturing_date",
+                    "posa_batch_price",
+                ],
+                order_by="expiry_date asc, creation asc",
+            )
+        )
     if not batch_docs:
         return []
 
     qty_map: Dict[Tuple[str, str], float] = {}
 
-    # Primary source of batch quantities: Serial and Batch Entry records linked to SLEs.
-    bundle_rows = frappe.db.sql(
-        """
-        SELECT
-            sbb.item_code,
-            sbe.batch_no,
-            SUM(sbe.qty) AS qty
-        FROM `tabSerial and Batch Entry` sbe
-        INNER JOIN `tabSerial and Batch Bundle` sbb
-            ON sbb.name = sbe.parent
-        INNER JOIN `tabStock Ledger Entry` sle
-            ON sle.serial_and_batch_bundle = sbb.name
-        WHERE
-            sbe.batch_no IS NOT NULL
-            AND sbb.item_code IN %(item_codes)s
-            AND sbb.warehouse IN %(warehouses)s
-            AND sle.is_cancelled = 0
-        GROUP BY sbb.item_code, sbe.batch_no
-        """,
-        {"item_codes": item_codes, "warehouses": warehouses},
-        as_dict=True,
-    )
+    for chunk in _chunk_codes(item_codes):
+        # Primary source of batch quantities: Serial and Batch Entry records linked to SLEs.
+        bundle_rows = frappe.db.sql(
+            """
+            SELECT
+                sbb.item_code,
+                sbe.batch_no,
+                SUM(sbe.qty) AS qty
+            FROM `tabSerial and Batch Entry` sbe
+            INNER JOIN `tabSerial and Batch Bundle` sbb
+                ON sbb.name = sbe.parent
+            INNER JOIN `tabStock Ledger Entry` sle
+                ON sle.serial_and_batch_bundle = sbb.name
+            WHERE
+                sbe.batch_no IS NOT NULL
+                AND sbb.item_code IN %(item_codes)s
+                AND sbb.warehouse IN %(warehouses)s
+                AND sle.is_cancelled = 0
+            GROUP BY sbb.item_code, sbe.batch_no
+            """,
+            {"item_codes": chunk, "warehouses": warehouses},
+            as_dict=True,
+        )
 
-    for row in bundle_rows:
-        if not row.batch_no:
-            continue
-        key = (row.item_code, row.batch_no)
-        qty_map[key] = qty_map.get(key, 0) + flt(row.qty)
+        for row in bundle_rows:
+            if not row.batch_no:
+                continue
+            key = (row.item_code, row.batch_no)
+            qty_map[key] = qty_map.get(key, 0) + flt(row.qty)
 
-    # Backward compatibility for ledgers created before Serial and Batch Bundle existed.
-    legacy_rows = frappe.db.sql(
-        """
-        SELECT
-            item_code,
-            batch_no,
-            SUM(actual_qty) AS qty
-        FROM `tabStock Ledger Entry`
-        WHERE
-            serial_and_batch_bundle IS NULL
-            AND warehouse IN %(warehouses)s
-            AND item_code IN %(item_codes)s
-            AND batch_no IS NOT NULL
-            AND is_cancelled = 0
-        GROUP BY item_code, batch_no
-        """,
-        {"item_codes": item_codes, "warehouses": warehouses},
-        as_dict=True,
-    )
+        # Backward compatibility for ledgers created before Serial and Batch Bundle existed.
+        legacy_rows = frappe.db.sql(
+            """
+            SELECT
+                item_code,
+                batch_no,
+                SUM(actual_qty) AS qty
+            FROM `tabStock Ledger Entry`
+            WHERE
+                serial_and_batch_bundle IS NULL
+                AND warehouse IN %(warehouses)s
+                AND item_code IN %(item_codes)s
+                AND batch_no IS NOT NULL
+                AND is_cancelled = 0
+            GROUP BY item_code, batch_no
+            """,
+            {"item_codes": chunk, "warehouses": warehouses},
+            as_dict=True,
+        )
 
-    for row in legacy_rows:
-        if not row.batch_no:
-            continue
-        key = (row.item_code, row.batch_no)
-        qty_map[key] = qty_map.get(key, 0) + flt(row.qty)
+        for row in legacy_rows:
+            if not row.batch_no:
+                continue
+            key = (row.item_code, row.batch_no)
+            qty_map[key] = qty_map.get(key, 0) + flt(row.qty)
 
     rows = []
     for doc in batch_docs:

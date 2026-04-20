@@ -5,7 +5,7 @@ import frappe
 from posawesome.posawesome.api.item_processing.stock import get_bulk_stock_availability
 from posawesome.posawesome.api.utils import get_active_pos_profile
 
-SYNC_SCHEMA_VERSION = "2026-04-09"
+SYNC_SCHEMA_VERSION = "2026-04-21"
 
 
 def _coerce_limit(value, default=200, maximum=2000):
@@ -93,31 +93,53 @@ def _collect_stock_rows(profile, watermark, start_after, limit):
 	if not warehouses:
 		return []
 
-	filters = {
+	bin_filters = {
 		"warehouse": ["in", warehouses],
 	}
 	if watermark:
-		filters["modified"] = [">", watermark]
+		bin_filters["modified"] = [">", watermark]
 	if start_after:
-		filters["item_code"] = [">", start_after]
+		bin_filters["item_code"] = [">", start_after]
 
-	rows = frappe.get_all(
+	bin_rows = frappe.get_all(
 		"Bin",
-		filters=filters,
+		filters=bin_filters,
 		fields=["item_code", "modified"],
 		order_by="item_code asc",
 		limit_page_length=limit,
 	) or []
 
-	deduped = []
+	# Pull SLE-only deltas as well so background `repost_item_valuation` lag —
+	# during which Bin can lag the underlying ledger — does not leave clients
+	# stuck on stale qty until the next unrelated Bin update.
+	sle_filters = {
+		"warehouse": ["in", warehouses],
+	}
+	if watermark:
+		sle_filters["modified"] = [">", watermark]
+	if start_after:
+		sle_filters["item_code"] = [">", start_after]
+
+	sle_rows = frappe.get_all(
+		"Stock Ledger Entry",
+		filters=sle_filters,
+		fields=["item_code", "modified"],
+		order_by="item_code asc",
+		limit_page_length=limit,
+	) or []
+
+	combined = []
 	seen = set()
-	for row in rows:
+	# Bin first so its (canonical) modified timestamp wins on dedupe.
+	for row in bin_rows + sle_rows:
 		item_code = row.get("item_code")
 		if not item_code or item_code in seen:
 			continue
 		seen.add(item_code)
-		deduped.append(row)
-	return deduped
+		combined.append(row)
+
+	combined.sort(key=lambda r: (r.get("item_code") or ""))
+	return combined[:limit]
 
 
 @frappe.whitelist()
