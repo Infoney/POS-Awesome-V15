@@ -1,7 +1,7 @@
 import frappe
 from frappe.utils import cint, flt, cstr, getdate, nowdate
 from frappe import _
-from erpnext.stock.doctype.batch.batch import get_batch_qty
+from erpnext.stock.doctype.batch.batch import get_batch_qty, get_batch_no
 from posawesome.posawesome.api.items import get_bulk_stock_availability, get_stock_availability
 from posawesome.posawesome.api.item_fetchers import get_batches
 from posawesome.posawesome.api.invoice_processing.utils import _sanitize_item_name
@@ -197,6 +197,47 @@ def _validate_stock_on_invoice(invoice_doc):
     errors = _collect_stock_errors(items_to_check)
     if errors and _should_block(invoice_doc.pos_profile):
         frappe.throw(frappe.as_json({"errors": errors}), frappe.ValidationError)
+
+
+def _auto_set_item_batches(invoice_doc):
+    """Auto-allocate ``batch_no`` for outgoing invoice rows that lack one.
+
+    Mirrors :func:`set_batch_nos_for_bundels` but operates on
+    ``invoice_doc.items`` so the regular line items are also covered. This
+    closes a gap where draft invoices saved before a batch was selected
+    (or invoices loaded from a draft whose ``batch_no_data`` cache was
+    stale) would reach ERPNext's stock ledger missing the batch and trip
+    the "Serial No / Batch No are mandatory" validator at submit.
+
+    Returns are intentionally skipped — :func:`_auto_set_return_batches`
+    handles those with the proper expiry / free-batch semantics.
+    """
+
+    if invoice_doc.is_return:
+        return
+
+    for d in invoice_doc.items:
+        item_code = d.get("item_code")
+        warehouse = d.get("warehouse")
+        if not item_code or not warehouse:
+            continue
+        if d.get("batch_no"):
+            continue
+        if not cint(frappe.db.get_value("Item", item_code, "has_batch_no") or 0):
+            continue
+
+        qty = flt(d.get("stock_qty") or d.get("transfer_qty") or d.get("qty") or 0)
+        if qty <= 0:
+            continue
+
+        try:
+            picked = get_batch_no(item_code, warehouse, qty, throw=False, serial_no=d.get("serial_no"))
+        except Exception:
+            picked = None
+
+        if picked:
+            d.use_serial_batch_fields = 1
+            d.batch_no = picked
 
 
 def _auto_set_return_batches(invoice_doc):

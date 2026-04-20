@@ -18,13 +18,22 @@ class AttrDict(dict):
     __getattr__ = dict.get
 
 
-def _install_stubs(*, batch_rows, bin_qty=0.0, allow_negative_global=0):
+def _install_stubs(
+    *,
+    batch_rows,
+    bin_qty=0.0,
+    allow_negative_global=0,
+    item_has_batch_no=1,
+    auto_pick_batch=None,
+):
     frappe_module = types.ModuleType("frappe")
     frappe_module._ = lambda text: text
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
     frappe_module.get_cached_value = lambda doctype, name, field: 0
     frappe_module.db = types.SimpleNamespace(
-        get_value=lambda *args, **kwargs: 0,
+        get_value=lambda doctype, name, field=None: (
+            item_has_batch_no if field == "has_batch_no" else 0
+        ),
         get_single_value=lambda doctype, field: allow_negative_global,
     )
     sys.modules["frappe"] = frappe_module
@@ -48,6 +57,9 @@ def _install_stubs(*, batch_rows, bin_qty=0.0, allow_negative_global=0):
     }
     erpnext_modules["erpnext.stock.doctype.batch.batch"].get_batch_qty = (
         lambda batch_no, warehouse: 0
+    )
+    erpnext_modules["erpnext.stock.doctype.batch.batch"].get_batch_no = (
+        lambda item_code, warehouse, qty, throw=False, serial_no=None: auto_pick_batch
     )
     sys.modules.update(erpnext_modules)
 
@@ -207,6 +219,142 @@ class TestBatchedItemStockValidation(unittest.TestCase):
         )
 
         self.assertEqual(errors, [])
+
+
+class TestAutoSetItemBatches(unittest.TestCase):
+    """The draft-load → submit fix: auto-allocate batch_no on the server.
+
+    Drafts saved before a batch could be selected (or where the cart's batch
+    cache went stale on reload) used to reach ERPNext's stock ledger with no
+    batch_no, tripping "Serial No / Batch No are mandatory for Item X".
+    """
+
+    def _make_invoice(self, items, is_return=False):
+        items_list = []
+        for it in items:
+            row = AttrDict(it)
+            # Mimic Frappe's ``Document`` attribute access for the fields we touch.
+            row.use_serial_batch_fields = row.get("use_serial_batch_fields") or 0
+            items_list.append(row)
+        # Use SimpleNamespace so .items doesn't collide with dict.items().
+        return types.SimpleNamespace(items=items_list, is_return=int(is_return))
+
+    def test_assigns_picked_batch_when_item_missing_one(self):
+        _install_stubs(
+            batch_rows=[],  # not relevant for this code path
+            auto_pick_batch="303490",
+        )
+        module = _load_module()
+
+        invoice = self._make_invoice(
+            [
+                {
+                    "item_code": "ITEM-25205",
+                    "warehouse": "AL-KHANSA - PPC",
+                    "qty": 1,
+                    "stock_qty": 1,
+                    "batch_no": None,
+                    "serial_no": None,
+                },
+            ]
+        )
+
+        module._auto_set_item_batches(invoice)
+
+        self.assertEqual(invoice.items[0].batch_no, "303490")
+        self.assertEqual(invoice.items[0].use_serial_batch_fields, 1)
+
+    def test_keeps_existing_batch_untouched(self):
+        _install_stubs(batch_rows=[], auto_pick_batch="ANOTHER-BATCH")
+        module = _load_module()
+
+        invoice = self._make_invoice(
+            [
+                {
+                    "item_code": "ITEM-25205",
+                    "warehouse": "AL-KHANSA - PPC",
+                    "qty": 1,
+                    "stock_qty": 1,
+                    "batch_no": "PRESET",
+                    "serial_no": None,
+                },
+            ]
+        )
+
+        module._auto_set_item_batches(invoice)
+
+        # An operator-set batch must win — never silently overwrite.
+        self.assertEqual(invoice.items[0].batch_no, "PRESET")
+
+    def test_does_not_assign_when_no_batch_can_be_picked(self):
+        _install_stubs(batch_rows=[], auto_pick_batch=None)
+        module = _load_module()
+
+        invoice = self._make_invoice(
+            [
+                {
+                    "item_code": "ITEM-25205",
+                    "warehouse": "AL-KHANSA - PPC",
+                    "qty": 1,
+                    "stock_qty": 1,
+                    "batch_no": None,
+                    "serial_no": None,
+                },
+            ]
+        )
+
+        module._auto_set_item_batches(invoice)
+
+        # Falls through to the stock validator (which now flags it clearly).
+        self.assertIsNone(invoice.items[0].batch_no)
+
+    def test_skips_returns(self):
+        _install_stubs(batch_rows=[], auto_pick_batch="WOULD-PICK")
+        module = _load_module()
+
+        invoice = self._make_invoice(
+            [
+                {
+                    "item_code": "ITEM-25205",
+                    "warehouse": "AL-KHANSA - PPC",
+                    "qty": -1,
+                    "stock_qty": -1,
+                    "batch_no": None,
+                    "serial_no": None,
+                },
+            ],
+            is_return=True,
+        )
+
+        module._auto_set_item_batches(invoice)
+
+        # Returns go through _auto_set_return_batches with proper expiry rules.
+        self.assertIsNone(invoice.items[0].batch_no)
+
+    def test_skips_non_batched_items(self):
+        _install_stubs(
+            batch_rows=[],
+            auto_pick_batch="WOULD-PICK",
+            item_has_batch_no=0,
+        )
+        module = _load_module()
+
+        invoice = self._make_invoice(
+            [
+                {
+                    "item_code": "ITEM-PLAIN",
+                    "warehouse": "AL-KHANSA - PPC",
+                    "qty": 1,
+                    "stock_qty": 1,
+                    "batch_no": None,
+                    "serial_no": None,
+                },
+            ]
+        )
+
+        module._auto_set_item_batches(invoice)
+
+        self.assertIsNone(invoice.items[0].batch_no)
 
 
 if __name__ == "__main__":

@@ -18,32 +18,7 @@
 			{{ formatCurrency(return_discount_meta.prorated_discount) }}
 		</v-alert>
 
-		<div class="summary-actions-block">
-			<InvoiceActionButtons
-				:pos_profile="pos_profile"
-				:saveLoading="saveLoading"
-				:loadDraftsLoading="loadDraftsLoading"
-				:selectOrderLoading="selectOrderLoading"
-				:selectPurchaseOrderLoading="selectPurchaseOrderLoading"
-				:cancelLoading="cancelLoading"
-				:invoiceManagementLoading="invoiceManagementLoading"
-				:returnsLoading="returnsLoading"
-				:printLoading="printLoading"
-				:paymentLoading="paymentLoading"
-				:customerDisplayLoading="customerDisplayLoading"
-				@save-and-clear="handleSaveAndClear"
-				@load-drafts="handleLoadDrafts"
-				@select-order="handleSelectOrder"
-				@cancel-sale="handleCancelSale"
-				@open-invoice-management="handleOpenInvoiceManagement"
-				@open-returns="handleOpenReturns"
-				@print-draft="handlePrintDraft"
-				@show-payment="handleShowPayment"
-				@open-customer-display="handleOpenCustomerDisplay"
-			/>
-		</div>
-
-		<div v-if="!useCompactSaleDock" class="summary-hero summary-hero--bottom">
+		<div v-if="!useCompactSaleDock" class="summary-hero summary-hero--top">
 			<div class="summary-hero__copy">
 				<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
 				<strong class="summary-hero__amount">
@@ -101,6 +76,31 @@
 					class="summary-field summary-field--dock"
 				/>
 			</div>
+		</div>
+
+		<div class="summary-actions-block">
+			<InvoiceActionButtons
+				:pos_profile="pos_profile"
+				:saveLoading="saveLoading"
+				:loadDraftsLoading="loadDraftsLoading"
+				:selectOrderLoading="selectOrderLoading"
+				:selectPurchaseOrderLoading="selectPurchaseOrderLoading"
+				:cancelLoading="cancelLoading"
+				:invoiceManagementLoading="invoiceManagementLoading"
+				:returnsLoading="returnsLoading"
+				:printLoading="printLoading"
+				:paymentLoading="paymentLoading"
+				:customerDisplayLoading="customerDisplayLoading"
+				@save-and-clear="handleSaveAndClear"
+				@load-drafts="handleLoadDrafts"
+				@select-order="handleSelectOrder"
+				@cancel-sale="handleCancelSale"
+				@open-invoice-management="handleOpenInvoiceManagement"
+				@open-returns="handleOpenReturns"
+				@print-draft="handlePrintDraft"
+				@show-payment="handleShowPayment"
+				@open-customer-display="handleOpenCustomerDisplay"
+			/>
 		</div>
 	</v-card>
 
@@ -449,11 +449,11 @@ defineExpose({
 }
 
 .summary-actions-block {
-	margin-bottom: 6px;
+	margin-top: 6px;
 }
 
-.summary-hero--bottom {
-	margin-top: 6px;
+.summary-hero--top {
+	margin-bottom: 6px;
 }
 
 .summary-hero {

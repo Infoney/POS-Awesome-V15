@@ -27,6 +27,10 @@ export const fetchDraftInvoices = async ({
 	const { message } = await frappe.call({
 		method: "posawesome.posawesome.api.invoices.get_draft_invoices",
 		args: {
+			// Send both: backend prefers pos_profile when present so the cashier
+			// sees every draft on this terminal across shifts; pos_opening_shift
+			// is kept as a fallback for older callers / supervisor scope.
+			pos_profile: posProfile?.name,
 			pos_opening_shift: posOpeningShift?.name,
 			doctype,
 		},

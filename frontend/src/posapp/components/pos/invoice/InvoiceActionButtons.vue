@@ -73,6 +73,21 @@
 				<ShortcutHint combo="Alt+8" />
 			</v-btn>
 		</v-col>
+		<v-col cols="6" sm="4">
+			<v-btn
+				block
+				color="success"
+				theme="dark"
+				prepend-icon="mdi-credit-card"
+				@click="$emit('show-payment')"
+				class="summary-btn pay-btn"
+				:loading="paymentLoading"
+				:title="__('Open payment (Alt+D) — submit + print (Alt+P) — submit only (Alt+X)')"
+			>
+				<span class="summary-btn__label">{{ __("PAY") }}</span>
+				<ShortcutHint combo="Alt+D" tone="light" />
+			</v-btn>
+		</v-col>
 		<v-col cols="6" sm="4" v-if="pos_profile.custom_allow_select_sales_order == 1">
 			<v-btn
 				block
@@ -112,21 +127,6 @@
 				:loading="customerDisplayLoading"
 			>
 				<span class="summary-btn__label">{{ __("Customer Screen") }}</span>
-			</v-btn>
-		</v-col>
-		<v-col cols="12">
-			<v-btn
-				block
-				color="success"
-				theme="dark"
-				prepend-icon="mdi-credit-card"
-				@click="$emit('show-payment')"
-				class="summary-btn pay-btn"
-				:loading="paymentLoading"
-				:title="__('Open payment (Alt+D) — submit + print (Alt+P) — submit only (Alt+X)')"
-			>
-				<span class="summary-btn__label">{{ __("PAY") }}</span>
-				<ShortcutHint combo="Alt+D" tone="light" />
 			</v-btn>
 		</v-col>
 	</v-row>
@@ -230,11 +230,13 @@ const showCustomerDisplayButton = computed(() =>
 	transform: translateY(0);
 }
 
-/* Special styling for the PAY button */
+/* Special styling for the PAY button — same height as the rest of the row
+   so the 3-col layout stays clean, but visually distinct via gradient
+   + shadow + heavier weight. */
 .pay-btn {
 	font-weight: 700 !important;
-	font-size: 1rem !important;
-	min-height: 50px !important;
+	font-size: 0.95rem !important;
+	min-height: 48px !important;
 	background: linear-gradient(135deg, #4caf50, #45a049) !important;
 	box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3) !important;
 	letter-spacing: 0.04em !important;

@@ -23,6 +23,7 @@ from posawesome.posawesome.api.invoice_processing.stock import (
     _deduplicate_free_items,
     _merge_duplicate_taxes,
     _auto_set_return_batches,
+    _auto_set_item_batches,
     _collect_stock_errors,
     _should_block
 )
@@ -839,9 +840,11 @@ def submit_invoice(invoice, data, submit_in_background=False):
     ]
 
     _auto_set_return_batches(invoice_doc)
+    # Auto-fill batch_no on regular line items (covers drafts that were saved
+    # before a batch could be picked, plus any item that bypassed the cart's
+    # batch picker). Returns are excluded — handled above.
+    _auto_set_item_batches(invoice_doc)
 
-    # if frappe.get_value("POS Profile", invoice_doc.pos_profile, "posa_auto_set_batch"):
-    #     set_batch_nos(invoice_doc, "warehouse", throw=True)
     set_batch_nos_for_bundels(invoice_doc, "warehouse", throw=True)
 
     _validate_stock_on_invoice(invoice_doc)

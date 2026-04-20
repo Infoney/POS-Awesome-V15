@@ -72,6 +72,12 @@ def get_draft_invoices(
             filters["pos_profile"] = pos_profile
         if cashier:
             filters["owner"] = cashier
+    elif pos_profile:
+        # Scope drafts to the POS Profile so cashiers see every draft for the
+        # terminal regardless of which shift saved it. The previous
+        # opening-shift filter hid drafts from earlier shifts on the same
+        # terminal, which surprised operators expecting a complete list.
+        filters["pos_profile"] = pos_profile
     else:
         filters["posa_pos_opening_shift"] = pos_opening_shift
     if frappe.db.has_column(doctype, "posa_is_printed"):
@@ -93,7 +99,7 @@ def get_draft_invoices(
             "modified_by",
         ],
         limit_page_length=limit_page_length,
-        order_by="modified desc",
+        order_by="posting_date desc, posting_time desc, modified desc",
     )
     for invoice in invoices_list:
         invoice["doctype"] = doctype
