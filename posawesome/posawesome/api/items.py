@@ -47,6 +47,9 @@ from posawesome.posawesome.api.item_processing.search import (
     get_items_count,
     normalize_brand
 )
+from posawesome.posawesome.api.item_processing.dashboard import (
+    get_item_dashboard,
+)
 
 
 def _collect_delta_item_codes(pos_profile, modified_after, price_list, limit):

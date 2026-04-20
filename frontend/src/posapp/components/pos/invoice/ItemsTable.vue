@@ -106,31 +106,48 @@
 					</div>
 					<v-divider />
 					<div class="posa-details-drawer__body">
-						<ItemsTableExpandedRow
+						<ItemDetailsPanel
 							v-if="drawerItem"
-							:item="drawerItem"
-							:is-expanded="true"
-							render-as="div"
-							:pos_profile="pos_profile"
-							:invoice-type="invoiceType"
-							:is-return-invoice="isReturnInvoice"
-							:invoice_doc="invoice_doc"
-							:hide_qty_decimals="hide_qty_decimals"
-							:expanded-content-classes="expandedContentClasses"
-							:format-float="memoizedFormatFloat"
-							:format-currency="memoizedFormatCurrency"
-							:currency-symbol="currencySymbol"
-							:is-number="isNumber"
-							:set-formated-currency="setFormatedCurrency"
-							:calc-prices="calcPrices"
-							:calc-uom="calcUom"
-							:change-price-list-rate="changePriceListRate"
-							:get-serial-options="getSerialOptions"
-							:set-serial-no="setSerialNo"
-							:set-batch-qty="setBatchQty"
-							:validate-due-date="validateDueDate"
-							@qty-change="handleQtyChange"
+							:item-code="drawerItem.item_code"
+							:pos-profile="pos_profile"
+							:hide-qty-decimals="hide_qty_decimals"
 						/>
+
+						<v-divider class="posa-details-drawer__divider" />
+
+						<details class="posa-details-drawer__edit" open>
+							<summary class="posa-details-drawer__edit-summary">
+								<v-icon size="16">mdi-pencil-outline</v-icon>
+								<span>{{ __("Edit line item") }}</span>
+							</summary>
+							<div class="posa-details-drawer__edit-body">
+								<ItemsTableExpandedRow
+									v-if="drawerItem"
+									:item="drawerItem"
+									:is-expanded="true"
+									render-as="div"
+									:pos_profile="pos_profile"
+									:invoice-type="invoiceType"
+									:is-return-invoice="isReturnInvoice"
+									:invoice_doc="invoice_doc"
+									:hide_qty_decimals="hide_qty_decimals"
+									:expanded-content-classes="expandedContentClasses"
+									:format-float="memoizedFormatFloat"
+									:format-currency="memoizedFormatCurrency"
+									:currency-symbol="currencySymbol"
+									:is-number="isNumber"
+									:set-formated-currency="setFormatedCurrency"
+									:calc-prices="calcPrices"
+									:calc-uom="calcUom"
+									:change-price-list-rate="changePriceListRate"
+									:get-serial-options="getSerialOptions"
+									:set-serial-no="setSerialNo"
+									:set-batch-qty="setBatchQty"
+									:validate-due-date="validateDueDate"
+									@qty-change="handleQtyChange"
+								/>
+							</div>
+						</details>
 					</div>
 				</v-card>
 			</v-dialog>
@@ -166,6 +183,7 @@ import { loadItemSelectorSettings } from "../../../utils/itemSelectorSettings";
 import { logComponentRender } from "../../../utils/perf";
 import CartItemRow from "./CartItemRow.vue";
 import ItemsTableExpandedRow from "./ItemsTableExpandedRow.vue";
+import ItemDetailsPanel from "./ItemDetailsPanel.vue";
 
 import { useItemsTableSearch } from "../../../composables/pos/items/useItemsTableSearch";
 import { useItemsTableDragDrop } from "../../../composables/pos/items/useItemsTableDragDrop";
@@ -534,6 +552,54 @@ defineExpose({
 .posa-details-drawer__body {
 	flex: 1 1 auto;
 	overflow-y: auto;
-	padding: 12px 14px 24px;
+	padding: 14px 16px 28px;
+}
+
+.posa-details-drawer__divider {
+	margin: 18px 0;
+}
+
+.posa-details-drawer__edit {
+	border: 1px solid rgba(148, 163, 184, 0.18);
+	border-radius: 12px;
+	background: rgba(148, 163, 184, 0.04);
+	overflow: hidden;
+}
+
+.posa-details-drawer__edit-summary {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 14px;
+	font-weight: 700;
+	font-size: 0.84rem;
+	color: var(--pos-text-primary);
+	cursor: pointer;
+	user-select: none;
+	list-style: none;
+}
+
+.posa-details-drawer__edit-summary::-webkit-details-marker {
+	display: none;
+}
+
+.posa-details-drawer__edit-summary::after {
+	content: "";
+	width: 8px;
+	height: 8px;
+	margin-inline-start: auto;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: rotate(45deg);
+	transition: transform 0.2s ease;
+	opacity: 0.6;
+}
+
+.posa-details-drawer__edit[open] .posa-details-drawer__edit-summary::after {
+	transform: rotate(-135deg);
+}
+
+.posa-details-drawer__edit-body {
+	padding: 4px 12px 14px;
 }
 </style>
