@@ -299,6 +299,7 @@ const FALLBACK_LANGUAGES = [
 	{ code: "pt", name: "Português", native_name: "Português" },
 ];
 
+import { inject } from "vue";
 import { useLastInvoicePrinting } from "../../composables/core/useLastInvoicePrinting";
 import { useUpdateStore } from "../../stores/updateStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
@@ -322,7 +323,8 @@ export default {
 		const updateStore = useUpdateStore();
 		const employeeStore = useEmployeeStore();
 		const { currentCashier, currentCashierDisplay } = storeToRefs(employeeStore);
-		return { printLastInvoice, updateStore, employeeStore, currentCashier, currentCashierDisplay };
+		const eventBus = inject("eventBus", null);
+		return { printLastInvoice, updateStore, employeeStore, currentCashier, currentCashierDisplay, eventBus };
 	},
 	data() {
 		return {
@@ -389,6 +391,16 @@ export default {
 		},
 		quickActions() {
 			const actions = [
+				this.isEnabledSetting(this.posProfile?.posa_allow_multi_currency)
+					? {
+							id: "multi-currency",
+							label: __("Currency"),
+							subtitle: __("Set sale currency & exchange rate"),
+							icon: "mdi-currency-usd",
+							tone: "info",
+							handler: "openMultiCurrency",
+						}
+					: null,
 				{
 					id: "switch-cashier",
 					label: __("Switch Cashier"),
@@ -612,6 +624,12 @@ export default {
 			}
 
 			switch (action.handler) {
+				case "openMultiCurrency":
+					this.closeMenu();
+					if (this.eventBus && typeof this.eventBus.emit === "function") {
+						this.eventBus.emit("show_multi_currency");
+					}
+					break;
 				case "openEmployeeSwitch":
 					this.closeMenu();
 					this.$emit("open-employee-switch");

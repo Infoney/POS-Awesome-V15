@@ -1,6 +1,6 @@
 <template>
-	<v-row dense>
-		<v-col cols="12" sm="6">
+	<v-row dense class="action-grid">
+		<v-col cols="6" sm="4">
 			<v-btn
 				block
 				color="accent"
@@ -13,7 +13,7 @@
 				{{ __("Save & Clear") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6">
+		<v-col cols="6" sm="4">
 			<v-btn
 				block
 				color="warning"
@@ -26,20 +26,7 @@
 				{{ __("Drafts") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6" v-if="pos_profile.custom_allow_select_sales_order == 1">
-			<v-btn
-				block
-				color="info"
-				theme="dark"
-				prepend-icon="mdi-book-search"
-				@click="$emit('select-order')"
-				class="summary-btn"
-				:loading="selectOrderLoading"
-			>
-				{{ __("Select S.O") }}
-			</v-btn>
-		</v-col>
-		<v-col cols="12" sm="6">
+		<v-col cols="6" sm="4">
 			<v-btn
 				block
 				color="deep-purple"
@@ -52,7 +39,7 @@
 				{{ __("Invoice Mgmt") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6">
+		<v-col cols="6" sm="4">
 			<v-btn
 				block
 				color="error"
@@ -65,8 +52,7 @@
 				{{ __("Cancel Sale") }}
 			</v-btn>
 		</v-col>
-
-		<v-col cols="12" sm="6" v-if="pos_profile.posa_allow_return == 1">
+		<v-col cols="6" sm="4" v-if="pos_profile.posa_allow_return == 1">
 			<v-btn
 				block
 				color="secondary"
@@ -79,7 +65,20 @@
 				{{ __("Sales Return") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6" v-if="pos_profile.posa_allow_print_draft_invoices">
+		<v-col cols="6" sm="4" v-if="pos_profile.custom_allow_select_sales_order == 1">
+			<v-btn
+				block
+				color="info"
+				theme="dark"
+				prepend-icon="mdi-book-search"
+				@click="$emit('select-order')"
+				class="summary-btn"
+				:loading="selectOrderLoading"
+			>
+				{{ __("Select S.O") }}
+			</v-btn>
+		</v-col>
+		<v-col cols="6" sm="4" v-if="pos_profile.posa_allow_print_draft_invoices">
 			<v-btn
 				block
 				color="primary"
@@ -92,7 +91,7 @@
 				{{ __("Print Draft") }}
 			</v-btn>
 		</v-col>
-		<v-col cols="12" sm="6" v-if="showCustomerDisplayButton">
+		<v-col cols="6" sm="4" v-if="showCustomerDisplayButton">
 			<v-btn
 				block
 				color="indigo"
@@ -110,7 +109,6 @@
 				block
 				color="success"
 				theme="dark"
-				size="large"
 				prepend-icon="mdi-credit-card"
 				@click="$emit('show-payment')"
 				class="summary-btn pay-btn"
@@ -170,18 +168,32 @@ const showCustomerDisplayButton = computed(() =>
 	color: var(--pos-text-primary) !important;
 }
 
+.action-grid {
+	row-gap: 6px;
+}
+
 /* Enhanced button styling with better performance */
 .summary-btn {
-	transition: all 0.2s ease !important;
+	transition: transform 0.18s ease, box-shadow 0.18s ease !important;
 	position: relative;
 	overflow: hidden;
-	min-height: 46px !important;
+	min-height: 44px !important;
 	text-transform: none !important;
+	font-size: 0.82rem !important;
+	letter-spacing: 0 !important;
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
+	cursor: pointer;
 }
 
 .summary-btn :deep(.v-btn__content) {
 	white-space: normal !important;
-	transition: all 0.2s ease;
+	pointer-events: none;
+}
+
+.summary-btn :deep(.v-btn__prepend),
+.summary-btn :deep(.v-btn__append) {
+	pointer-events: none;
 }
 
 .summary-btn:hover {
@@ -195,10 +207,12 @@ const showCustomerDisplayButton = computed(() =>
 
 /* Special styling for the PAY button */
 .pay-btn {
-	font-weight: 600 !important;
-	font-size: 1.1rem !important;
+	font-weight: 700 !important;
+	font-size: 1rem !important;
+	min-height: 50px !important;
 	background: linear-gradient(135deg, #4caf50, #45a049) !important;
 	box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3) !important;
+	letter-spacing: 0.04em !important;
 }
 
 .pay-btn:hover {
@@ -210,9 +224,9 @@ const showCustomerDisplayButton = computed(() =>
 /* Responsive optimizations */
 @media (max-width: 768px) {
 	.summary-btn {
-		font-size: 0.8rem !important;
+		font-size: 0.78rem !important;
 		padding: 4px 8px !important;
-		min-height: 42px !important;
+		min-height: 44px !important;
 	}
 
 	.pay-btn {
@@ -225,12 +239,12 @@ const showCustomerDisplayButton = computed(() =>
 	.summary-btn {
 		font-size: 0.74rem !important;
 		padding: 3px 6px !important;
-		min-height: 34px !important;
+		min-height: 42px !important;
 	}
 
 	.pay-btn {
-		font-size: 0.85rem !important;
-		min-height: 40px !important;
+		font-size: 0.9rem !important;
+		min-height: 46px !important;
 	}
 }
 

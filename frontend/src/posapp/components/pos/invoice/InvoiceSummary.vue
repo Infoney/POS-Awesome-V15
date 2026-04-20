@@ -1,6 +1,6 @@
 <template>
 	<v-card
-		class="cards sticky-summary-card mb-0 py-2 px-3 rounded-lg pos-themed-card"
+		class="cards sticky-summary-card mb-0 py-1 px-2 rounded-lg pos-themed-card"
 		:class="{ 'sticky-summary-card--dock-safe': useCompactSaleDock }"
 	>
 		<v-row dense class="summary-content">
@@ -453,53 +453,54 @@ defineExpose({
 }
 
 .summary-content {
-	row-gap: 6px;
+	row-gap: 4px;
 }
 
 .summary-hero {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 14px;
-	padding: 14px 16px;
-	border-radius: 20px;
+	gap: 10px;
+	padding: 6px 12px;
+	border-radius: 14px;
 	background:
-		linear-gradient(135deg, rgba(var(--v-theme-primary), 0.12), rgba(var(--v-theme-success), 0.08)),
+		linear-gradient(135deg, rgba(var(--v-theme-primary), 0.1), rgba(var(--v-theme-success), 0.06)),
 		var(--pos-surface-muted);
-	border: 1px solid rgba(var(--v-theme-primary), 0.12);
+	border: 1px solid rgba(var(--v-theme-primary), 0.1);
 }
 
 .summary-hero__copy {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 1px;
 	min-width: 0;
 }
 
 .summary-hero__eyebrow {
-	font-size: 0.72rem;
+	font-size: 0.62rem;
 	font-weight: 700;
 	text-transform: uppercase;
-	letter-spacing: 0.08em;
+	letter-spacing: 0.06em;
 	color: var(--pos-text-secondary);
 }
 
 .summary-hero__amount {
-	font-size: clamp(1.2rem, 2vw, 1.8rem);
+	font-size: clamp(0.95rem, 1.3vw, 1.2rem);
 	line-height: 1.1;
 	color: var(--pos-text-primary);
+	font-weight: 700;
 }
 
 .summary-hero__meta {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px 14px;
-	font-size: 0.84rem;
+	gap: 4px 10px;
+	font-size: 0.72rem;
 	color: var(--pos-text-secondary);
 }
 
 .summary-hero__field-wrap {
-	width: min(260px, 100%);
+	width: min(220px, 100%);
 }
 
 .invoice-summary-actions {
