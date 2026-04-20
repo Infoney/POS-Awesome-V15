@@ -10,7 +10,6 @@
 			:loading-indeterminate="loadingIndeterminate"
 			:loading-message="loadingMessage"
 			@nav-click="handleNavClick"
-			@go-desk="goDesk"
 			@show-offline-invoices="showOfflineInvoices = true"
 			@open-employee-switch="openEmployeeSwitch"
 		>
@@ -664,10 +663,6 @@ export default {
 		closeSettingsPanel() {
 			this.settingsPanelOpen = false;
 		},
-		goDesk() {
-			window.location.href = "/app";
-		},
-
 		openCloseShift() {
 			this.$emit("close-shift");
 		},

@@ -1,7 +1,7 @@
 <template>
 	<v-app-bar
 		flat
-		:height="isMobile ? 64 : 56"
+		:height="isMobile ? 64 : 64"
 		:class="[
 			'pos-navbar-enhanced elevation-2 pos-themed-card pos-theme-immediate',
 			rtlClasses,
@@ -23,22 +23,18 @@
 			<v-img
 				:src="brandLogo"
 				:alt="brandLogoAlt"
-				:max-width="isMobile ? 24 : 32"
+				:max-width="isMobile ? 40 : 52"
+				:max-height="isMobile ? 40 : 52"
 				:class="['pos-navbar-logo', isRtl ? 'rtl-logo' : 'ltr-logo']"
 				loading="lazy"
 			/>
 
 			<v-toolbar-title
-				@click="$emit('go-desk')"
-				@keydown.enter="$emit('go-desk')"
+				v-if="!hideBrandText"
 				:class="[
 					'text-h6 font-weight-bold text-primary pos-navbar-title',
 					isRtl ? 'rtl-title' : 'ltr-title',
 				]"
-				style="cursor: pointer; text-decoration: none"
-				tabindex="0"
-				:aria-label="__('Go to Frappe Desk')"
-				role="button"
 			>
 				<template v-if="customBrandName">
 					<span class="pos-navbar-title-bold pos-navbar-title-custom">{{ customBrandName }}</span>
@@ -367,6 +363,14 @@ export default {
 		brandLogoAlt() {
 			return this.customBrandName || "POS Awesome";
 		},
+
+		// Operator opt-out: show only the logo, no text. Falsy values keep the title.
+		hideBrandText() {
+			const raw = this.posProfile?.posa_hide_brand_text;
+			if (raw === true || raw === 1 || raw === "1") return true;
+			if (typeof raw === "string") return raw.trim().toLowerCase() === "true";
+			return false;
+		},
 	},
 
 	methods: {
@@ -401,7 +405,7 @@ export default {
 			}
 		},
 	},
-	emits: ["nav-click", "go-desk", "show-offline-invoices", "open-employee-switch"],
+	emits: ["nav-click", "show-offline-invoices", "open-employee-switch"],
 };
 </script>
 
@@ -613,11 +617,6 @@ export default {
 	flex: 1 1 auto;
 	/* Use same blue as Menu button - matching gradient blue */
 	color: #1976d2 !important;
-}
-
-.pos-navbar-title:hover {
-	text-decoration: none !important;
-	opacity: 0.8;
 }
 
 .rtl-title {
@@ -1028,7 +1027,8 @@ export default {
 }
 
 .mobile-navbar .pos-navbar-logo {
-	max-width: 28px !important;
+	max-width: 40px !important;
+	max-height: 40px !important;
 }
 
 .mobile-navbar .pos-navbar-title {
@@ -1073,7 +1073,8 @@ export default {
 	}
 
 	.mobile-navbar .pos-navbar-logo {
-		max-width: 24px !important;
+		max-width: 32px !important;
+		max-height: 32px !important;
 	}
 
 	.mobile-navbar .pos-navbar-title {

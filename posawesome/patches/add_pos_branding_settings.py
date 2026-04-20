@@ -64,6 +64,14 @@ def execute():
             "description": "Shown in the POS navbar instead of the default logo. Leave blank to keep the default.",
             "insert_after": "posa_column_break_branding",
         },
+        {
+            "fieldname": "posa_hide_brand_text",
+            "label": "Hide Brand Text in Navbar",
+            "fieldtype": "Check",
+            "default": "0",
+            "description": "Show only the logo in the POS navbar — hides the \"POS Awesome\" / Brand Name wordmark.",
+            "insert_after": "posa_brand_logo",
+        },
     ]
 
     for field in fields:
