@@ -96,9 +96,21 @@
 				</div>
 			</template>
 			<template v-slot:item.actual_qty="{ item }">
-				<span class="golden--text" :class="{ 'negative-number': isNegative(item.actual_qty) }">
-					{{ formatActualQty(item.actual_qty) }}
-				</span>
+				<div class="qty-cell">
+					<span
+						class="golden--text qty-cell__value"
+						:class="{ 'negative-number': isNegative(item.actual_qty) }"
+					>
+						{{ formatActualQty(item.actual_qty) }}
+					</span>
+					<ItemStockInfoMenu
+						v-if="showStockInfo(item)"
+						:item="item"
+						:pos-profile="posProfile"
+						:format-number="formatNumber"
+						:hide-qty-decimals="hideQtyDecimals"
+					/>
+				</div>
 			</template>
 		</v-data-table-virtual>
 	</div>
@@ -107,6 +119,7 @@
 <script setup>
 import { ref } from "vue";
 import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
+import ItemStockInfoMenu from "./ItemStockInfoMenu.vue";
 
 const props = defineProps({
 	displayedItems: { type: Array, default: () => [] },
@@ -147,6 +160,16 @@ const formatActualQty = (value) => {
 		return props.formatNumber(Math.round(numericQty), 0);
 	}
 	return props.formatNumber(numericQty, 4);
+};
+
+const showStockInfo = (item) => {
+	if (!item) return false;
+	if (item.has_batch_no) return true;
+	if (Array.isArray(item.batch_no_data) && item.batch_no_data.length > 0) return true;
+	const qty = Number(item.actual_qty ?? 0) || 0;
+	// Surface the popover when stock is empty/negative even on plain items so
+	// the cashier gets the same "why is it 0?" affordance as for batched ones.
+	return qty <= 0;
 };
 
 const tableRef = ref(null);
@@ -195,6 +218,16 @@ defineExpose({ scrollToIndex, getTableElement, tableRef });
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
+}
+
+.qty-cell {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.qty-cell__value {
+	min-width: 0;
 }
 
 .sleek-data-table {

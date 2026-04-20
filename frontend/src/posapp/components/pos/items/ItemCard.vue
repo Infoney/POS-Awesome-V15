@@ -62,6 +62,13 @@
 						{{ formattedActualQty }}
 					</span>
 					<span class="stock-uom">{{ item.stock_uom || "" }}</span>
+					<ItemStockInfoMenu
+						v-if="showStockInfo"
+						:item="item"
+						:pos-profile="posProfile"
+						:format-number="formatNumber"
+						:hide-qty-decimals="hideQtyDecimals"
+					/>
 				</div>
 			</div>
 		</div>
@@ -72,6 +79,7 @@
 import { computed } from "vue";
 import placeholderImage from "../placeholder-image.png";
 import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
+import ItemStockInfoMenu from "./ItemStockInfoMenu.vue";
 
 const props = defineProps({
 	item: { type: Object, required: true },
@@ -141,6 +149,17 @@ const formattedActualQty = computed(() => {
 		return props.formatNumber(Math.round(numericQty), 0);
 	}
 	return props.formatNumber(numericQty, 4);
+});
+
+const showStockInfo = computed(() => {
+	const item = props.item;
+	if (!item) return false;
+	if (item.has_batch_no) return true;
+	if (Array.isArray(item.batch_no_data) && item.batch_no_data.length > 0) return true;
+	const qty = Number(item.actual_qty ?? 0) || 0;
+	// Surface the popover when qty is 0/negative on plain items so the
+	// cashier can see "warehouse over-sold by N" without leaving the row.
+	return qty <= 0;
 });
 
 const onClick = (event) => {
