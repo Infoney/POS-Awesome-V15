@@ -12,7 +12,7 @@
 					autofocus
 					variant="solo"
 					color="primary"
-					class="pos-themed-input"
+					class="pos-themed-input pos-cmd-search"
 					:label="frappe._('Search, scan or browse item')"
 					hide-details
 					:model-value="searchInput"
@@ -62,6 +62,15 @@
 							:aria-label="toolsOpen ? __('Hide search tools') : __('Show search tools')"
 						>
 						</v-btn>
+						<span
+							class="cmd-search-hint"
+							:title="__('Press Alt+3 to focus this search')"
+							aria-hidden="true"
+						>
+							<kbd class="cmd-search-hint__key">Alt</kbd>
+							<span class="cmd-search-hint__plus">+</span>
+							<kbd class="cmd-search-hint__key">3</kbd>
+						</span>
 					</template>
 				</v-text-field>
 			</v-col>
@@ -235,6 +244,49 @@ defineExpose({
 
 :deep(.sticky-header .v-field) {
 	border-radius: 16px;
+}
+
+/* Command-center style kbd hint inside the items search field. */
+.cmd-search-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	margin-inline-start: 6px;
+	padding: 2px 4px;
+	font-family:
+		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+	font-size: 0.66rem;
+	line-height: 1;
+	color: var(--pos-text-secondary, rgba(148, 163, 184, 0.85));
+	user-select: none;
+	pointer-events: none;
+	opacity: 0.85;
+}
+
+.cmd-search-hint__key {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	padding: 1px 5px;
+	border-radius: 5px;
+	background: rgba(148, 163, 184, 0.18);
+	border: 1px solid rgba(148, 163, 184, 0.28);
+	font-weight: 600;
+	font-family: inherit;
+	font-size: inherit;
+	letter-spacing: 0.02em;
+}
+
+.cmd-search-hint__plus {
+	opacity: 0.6;
+	font-weight: 600;
+}
+
+@media (max-width: 640px) {
+	.cmd-search-hint {
+		display: none;
+	}
 }
 
 @media (max-width: 768px) {

@@ -157,6 +157,7 @@ import ItemsTableExpandedRow from "./ItemsTableExpandedRow.vue";
 
 import { useItemsTableSearch } from "../../../composables/pos/items/useItemsTableSearch";
 import { useItemsTableDragDrop } from "../../../composables/pos/items/useItemsTableDragDrop";
+import { useResponsive } from "../../../composables/core/useResponsive";
 import {
 	DATA_TABLE_EXPAND_COLUMN,
 	useItemsTableResponsive,
@@ -305,10 +306,15 @@ const getSerialOptions = (item: any) => {
 // Right-side details drawer state (replaces the previous inline expanded row).
 const detailsDrawerOpen = ref(false);
 const drawerItem = ref<any>(null);
+const { windowWidth } = useResponsive();
+// Open the drawer at command-center scale: ~half the viewport on desktop,
+// capped at 960px so it doesn't dwarf the cart, and falling back to
+// (viewport - 16) on small screens. Reactive on resize via useResponsive.
 const detailsDrawerWidth = computed(() => {
-	if (typeof window === "undefined") return 540;
-	const max = Math.min(window.innerWidth - 24, 540);
-	return Math.max(320, max);
+	const viewport = windowWidth.value || 1280;
+	const desired = Math.round(viewport * 0.5);
+	const max = Math.min(viewport - 16, 960);
+	return Math.max(360, Math.min(desired, max));
 });
 
 const isItemInDrawer = (item: any) =>
