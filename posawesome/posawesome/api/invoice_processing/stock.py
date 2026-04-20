@@ -109,7 +109,14 @@ def _collect_stock_errors(items):
             continue
         if not _is_stock_item(d):
             continue
-        if _allow_negative_stock(d, global_allow_negative=global_allow_negative):
+        # Global flag fully disables both our and ERPNext's checks.
+        if global_allow_negative:
+            continue
+        # Item-level allow_negative_stock only relaxes Bin-total checks for
+        # plain items. ERPNext still enforces per-batch positivity even when
+        # an Item is marked allow_negative_stock=1, so for batched rows we
+        # must keep validating regardless of the item-level flag.
+        if not _has_batch_no(d) and _allow_negative_stock(d, global_allow_negative=0):
             continue
         items_to_check.append(d)
 
@@ -187,6 +194,15 @@ def _should_block(pos_profile):
     return bool(block_sale)
 
 
+def _is_batch_specific_error(error):
+    """A flagged row that ERPNext's per-batch validator would also reject."""
+    if not isinstance(error, dict):
+        return False
+    if error.get("batch_no"):
+        return True
+    return error.get("reason") == "no_batch_with_enough_qty"
+
+
 def _validate_stock_on_invoice(invoice_doc):
     if invoice_doc.doctype == "Sales Invoice" and not cint(getattr(invoice_doc, "update_stock", 0)):
         frappe.logger().debug("Skipping stock validation for Sales Invoice without stock update")
@@ -195,7 +211,16 @@ def _validate_stock_on_invoice(invoice_doc):
     if hasattr(invoice_doc, "packed_items"):
         items_to_check.extend([d.as_dict() for d in invoice_doc.packed_items])
     errors = _collect_stock_errors(items_to_check)
-    if errors and _should_block(invoice_doc.pos_profile):
+    if not errors:
+        return
+
+    # ERPNext's stock ledger always rejects negative-batch movements when
+    # Stock Settings.allow_negative_stock is off, regardless of the POS
+    # Profile's posa_block_sale_beyond_available_qty preference. Force-block
+    # any error that's batch-specific so the cashier sees our cleaner
+    # message before ERPNext throws a cryptic stock-ledger error. Plain
+    # (non-batched) overdrafts still respect the per-profile preference.
+    if any(_is_batch_specific_error(error) for error in errors) or _should_block(invoice_doc.pos_profile):
         frappe.throw(frappe.as_json({"errors": errors}), frappe.ValidationError)
 
 

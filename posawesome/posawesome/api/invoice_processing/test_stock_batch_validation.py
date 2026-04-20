@@ -17,6 +17,9 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
 class AttrDict(dict):
     __getattr__ = dict.get
 
+    def as_dict(self):
+        return dict(self)
+
 
 def _install_stubs(
     *,
@@ -24,16 +27,38 @@ def _install_stubs(
     bin_qty=0.0,
     allow_negative_global=0,
     item_has_batch_no=1,
+    item_allow_negative=0,
+    posa_block_sale=1,
     auto_pick_batch=None,
 ):
     frappe_module = types.ModuleType("frappe")
     frappe_module._ = lambda text: text
     frappe_module.whitelist = lambda *args, **kwargs: (lambda fn: fn)
-    frappe_module.get_cached_value = lambda doctype, name, field: 0
+    frappe_module.as_json = __import__("json").dumps
+    frappe_module.logger = lambda: types.SimpleNamespace(debug=lambda *a, **k: None)
+
+    class _ValidationError(Exception):
+        pass
+
+    frappe_module.ValidationError = _ValidationError
+
+    def _throw(message, exc=_ValidationError):
+        raise exc(message)
+
+    frappe_module.throw = _throw
+    frappe_module.get_cached_value = lambda doctype, name, field: (
+        item_allow_negative if field == "allow_negative_stock" else 0
+    )
+
+    def _get_value(doctype, name, field=None):
+        if field == "has_batch_no":
+            return item_has_batch_no
+        if field == "posa_block_sale_beyond_available_qty":
+            return posa_block_sale
+        return 0
+
     frappe_module.db = types.SimpleNamespace(
-        get_value=lambda doctype, name, field=None: (
-            item_has_batch_no if field == "has_batch_no" else 0
-        ),
+        get_value=_get_value,
         get_single_value=lambda doctype, field: allow_negative_global,
     )
     sys.modules["frappe"] = frappe_module
@@ -219,6 +244,140 @@ class TestBatchedItemStockValidation(unittest.TestCase):
         )
 
         self.assertEqual(errors, [])
+
+
+class TestItemLevelAllowNegativeBatchInteraction(unittest.TestCase):
+    """Per-item allow_negative_stock must NOT bypass batch-level checks.
+
+    ERPNext enforces per-batch positivity even when the Item is marked
+    ``allow_negative_stock=1``; only ``Stock Settings.allow_negative_stock``
+    (the global flag) relaxes the batch validator. We must mirror that or
+    cashiers see ERPNext's cryptic stock-ledger error instead of ours.
+    """
+
+    def test_per_item_allow_negative_still_blocks_negative_batch(self):
+        _install_stubs(
+            batch_rows=[
+                AttrDict(batch_no="2114011", batch_qty=-1.0, expiry_date=None),
+            ],
+            bin_qty=-1.0,
+            item_allow_negative=1,  # Item.allow_negative_stock = 1
+            posa_block_sale=1,
+        )
+        module = _load_module()
+
+        errors = module._collect_stock_errors(
+            [_make_item(batch_no="2114011", qty=1, stock_qty=1)],
+        )
+
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors[0]["batch_no"], "2114011")
+
+    def test_per_item_allow_negative_still_skips_plain_items(self):
+        # Sanity check: the item-level override still works for non-batched
+        # items (Bin-level overdraft is fine when the item allows it).
+        _install_stubs(
+            batch_rows=[],
+            bin_qty=-5.0,
+            item_has_batch_no=0,  # plain item
+            item_allow_negative=1,
+        )
+        module = _load_module()
+
+        errors = module._collect_stock_errors(
+            [
+                _make_item(
+                    has_batch_no=0,
+                    batch_no=None,
+                    allow_negative_stock=1,
+                    qty=1,
+                    stock_qty=1,
+                ),
+            ],
+        )
+
+        self.assertEqual(errors, [])
+
+
+class TestValidateStockOnInvoice(unittest.TestCase):
+    """Batch-specific errors must always block, even when posa_block_sale=0.
+
+    ERPNext's stock ledger always rejects negative-batch movements (when
+    global allow_negative_stock is off), regardless of the POS Profile's
+    posa_block_sale_beyond_available_qty preference. Our pre-flight must
+    mirror that so the cashier sees our cleaner message first.
+    """
+
+    def _make_invoice(self, items, doctype="POS Invoice", pos_profile="POS-TEST"):
+        rows = [AttrDict(it) for it in items]
+        invoice = types.SimpleNamespace(
+            items=rows,
+            packed_items=[],
+            pos_profile=pos_profile,
+            doctype=doctype,
+            update_stock=1,
+        )
+        invoice.is_return = 0
+        return invoice
+
+    def test_batch_negative_blocks_even_when_posa_block_sale_is_off(self):
+        _install_stubs(
+            batch_rows=[
+                AttrDict(batch_no="2114011", batch_qty=-1.0, expiry_date=None),
+            ],
+            bin_qty=-1.0,
+            posa_block_sale=0,  # cashier preference: don't block beyond qty
+        )
+        module = _load_module()
+
+        invoice = self._make_invoice(
+            [
+                {
+                    "item_code": "ITEM-30879",
+                    "warehouse": "AL-KHANSA - PPC",
+                    "qty": 1,
+                    "stock_qty": 1,
+                    "is_stock_item": 1,
+                    "has_batch_no": 1,
+                    "allow_negative_stock": 0,
+                    "batch_no": "2114011",
+                },
+            ]
+        )
+
+        with self.assertRaises(Exception) as ctx:
+            module._validate_stock_on_invoice(invoice)
+        # The thrown payload is the JSON-encoded errors list.
+        self.assertIn("2114011", str(ctx.exception))
+
+    def test_no_errors_means_no_throw(self):
+        # Sanity check that a clean invoice doesn't trigger the force-block
+        # branch. Bin total covers the request, no batch involvement.
+        _install_stubs(
+            batch_rows=[],
+            bin_qty=20.0,
+            item_has_batch_no=0,
+            posa_block_sale=1,
+        )
+        module = _load_module()
+
+        invoice = self._make_invoice(
+            [
+                {
+                    "item_code": "ITEM-PLAIN",
+                    "warehouse": "AL-KHANSA - PPC",
+                    "qty": 5,
+                    "stock_qty": 5,
+                    "is_stock_item": 1,
+                    "has_batch_no": 0,
+                    "allow_negative_stock": 0,
+                    "batch_no": None,
+                },
+            ]
+        )
+
+        # Stock available (20) > requested (5) → no throw.
+        module._validate_stock_on_invoice(invoice)
 
 
 class TestAutoSetItemBatches(unittest.TestCase):
