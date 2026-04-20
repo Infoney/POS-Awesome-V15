@@ -10,23 +10,18 @@
 		@dragleave="onDragLeaveFromSelector"
 	>
 		<v-data-table-virtual
-			:headers="responsiveHeaders"
+			:headers="finalVisibleColumns"
 			:items="items"
-			:expanded="expanded"
-			show-expand
 			item-value="posa_row_id"
 			class="posa-cart-table elevation-2 pos-themed-card"
 			:class="tableClasses"
 			:items-per-page="virtualScrollConfig.itemsPerPage"
 			:item-height="virtualScrollConfig.itemHeight"
 			:buffer-size="virtualScrollConfig.bufferSize"
-			expand-on-click
 			fixed-header
 			:density="tableDensity"
 			hide-default-footer
-			:single-expand="true"
 			:header-props="dynamicHeaderProps"
-			@update:expanded="handleExpandedUpdate"
 			:search="itemSearch"
 			:custom-filter="customItemFilter"
 		>
@@ -40,7 +35,7 @@
 				</div>
 			</template>
 
-			<template v-slot:item="{ item, toggleExpand, internalItem }">
+			<template v-slot:item="{ item }">
 				<CartItemRow
 					:item="item"
 					:visible-columns="finalVisibleColumns"
@@ -55,7 +50,7 @@
 					:isNegative="memoizedIsNegative"
 					:hideQtyDecimals="hide_qty_decimals"
 					:isRTL="isRtl"
-					:is-expanded="isItemExpanded(item.posa_row_id)"
+					:is-expanded="isItemInDrawer(item)"
 					@update-qty="handleQtyUpdate"
 					@minus-click="handleMinusClick"
 					@add-one="addOne"
@@ -66,18 +61,46 @@
 					@open-name-dialog="openNameDialog"
 					@reset-item-name="resetItemName"
 					@toggle-offer="toggleOffer"
-					@toggle-expand="handleToggleExpand(internalItem, toggleExpand)"
+					@toggle-expand="openDetailsDrawer(item)"
 					@remove-item="removeItem"
-					@click="handleRowClick($event, item, toggleExpand, internalItem)"
+					@click="handleRowClick($event, item)"
 				/>
 			</template>
+		</v-data-table-virtual>
 
-			<!-- Expanded row -->
-			<template v-slot:expanded-row="{ item }">
+		<!-- Right-side product details drawer (command-center style) -->
+		<v-navigation-drawer
+			v-model="detailsDrawerOpen"
+			location="right"
+			temporary
+			:width="detailsDrawerWidth"
+			class="posa-details-drawer pos-themed-card"
+		>
+			<div class="posa-details-drawer__header">
+				<div class="posa-details-drawer__title">
+					<v-icon size="20" class="posa-details-drawer__title-icon">mdi-information-outline</v-icon>
+					<div class="posa-details-drawer__heading">
+						<span class="posa-details-drawer__eyebrow">{{ __("Product Details") }}</span>
+						<strong v-if="drawerItem" class="posa-details-drawer__name">
+							{{ drawerItem.item_name || drawerItem.item_code }}
+						</strong>
+					</div>
+				</div>
+				<v-btn
+					icon="mdi-close"
+					variant="text"
+					density="compact"
+					:aria-label="__('Close')"
+					@click="closeDetailsDrawer"
+				/>
+			</div>
+			<v-divider />
+			<div class="posa-details-drawer__body">
 				<ItemsTableExpandedRow
-					:item="item"
-					:is-expanded="isItemExpanded(item.posa_row_id)"
-					:colspan="finalVisibleColumns.length"
+					v-if="drawerItem"
+					:item="drawerItem"
+					:is-expanded="true"
+					render-as="div"
 					:pos_profile="pos_profile"
 					:invoice-type="invoiceType"
 					:is-return-invoice="isReturnInvoice"
@@ -98,8 +121,8 @@
 					:validate-due-date="validateDueDate"
 					@qty-change="handleQtyChange"
 				/>
-			</template>
-		</v-data-table-virtual>
+			</div>
+		</v-navigation-drawer>
 
 		<!-- Edit name dialog -->
 		<v-dialog v-model="editNameDialog" max-width="400">
@@ -279,10 +302,53 @@ const getSerialOptions = (item: any) => {
 	return Array.isArray(item?.serial_no_data) ? item.serial_no_data : [];
 };
 
-const handleExpandedUpdate = (val: any[]) => {
-	const mappedValues = val.map((v) => (typeof v === "object" ? v.posa_row_id : v));
-	emit("update:expanded", mappedValues);
+// Right-side details drawer state (replaces the previous inline expanded row).
+const detailsDrawerOpen = ref(false);
+const drawerItem = ref<any>(null);
+const detailsDrawerWidth = computed(() => {
+	if (typeof window === "undefined") return 540;
+	const max = Math.min(window.innerWidth - 24, 540);
+	return Math.max(320, max);
+});
+
+const isItemInDrawer = (item: any) =>
+	detailsDrawerOpen.value && drawerItem.value?.posa_row_id === item?.posa_row_id;
+
+const openDetailsDrawer = (item: any) => {
+	if (!item) return;
+	drawerItem.value = item;
+	detailsDrawerOpen.value = true;
 };
+
+const closeDetailsDrawer = () => {
+	detailsDrawerOpen.value = false;
+	// Defer clearing so the drawer animates out cleanly with content still present.
+	setTimeout(() => {
+		if (!detailsDrawerOpen.value) {
+			drawerItem.value = null;
+		}
+	}, 250);
+};
+
+watch(detailsDrawerOpen, (open) => {
+	if (!open) {
+		// Mirror the legacy emit so external listeners don't see stale state.
+		emit("update:expanded", []);
+	}
+});
+
+// Keep the drawer item reference fresh as the cart re-renders (e.g. qty edits).
+watch(items, (next) => {
+	if (!detailsDrawerOpen.value || !drawerItem.value) return;
+	const refreshed = next.find(
+		(row: any) => row.posa_row_id === drawerItem.value.posa_row_id,
+	);
+	if (!refreshed) {
+		closeDetailsDrawer();
+	} else if (refreshed !== drawerItem.value) {
+		drawerItem.value = refreshed;
+	}
+});
 
 const handleQtyChange = (item: any, event: any) => {
 	const newQty = parseFloat(event.target.value) || 0;
@@ -337,24 +403,12 @@ const handleDiscountAmountUpdate = (item: any, newDiscount: any) => {
 	props.calcPrices(item, newDiscount, { target: { id: "discount_amount" } });
 };
 
-const handleRowClick = (event: any, item: any, toggleExpand: any, internalItem: any) => {
-	if (toggleExpand) {
-		toggleExpand(internalItem);
-	}
-};
-
-const handleToggleExpand = (internalItem: any, toggleExpand: any) => {
-	if (toggleExpand) {
-		toggleExpand(internalItem);
-	}
+const handleRowClick = (_event: any, item: any) => {
+	openDetailsDrawer(item);
 };
 
 const focusItemField = (index: number, field: CartShortcutField) => {
 	return focusCartItemField(tableContainer.value, index, field);
-};
-
-const isItemExpanded = (itemId: any) => {
-	return props.expanded?.includes(itemId);
 };
 
 // Drag and Drop delegation
@@ -379,6 +433,8 @@ onBeforeUnmount(() => {
 
 defineExpose({
 	focusItemField,
+	openDetailsDrawer,
+	closeDetailsDrawer,
 });
 </script>
 
@@ -392,5 +448,60 @@ defineExpose({
 .posa-items-table-container {
 	position: relative;
 	transition: all 0.3s ease;
+}
+
+.posa-details-drawer :deep(.v-navigation-drawer__content) {
+	background: var(--pos-surface-muted, #0f172a);
+	display: flex;
+	flex-direction: column;
+}
+
+.posa-details-drawer__header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 16px 18px 12px;
+}
+
+.posa-details-drawer__title {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	min-width: 0;
+}
+
+.posa-details-drawer__title-icon {
+	color: var(--pos-primary, rgb(var(--v-theme-primary)));
+	margin-top: 2px;
+	flex-shrink: 0;
+}
+
+.posa-details-drawer__heading {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.posa-details-drawer__eyebrow {
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--pos-text-secondary);
+}
+
+.posa-details-drawer__name {
+	font-size: 1.05rem;
+	line-height: 1.25;
+	color: var(--pos-text-primary);
+	overflow-wrap: anywhere;
+}
+
+.posa-details-drawer__body {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	padding: 12px 14px 24px;
 }
 </style>

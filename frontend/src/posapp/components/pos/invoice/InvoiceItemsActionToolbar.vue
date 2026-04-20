@@ -13,7 +13,19 @@
 			hide-details
 			clearable
 			autocomplete="off"
-		></v-text-field>
+		>
+			<template #append-inner>
+				<span
+					class="search-shortcut-hint"
+					:title="__('Press Alt+F to focus this search')"
+					aria-hidden="true"
+				>
+					<kbd class="search-shortcut-hint__key">Alt</kbd>
+					<span class="search-shortcut-hint__plus">+</span>
+					<kbd class="search-shortcut-hint__key">F</kbd>
+				</span>
+			</template>
+		</v-text-field>
 		<v-btn
 			density="compact"
 			variant="text"
@@ -121,3 +133,46 @@ defineExpose({
 	focusSearch,
 });
 </script>
+
+<style scoped>
+.search-shortcut-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px 4px;
+	font-family:
+		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+	font-size: 0.66rem;
+	line-height: 1;
+	color: var(--pos-text-secondary, rgba(148, 163, 184, 0.85));
+	user-select: none;
+	pointer-events: none;
+	opacity: 0.85;
+}
+
+.search-shortcut-hint__key {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	padding: 1px 5px;
+	border-radius: 5px;
+	background: rgba(148, 163, 184, 0.18);
+	border: 1px solid rgba(148, 163, 184, 0.28);
+	font-weight: 600;
+	font-family: inherit;
+	font-size: inherit;
+	letter-spacing: 0.02em;
+}
+
+.search-shortcut-hint__plus {
+	opacity: 0.6;
+	font-weight: 600;
+}
+
+@media (max-width: 640px) {
+	.search-shortcut-hint {
+		display: none;
+	}
+}
+</style>

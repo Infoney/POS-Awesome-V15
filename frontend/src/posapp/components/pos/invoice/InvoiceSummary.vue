@@ -3,113 +3,105 @@
 		class="cards sticky-summary-card mb-0 py-1 px-2 rounded-lg pos-themed-card"
 		:class="{ 'sticky-summary-card--dock-safe': useCompactSaleDock }"
 	>
-		<v-row dense class="summary-content">
-			<v-col
-				v-if="!useCompactSaleDock || showReturnDiscountAlert"
-				cols="12"
-				:md="useCompactSaleDock ? 12 : 7"
-			>
-				<v-alert
-					v-if="showReturnDiscountAlert"
-					density="compact"
-					type="info"
-					variant="tonal"
-					class="summary-field summary-field--alert"
-				>
-					{{ __("Prorated return discount") }}:
-					{{ formatRatio(return_discount_meta.ratio) }} -
-					{{ __("Original") }}:
-					{{ formatCurrency(return_discount_meta.original_discount) }},
-					{{ __("Applied") }}:
-					{{ formatCurrency(return_discount_meta.prorated_discount) }}
-				</v-alert>
+		<v-alert
+			v-if="showReturnDiscountAlert"
+			density="compact"
+			type="info"
+			variant="tonal"
+			class="summary-field summary-field--alert"
+		>
+			{{ __("Prorated return discount") }}:
+			{{ formatRatio(return_discount_meta.ratio) }} -
+			{{ __("Original") }}:
+			{{ formatCurrency(return_discount_meta.original_discount) }},
+			{{ __("Applied") }}:
+			{{ formatCurrency(return_discount_meta.prorated_discount) }}
+		</v-alert>
 
-				<div v-if="!useCompactSaleDock" class="summary-hero">
-					<div class="summary-hero__copy">
-						<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
-						<strong class="summary-hero__amount">
-							{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}
-						</strong>
-						<div class="summary-hero__meta">
-							<span>{{ formatFloat(total_qty, hide_qty_decimals ? 0 : undefined) }} {{ __("qty") }}</span>
-							<span>
-								{{ currencySymbol(displayCurrency) }}{{ formatCurrency(total_items_discount_amount) }}
-								{{ __("discount") }}
-							</span>
-						</div>
-					</div>
+		<div class="summary-actions-block">
+			<InvoiceActionButtons
+				:pos_profile="pos_profile"
+				:saveLoading="saveLoading"
+				:loadDraftsLoading="loadDraftsLoading"
+				:selectOrderLoading="selectOrderLoading"
+				:selectPurchaseOrderLoading="selectPurchaseOrderLoading"
+				:cancelLoading="cancelLoading"
+				:invoiceManagementLoading="invoiceManagementLoading"
+				:returnsLoading="returnsLoading"
+				:printLoading="printLoading"
+				:paymentLoading="paymentLoading"
+				:customerDisplayLoading="customerDisplayLoading"
+				@save-and-clear="handleSaveAndClear"
+				@load-drafts="handleLoadDrafts"
+				@select-order="handleSelectOrder"
+				@cancel-sale="handleCancelSale"
+				@open-invoice-management="handleOpenInvoiceManagement"
+				@open-returns="handleOpenReturns"
+				@print-draft="handlePrintDraft"
+				@show-payment="handleShowPayment"
+				@open-customer-display="handleOpenCustomerDisplay"
+			/>
+		</div>
 
-					<div class="summary-hero__field-wrap">
-						<v-text-field
-							v-if="!pos_profile.posa_use_percentage_discount"
-							ref="additionalDiscountField"
-							v-model="additionalDiscountDisplay"
-							@update:model-value="handleAdditionalDiscountUpdate"
-							@focus="handleAdditionalDiscountFocus"
-							@blur="handleAdditionalDiscountBlur"
-							:label="frappe._('Additional Discount')"
-							prepend-inner-icon="mdi-cash-minus"
-							variant="solo"
-							density="compact"
-							color="warning"
-							:prefix="currencySymbol(pos_profile.currency)"
-							:disabled="
-								!pos_profile.posa_allow_user_to_edit_additional_discount ||
-								!!discount_percentage_offer_name
-							"
-							class="summary-field summary-field--dock"
-						/>
-
-						<v-text-field
-							v-else
-							ref="additionalDiscountField"
-							v-model="additionalDiscountPercentageDisplay"
-							@update:model-value="handleAdditionalDiscountPercentageUpdate"
-							@change="$emit('update_discount_umount')"
-							@focus="handleAdditionalDiscountPercentageFocus"
-							@blur="handleAdditionalDiscountPercentageBlur"
-							:rules="[isNumber]"
-							:label="frappe._('Additional Discount %')"
-							suffix="%"
-							prepend-inner-icon="mdi-percent"
-							variant="solo"
-							density="compact"
-							color="warning"
-							:disabled="
-								!pos_profile.posa_allow_user_to_edit_additional_discount ||
-								!!discount_percentage_offer_name
-							"
-							class="summary-field summary-field--dock"
-						/>
-					</div>
+		<div v-if="!useCompactSaleDock" class="summary-hero summary-hero--bottom">
+			<div class="summary-hero__copy">
+				<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
+				<strong class="summary-hero__amount">
+					{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}
+				</strong>
+				<div class="summary-hero__meta">
+					<span>{{ formatFloat(total_qty, hide_qty_decimals ? 0 : undefined) }} {{ __("qty") }}</span>
+					<span>
+						{{ currencySymbol(displayCurrency) }}{{ formatCurrency(total_items_discount_amount) }}
+						{{ __("discount") }}
+					</span>
 				</div>
-			</v-col>
+			</div>
 
-			<v-col cols="12" :md="useCompactSaleDock ? 12 : 5" class="invoice-summary-actions">
-				<InvoiceActionButtons
-					:pos_profile="pos_profile"
-					:saveLoading="saveLoading"
-					:loadDraftsLoading="loadDraftsLoading"
-					:selectOrderLoading="selectOrderLoading"
-					:selectPurchaseOrderLoading="selectPurchaseOrderLoading"
-					:cancelLoading="cancelLoading"
-					:invoiceManagementLoading="invoiceManagementLoading"
-					:returnsLoading="returnsLoading"
-					:printLoading="printLoading"
-					:paymentLoading="paymentLoading"
-					:customerDisplayLoading="customerDisplayLoading"
-					@save-and-clear="handleSaveAndClear"
-					@load-drafts="handleLoadDrafts"
-					@select-order="handleSelectOrder"
-					@cancel-sale="handleCancelSale"
-					@open-invoice-management="handleOpenInvoiceManagement"
-					@open-returns="handleOpenReturns"
-					@print-draft="handlePrintDraft"
-					@show-payment="handleShowPayment"
-					@open-customer-display="handleOpenCustomerDisplay"
+			<div class="summary-hero__field-wrap">
+				<v-text-field
+					v-if="!pos_profile.posa_use_percentage_discount"
+					ref="additionalDiscountField"
+					v-model="additionalDiscountDisplay"
+					@update:model-value="handleAdditionalDiscountUpdate"
+					@focus="handleAdditionalDiscountFocus"
+					@blur="handleAdditionalDiscountBlur"
+					:label="frappe._('Additional Discount')"
+					prepend-inner-icon="mdi-cash-minus"
+					variant="solo"
+					density="compact"
+					color="warning"
+					:prefix="currencySymbol(pos_profile.currency)"
+					:disabled="
+						!pos_profile.posa_allow_user_to_edit_additional_discount ||
+						!!discount_percentage_offer_name
+					"
+					class="summary-field summary-field--dock"
 				/>
-			</v-col>
-		</v-row>
+
+				<v-text-field
+					v-else
+					ref="additionalDiscountField"
+					v-model="additionalDiscountPercentageDisplay"
+					@update:model-value="handleAdditionalDiscountPercentageUpdate"
+					@change="$emit('update_discount_umount')"
+					@focus="handleAdditionalDiscountPercentageFocus"
+					@blur="handleAdditionalDiscountPercentageBlur"
+					:rules="[isNumber]"
+					:label="frappe._('Additional Discount %')"
+					suffix="%"
+					prepend-inner-icon="mdi-percent"
+					variant="solo"
+					density="compact"
+					color="warning"
+					:disabled="
+						!pos_profile.posa_allow_user_to_edit_additional_discount ||
+						!!discount_percentage_offer_name
+					"
+					class="summary-field summary-field--dock"
+				/>
+			</div>
+		</div>
 	</v-card>
 
 	<v-navigation-drawer
@@ -454,6 +446,14 @@ defineExpose({
 
 .summary-content {
 	row-gap: 4px;
+}
+
+.summary-actions-block {
+	margin-bottom: 6px;
+}
+
+.summary-hero--bottom {
+	margin-top: 6px;
 }
 
 .summary-hero {

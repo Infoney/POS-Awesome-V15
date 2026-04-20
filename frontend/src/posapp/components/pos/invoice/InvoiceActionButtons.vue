@@ -9,8 +9,10 @@
 				@click="$emit('save-and-clear')"
 				class="summary-btn"
 				:loading="saveLoading"
+				:title="__('Save & Clear (Alt+S)')"
 			>
-				{{ __("Save & Clear") }}
+				<span class="summary-btn__label">{{ __("Save & Clear") }}</span>
+				<ShortcutHint combo="Alt+S" />
 			</v-btn>
 		</v-col>
 		<v-col cols="6" sm="4">
@@ -22,8 +24,10 @@
 				@click="$emit('load-drafts')"
 				class="white-text-btn summary-btn"
 				:loading="loadDraftsLoading"
+				:title="__('Drafts (Alt+L)')"
 			>
-				{{ __("Drafts") }}
+				<span class="summary-btn__label">{{ __("Drafts") }}</span>
+				<ShortcutHint combo="Alt+L" />
 			</v-btn>
 		</v-col>
 		<v-col cols="6" sm="4">
@@ -36,7 +40,7 @@
 				class="summary-btn"
 				:loading="invoiceManagementLoading"
 			>
-				{{ __("Invoice Mgmt") }}
+				<span class="summary-btn__label">{{ __("Invoice Mgmt") }}</span>
 			</v-btn>
 		</v-col>
 		<v-col cols="6" sm="4">
@@ -48,8 +52,10 @@
 				@click="$emit('cancel-sale')"
 				class="summary-btn"
 				:loading="cancelLoading"
+				:title="__('Cancel Sale (Alt+2)')"
 			>
-				{{ __("Cancel Sale") }}
+				<span class="summary-btn__label">{{ __("Cancel Sale") }}</span>
+				<ShortcutHint combo="Alt+2" />
 			</v-btn>
 		</v-col>
 		<v-col cols="6" sm="4" v-if="pos_profile.posa_allow_return == 1">
@@ -61,8 +67,10 @@
 				@click="$emit('open-returns')"
 				class="summary-btn"
 				:loading="returnsLoading"
+				:title="__('Sales Return (Alt+8)')"
 			>
-				{{ __("Sales Return") }}
+				<span class="summary-btn__label">{{ __("Sales Return") }}</span>
+				<ShortcutHint combo="Alt+8" />
 			</v-btn>
 		</v-col>
 		<v-col cols="6" sm="4" v-if="pos_profile.custom_allow_select_sales_order == 1">
@@ -74,8 +82,10 @@
 				@click="$emit('select-order')"
 				class="summary-btn"
 				:loading="selectOrderLoading"
+				:title="__('Select S.O (Alt+7)')"
 			>
-				{{ __("Select S.O") }}
+				<span class="summary-btn__label">{{ __("Select S.O") }}</span>
+				<ShortcutHint combo="Alt+7" />
 			</v-btn>
 		</v-col>
 		<v-col cols="6" sm="4" v-if="pos_profile.posa_allow_print_draft_invoices">
@@ -88,7 +98,7 @@
 				class="summary-btn"
 				:loading="printLoading"
 			>
-				{{ __("Print Draft") }}
+				<span class="summary-btn__label">{{ __("Print Draft") }}</span>
 			</v-btn>
 		</v-col>
 		<v-col cols="6" sm="4" v-if="showCustomerDisplayButton">
@@ -101,7 +111,7 @@
 				class="summary-btn"
 				:loading="customerDisplayLoading"
 			>
-				{{ __("Customer Screen") }}
+				<span class="summary-btn__label">{{ __("Customer Screen") }}</span>
 			</v-btn>
 		</v-col>
 		<v-col cols="12">
@@ -113,8 +123,10 @@
 				@click="$emit('show-payment')"
 				class="summary-btn pay-btn"
 				:loading="paymentLoading"
+				:title="__('Open payment (Alt+D) — submit + print (Alt+P) — submit only (Alt+X)')"
 			>
-				{{ __("PAY") }}
+				<span class="summary-btn__label">{{ __("PAY") }}</span>
+				<ShortcutHint combo="Alt+D" tone="light" />
 			</v-btn>
 		</v-col>
 	</v-row>
@@ -123,6 +135,7 @@
 <script setup>
 import { computed } from "vue";
 import { parseBooleanSetting } from "../../../utils/stock";
+import ShortcutHint from "./ShortcutHint.vue";
 
 const props = defineProps({
 	pos_profile: {
@@ -189,6 +202,18 @@ const showCustomerDisplayButton = computed(() =>
 .summary-btn :deep(.v-btn__content) {
 	white-space: normal !important;
 	pointer-events: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.summary-btn__label {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .summary-btn :deep(.v-btn__prepend),
