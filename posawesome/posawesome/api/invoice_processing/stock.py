@@ -3,6 +3,7 @@ from frappe.utils import cint, flt, cstr, getdate, nowdate
 from frappe import _
 from erpnext.stock.doctype.batch.batch import get_batch_qty
 from posawesome.posawesome.api.items import get_bulk_stock_availability, get_stock_availability
+from posawesome.posawesome.api.item_fetchers import get_batches
 from posawesome.posawesome.api.invoice_processing.utils import _sanitize_item_name
 
 def _is_stock_item(item):
@@ -53,6 +54,49 @@ def _get_available_stock(item):
     return get_stock_availability(item_code, warehouse)
 
 
+def _has_batch_no(item):
+    """Return True when the item is configured with batches."""
+
+    flag = item.get("has_batch_no")
+    if flag is not None:
+        return bool(cint(flag))
+
+    item_code = item.get("item_code")
+    if not item_code:
+        return False
+
+    return bool(cint(frappe.get_cached_value("Item", item_code, "has_batch_no") or 0))
+
+
+def _today():
+    return getdate(nowdate())
+
+
+def _max_available_batch_qty(item_code, warehouse):
+    """Return the largest non-expired batch qty available in the warehouse.
+
+    A safe lower bound for "is it possible to fulfil ``requested`` from a
+    single batch right now?". Bundle splitting may stretch this further, but
+    if even the largest batch can't cover the request the cashier will hit
+    ERPNext's per-batch validator at submit time.
+    """
+
+    batch_rows = get_batches(warehouse, (item_code,)) or []
+    if not batch_rows:
+        return 0.0
+
+    today = _today()
+    best = 0.0
+    for row in batch_rows:
+        expiry = row.get("expiry_date")
+        if expiry and getdate(expiry) < today:
+            continue
+        qty = flt(row.get("batch_qty") or 0)
+        if qty > best:
+            best = qty
+    return best
+
+
 def _collect_stock_errors(items):
     """Return list of items exceeding available stock."""
     errors = []
@@ -78,9 +122,45 @@ def _collect_stock_errors(items):
         item_code = d.get("item_code")
         warehouse = d.get("warehouse")
         batch_no = cstr(d.get("batch_no"))
-
-        available = stock_map.get((item_code, warehouse, batch_no), 0.0)
         requested = flt(d.get("stock_qty") or (flt(d.get("qty")) * flt(d.get("conversion_factor") or 1)))
+
+        if batch_no:
+            # Caller picked (or auto-picker assigned) a specific batch — validate
+            # that batch directly. Catches the "Batch X has negative stock" case
+            # before it reaches ERPNext's stock ledger.
+            available = stock_map.get((item_code, warehouse, batch_no), 0.0)
+            if requested > available:
+                errors.append(
+                    {
+                        "item_code": item_code,
+                        "warehouse": warehouse,
+                        "batch_no": batch_no,
+                        "requested_qty": requested,
+                        "available_qty": available,
+                    }
+                )
+            continue
+
+        # No batch picked yet — for batched items, ERPNext will allocate one at
+        # submit. Bin total can mask a situation where every individual batch
+        # has 0 or negative qty, so cross-check that at least one non-expired
+        # batch can fulfil the request.
+        if _has_batch_no(d) and item_code and warehouse:
+            best_batch_qty = _max_available_batch_qty(item_code, warehouse)
+            if requested > best_batch_qty:
+                errors.append(
+                    {
+                        "item_code": item_code,
+                        "warehouse": warehouse,
+                        "requested_qty": requested,
+                        "available_qty": best_batch_qty,
+                        "reason": "no_batch_with_enough_qty",
+                    }
+                )
+            continue
+
+        # Plain (non-batched) stock item — Bin total is the right signal.
+        available = stock_map.get((item_code, warehouse, ""), 0.0)
         if requested > available:
             errors.append(
                 {

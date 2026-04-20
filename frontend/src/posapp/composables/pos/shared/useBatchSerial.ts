@@ -244,10 +244,18 @@ export function useBatchSerial() {
 		const selectable_batches = normalized_batch_data.filter(
 			(batch) => batch.available_qty > 0,
 		);
-		const selection_pool =
-			selectable_batches.length > 0
+
+		// Operator-driven picks (value is set) may target a specific batch even
+		// if its on-hand qty is 0/negative — let the backend validation surface
+		// the issue with the proper message. Auto-picks (no value) must never
+		// land on a non-positive batch, otherwise we silently push the cart
+		// toward an oversell that ERPNext will reject at submit
+		// (e.g. "Batch No XXX has negative stock of -2.0").
+		const selection_pool = value
+			? selectable_batches.length > 0
 				? selectable_batches
-				: normalized_batch_data;
+				: normalized_batch_data
+			: selectable_batches;
 
 		if (selection_pool.length > 0) {
 			let batch_to_use: any = null;
