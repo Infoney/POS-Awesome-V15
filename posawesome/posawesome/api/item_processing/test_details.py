@@ -167,5 +167,87 @@ class TestGetItemDetailNormalization(unittest.TestCase):
         self.assertIsInstance(captured["doc"], self.frappe._dict)
 
 
+class TestBatchedActualQtyClampsNegatives(unittest.TestCase):
+    """Items selector must show *sellable* qty.
+
+    For batched items, ERPNext rejects SLEs that would consume from a
+    negative-qty batch. So the displayed actual_qty must reflect what's
+    actually sellable — sum of POSITIVE non-expired batch qtys — not the
+    naive sum which can mask negative batches behind positive ones and
+    mislead the cashier into a sale that fails at submit.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.frappe = _install_framework_stubs()
+        _install_dependency_stubs()
+        _install_package_stubs()
+        cls.details = _load_module()
+
+    def _run(self, batch_rows):
+        captured = {}
+
+        def fake_get_item_details(item, doc, overwrite_warehouse=False):
+            captured["item"] = item
+            return {}
+
+        with patch.object(
+            self.details, "get_batches", return_value=batch_rows
+        ), patch.object(self.details.frappe, "get_all", return_value=[]), patch.object(
+            self.details.frappe.db,
+            "get_value",
+            side_effect=lambda doctype, name, field, as_dict=False: (
+                {"max_discount": 0, "allow_negative_stock": 0, "stock_uom": "Nos"}
+                if doctype == "Item" and as_dict
+                else "USD"
+            ),
+        ), patch.dict(
+            sys.modules,
+            {
+                "erpnext.stock.get_item_details": types.SimpleNamespace(
+                    get_item_details=fake_get_item_details
+                )
+            },
+        ):
+            return self.details.get_item_detail(
+                {
+                    "item_code": "ITEM-30879",
+                    "is_stock_item": 1,
+                    "has_batch_no": 1,
+                },
+                doc=self.frappe._dict({"customer": "Test"}),
+                warehouse="AL-KHANSA - PPC",
+                price_list="Standard Selling",
+                company="Test Company",
+            )
+
+    def test_negative_batch_does_not_inflate_displayed_qty(self):
+        # The original bug: cashier sees positive qty (8) and adds to cart;
+        # ERPNext later rejects because batch B-NEG is at -2.
+        result = self._run(
+            [
+                AttrDict(batch_no="B-POS", batch_qty=10, expiry_date=None),
+                AttrDict(batch_no="B-NEG", batch_qty=-2, expiry_date=None),
+            ]
+        )
+        # 10 (positive batch only), not 8 (10 + -2).
+        self.assertEqual(result["actual_qty"], 10)
+        # Per-batch data keeps the signed value so the picker can flag it.
+        rows = {row["batch_no"]: row["batch_qty"] for row in result["batch_no_data"]}
+        self.assertEqual(rows, {"B-POS": 10, "B-NEG": -2})
+
+    def test_all_batches_negative_yields_zero_displayed_qty(self):
+        # The reported scenario: every batch is at or below 0. The selector
+        # must show 0 so the cashier knows it's actually out of stock.
+        result = self._run(
+            [
+                AttrDict(batch_no="B1", batch_qty=-5, expiry_date=None),
+                AttrDict(batch_no="B2", batch_qty=0, expiry_date=None),
+                AttrDict(batch_no="B3", batch_qty=-1, expiry_date=None),
+            ]
+        )
+        self.assertEqual(result["actual_qty"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

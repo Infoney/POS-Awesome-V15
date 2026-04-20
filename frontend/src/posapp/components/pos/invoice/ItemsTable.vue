@@ -68,61 +68,73 @@
 			</template>
 		</v-data-table-virtual>
 
-		<!-- Right-side product details drawer (command-center style) -->
-		<v-navigation-drawer
-			v-model="detailsDrawerOpen"
-			location="right"
-			temporary
-			:width="detailsDrawerWidth"
-			class="posa-details-drawer pos-themed-card"
-		>
-			<div class="posa-details-drawer__header">
-				<div class="posa-details-drawer__title">
-					<v-icon size="20" class="posa-details-drawer__title-icon">mdi-information-outline</v-icon>
-					<div class="posa-details-drawer__heading">
-						<span class="posa-details-drawer__eyebrow">{{ __("Product Details") }}</span>
-						<strong v-if="drawerItem" class="posa-details-drawer__name">
-							{{ drawerItem.item_name || drawerItem.item_code }}
-						</strong>
+		<!-- Right-side product details drawer (command-center style).
+		     Teleported to <body> so it overlays the entire viewport instead of
+		     being clipped by the cart container's overflow:auto. -->
+		<Teleport to="body">
+			<v-dialog
+				v-model="detailsDrawerOpen"
+				:width="detailsDrawerWidth"
+				:max-width="detailsDrawerWidth"
+				:fullscreen="false"
+				transition="dialog-right-transition"
+				scrim="rgba(15, 23, 42, 0.55)"
+				class="posa-details-drawer-dialog"
+				@update:model-value="(open) => !open && closeDetailsDrawer()"
+			>
+				<v-card
+					class="posa-details-drawer pos-themed-card"
+					:height="'100dvh'"
+				>
+					<div class="posa-details-drawer__header">
+						<div class="posa-details-drawer__title">
+							<v-icon size="20" class="posa-details-drawer__title-icon">mdi-information-outline</v-icon>
+							<div class="posa-details-drawer__heading">
+								<span class="posa-details-drawer__eyebrow">{{ __("Product Details") }}</span>
+								<strong v-if="drawerItem" class="posa-details-drawer__name">
+									{{ drawerItem.item_name || drawerItem.item_code }}
+								</strong>
+							</div>
+						</div>
+						<v-btn
+							icon="mdi-close"
+							variant="text"
+							density="compact"
+							:aria-label="__('Close')"
+							@click="closeDetailsDrawer"
+						/>
 					</div>
-				</div>
-				<v-btn
-					icon="mdi-close"
-					variant="text"
-					density="compact"
-					:aria-label="__('Close')"
-					@click="closeDetailsDrawer"
-				/>
-			</div>
-			<v-divider />
-			<div class="posa-details-drawer__body">
-				<ItemsTableExpandedRow
-					v-if="drawerItem"
-					:item="drawerItem"
-					:is-expanded="true"
-					render-as="div"
-					:pos_profile="pos_profile"
-					:invoice-type="invoiceType"
-					:is-return-invoice="isReturnInvoice"
-					:invoice_doc="invoice_doc"
-					:hide_qty_decimals="hide_qty_decimals"
-					:expanded-content-classes="expandedContentClasses"
-					:format-float="memoizedFormatFloat"
-					:format-currency="memoizedFormatCurrency"
-					:currency-symbol="currencySymbol"
-					:is-number="isNumber"
-					:set-formated-currency="setFormatedCurrency"
-					:calc-prices="calcPrices"
-					:calc-uom="calcUom"
-					:change-price-list-rate="changePriceListRate"
-					:get-serial-options="getSerialOptions"
-					:set-serial-no="setSerialNo"
-					:set-batch-qty="setBatchQty"
-					:validate-due-date="validateDueDate"
-					@qty-change="handleQtyChange"
-				/>
-			</div>
-		</v-navigation-drawer>
+					<v-divider />
+					<div class="posa-details-drawer__body">
+						<ItemsTableExpandedRow
+							v-if="drawerItem"
+							:item="drawerItem"
+							:is-expanded="true"
+							render-as="div"
+							:pos_profile="pos_profile"
+							:invoice-type="invoiceType"
+							:is-return-invoice="isReturnInvoice"
+							:invoice_doc="invoice_doc"
+							:hide_qty_decimals="hide_qty_decimals"
+							:expanded-content-classes="expandedContentClasses"
+							:format-float="memoizedFormatFloat"
+							:format-currency="memoizedFormatCurrency"
+							:currency-symbol="currencySymbol"
+							:is-number="isNumber"
+							:set-formated-currency="setFormatedCurrency"
+							:calc-prices="calcPrices"
+							:calc-uom="calcUom"
+							:change-price-list-rate="changePriceListRate"
+							:get-serial-options="getSerialOptions"
+							:set-serial-no="setSerialNo"
+							:set-batch-qty="setBatchQty"
+							:validate-due-date="validateDueDate"
+							@qty-change="handleQtyChange"
+						/>
+					</div>
+				</v-card>
+			</v-dialog>
+		</Teleport>
 
 		<!-- Edit name dialog -->
 		<v-dialog v-model="editNameDialog" max-width="400">
@@ -456,10 +468,24 @@ defineExpose({
 	transition: all 0.3s ease;
 }
 
-.posa-details-drawer :deep(.v-navigation-drawer__content) {
-	background: var(--pos-surface-muted, #0f172a);
+/* Anchor the dialog to the right edge so it reads as a side drawer. */
+.posa-details-drawer-dialog :deep(.v-overlay__content) {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	margin: 0;
+	max-height: 100dvh;
+	border-radius: 0;
+	transform-origin: right center;
+}
+
+.posa-details-drawer {
+	background: var(--pos-surface-muted, #0f172a) !important;
+	border-radius: 0 !important;
 	display: flex;
 	flex-direction: column;
+	overflow: hidden;
 }
 
 .posa-details-drawer__header {

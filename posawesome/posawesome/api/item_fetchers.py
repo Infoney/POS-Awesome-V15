@@ -533,8 +533,13 @@ def merge_item_row(
     batch_rows = lookup_data.batch_map.get(item_code, [])
     actual_qty = lookup_data.stock_map.get(item_code, 0) or 0
     if meta.get("has_batch_no") and batch_rows:
+        # Sum only positive non-expired batches: the cashier can't sell
+        # from a negative batch (ERPNext rejects the SLE), so showing the
+        # net sum of positive + negative batches misleads the operator
+        # into adding items that will fail at submit. Per-batch batch_qty
+        # in batch_no_data is left signed so the picker can flag negatives.
         actual_qty = sum(
-            flt(batch.get("batch_qty"))
+            max(flt(batch.get("batch_qty")), 0)
             for batch in batch_rows
             if not batch.get("is_expired")
         )

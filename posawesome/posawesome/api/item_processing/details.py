@@ -66,7 +66,11 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None, company=Non
             is_expired = bool(row.expiry_date and str(row.expiry_date) <= str(today))
             if is_expired:
                 continue
-            non_expired_batch_qty += row.batch_qty or 0
+            # Negative batches can't be sold from — ERPNext will reject the
+            # SLE — so they must not inflate the displayed sellable qty.
+            # The signed batch_qty stays on the per-batch row so the picker
+            # can still surface "Batch X: -2 (out of stock)" if needed.
+            non_expired_batch_qty += max(row.batch_qty or 0, 0)
             batch_no_data.append(
                 {
                     "batch_no": row.batch_no,
