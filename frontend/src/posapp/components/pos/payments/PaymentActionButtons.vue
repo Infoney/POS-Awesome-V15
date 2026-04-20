@@ -13,8 +13,10 @@
 					:loading="loading"
 					:disabled="loading || validatePayment"
 					:class="{ 'submit-highlight': highlightSubmit }"
+					:title="__('Submit (Alt+X)')"
 				>
-					{{ __("Submit") }}
+					<span class="payment-btn__label">{{ __("Submit") }}</span>
+					<ShortcutHint combo="Alt+X" tone="light" />
 				</v-btn>
 			</v-col>
 			<v-col cols="12" sm="6" class="payment-action-col">
@@ -27,8 +29,10 @@
 					@click="$emit('submit-and-print')"
 					:loading="loading"
 					:disabled="loading || validatePayment"
+					:title="__('Submit & Print (Alt+P)')"
 				>
-					{{ __("Submit & Print") }}
+					<span class="payment-btn__label">{{ __("Submit & Print") }}</span>
+					<ShortcutHint combo="Alt+P" tone="light" />
 				</v-btn>
 			</v-col>
 			<v-col cols="12">
@@ -48,6 +52,8 @@
 </template>
 
 <script setup>
+import ShortcutHint from "../invoice/ShortcutHint.vue";
+
 defineProps({
 	loading: Boolean,
 	validatePayment: Boolean,
@@ -78,6 +84,18 @@ const __ = window.__;
 		transform 0.18s ease !important;
 	color: #ffffff !important;
 	min-height: 48px !important;
+}
+
+:deep(.payment-footer-btn .v-btn__content) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+}
+
+.payment-btn__label {
+	display: inline-flex;
+	align-items: center;
 }
 
 .payment-submit-btn {
