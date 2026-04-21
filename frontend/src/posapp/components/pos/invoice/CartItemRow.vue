@@ -1,5 +1,9 @@
 <template>
-	<tr class="posa-cart-item-row" v-memo="memoDeps">
+	<tr
+		class="posa-cart-item-row"
+		:data-accent-tier="accentTier"
+		v-memo="memoDeps"
+	>
 		<template v-for="column in visibleColumns" :key="column.key">
 		<!-- Item Name Column -->
 		<td v-if="column.key === 'item_name'" class="text-start" :data-column-key="'item_name'">
@@ -491,6 +495,18 @@ const memoDeps = computed(() => {
 });
 
 const qtyLength = computed(() => String(Math.abs(props.item.qty || 0)).replace(".", "").length);
+
+// Row accent tier — drives the left stripe colour for the CC row-card look.
+// Matches the item-selector accent language: offer = green, replace = blue,
+// return/negative qty = red, expired batch = orange, default = neutral.
+const accentTier = computed(() => {
+	const it = props.item || {};
+	if (it.batch_no_is_expired) return "expired";
+	if (it.posa_is_offer || it.is_free_item) return "offer";
+	if (it.posa_is_replace) return "replace";
+	if (props.isReturnInvoice || Number(it.qty) < 0) return "return";
+	return "default";
+});
 
 const disableDecrement = computed(
 	() =>

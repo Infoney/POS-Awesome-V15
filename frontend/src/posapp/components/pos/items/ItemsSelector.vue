@@ -321,7 +321,9 @@ const newItemDialogAwaitingScan = ref(false);
 const qty = ref(1);
 const search_input = ref("");
 const first_search = ref("");
-const items_view = ref("list");
+// Default to the CC-style row "card" view (horizontal rows). The legacy
+// dense data table is still reachable from the view toggle.
+const items_view = ref("card");
 const itemsPerPage = ref(50);
 const clearingSearch = ref(false);
 const isDragging = ref(false);
@@ -1008,6 +1010,7 @@ onMounted(async () => {
 	window.addEventListener("resize", checkItemContainerOverflow);
 	if (props.context === "pos") {
 		document.addEventListener("keydown", handleGlobalTypeToSearchKeydown, true);
+		document.addEventListener("keydown", handleFocusSearchShortcut, true);
 	}
 	nextTick(() => {
 		checkItemContainerOverflow();
@@ -1033,6 +1036,7 @@ onBeforeUnmount(() => {
 	}
 	if (props.context === "pos") {
 		document.removeEventListener("keydown", handleGlobalTypeToSearchKeydown, true);
+		document.removeEventListener("keydown", handleFocusSearchShortcut, true);
 	}
 	itemSearchFocusClearGuard.dispose();
 	window.removeEventListener("resize", checkItemContainerOverflow);
@@ -1245,6 +1249,26 @@ const handleGlobalTypeToSearchKeydown = (event: KeyboardEvent) => {
 	revealItemSearchView();
 	requestForegroundItemSearchFocus();
 	appendSearchCharacter(event.key);
+};
+
+// Ctrl+K / Cmd+K — focus the item search from anywhere in the POS.
+// Mirrors the Command Center shortcut. Works even while another
+// input is focused so cashiers can jump to search without clicking.
+const handleFocusSearchShortcut = (event: KeyboardEvent) => {
+	if (!event || event.defaultPrevented || event.repeat) return;
+	if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+	if ((event.key || "").toLowerCase() !== "k") return;
+	if (
+		props.context !== "pos" ||
+		activeView.value === "payment" ||
+		scannerInput.cameraScannerActive.value
+	) {
+		return;
+	}
+	event.preventDefault();
+	event.stopPropagation();
+	revealItemSearchView();
+	requestForegroundItemSearchFocus();
 };
 const handleItemSearchFocus = () => {
 	if (!itemSearchFocusClearGuard.shouldClearSearchOnFocus()) {

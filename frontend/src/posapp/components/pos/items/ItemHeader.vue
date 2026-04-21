@@ -1,11 +1,7 @@
 <template>
 	<div class="sticky-header">
-		<v-row class="items">
-			<v-col
-				class="pb-0"
-				:cols="posProfile.posa_input_qty ? 8 : 12"
-				:sm="posProfile.posa_input_qty ? 9 : 12"
-			>
+		<div class="cmd-search-row">
+			<div class="cmd-search-field">
 				<v-text-field
 					density="compact"
 					clearable
@@ -34,48 +30,48 @@
 					ref="debounce_search"
 				>
 					<template v-slot:append-inner>
-						<v-btn
-							v-if="posProfile.posa_enable_camera_scanning"
-							icon="mdi-camera"
-							size="small"
-							color="primary"
-							variant="text"
-							:disabled="scannerLocked"
-							@click="$emit('start-camera')"
-							:aria-label="
-								scannerLocked
-									? __('Camera scanner is locked until the current error is acknowledged')
-									: __('Scan with camera')
-							"
-							:title="
-								scannerLocked
-									? __('Acknowledge the error to resume scanning')
-									: __('Scan with Camera')
-							"
-						>
-						</v-btn>
-						<v-btn
-							icon="mdi-tune-vertical"
-							size="x-small"
-							color="primary"
-							variant="text"
-							class="cmd-search-tools-btn"
-							@click.stop="toolsOpen = !toolsOpen"
-							:aria-label="toolsOpen ? __('Hide search tools') : __('Show search tools')"
-						>
-						</v-btn>
 						<span
 							class="cmd-search-hint"
-							:title="__('Press Alt+3 to focus this search')"
+							:title="__('Press Ctrl+K to focus this search')"
 							aria-hidden="true"
 						>
-							<kbd class="cmd-search-hint__key">Alt</kbd>
-							<kbd class="cmd-search-hint__key">3</kbd>
+							<kbd class="cmd-search-hint__key">{{ shortcutModifierLabel }}</kbd>
+							<kbd class="cmd-search-hint__key">K</kbd>
 						</span>
 					</template>
 				</v-text-field>
-			</v-col>
-			<v-col cols="4" sm="3" class="pb-0" v-if="posProfile.posa_input_qty">
+			</div>
+			<v-btn
+				v-if="posProfile.posa_enable_camera_scanning"
+				icon="mdi-camera"
+				size="small"
+				color="primary"
+				variant="text"
+				class="cmd-search-side-btn"
+				:disabled="scannerLocked"
+				@click="$emit('start-camera')"
+				:aria-label="
+					scannerLocked
+						? __('Camera scanner is locked until the current error is acknowledged')
+						: __('Scan with camera')
+				"
+				:title="
+					scannerLocked
+						? __('Acknowledge the error to resume scanning')
+						: __('Scan with Camera')
+				"
+			/>
+			<v-btn
+				icon="mdi-tune-vertical"
+				size="small"
+				color="primary"
+				variant="text"
+				class="cmd-search-side-btn"
+				@click.stop="toolsOpen = !toolsOpen"
+				:aria-label="toolsOpen ? __('Hide search tools') : __('Show search tools')"
+				:title="toolsOpen ? __('Hide tools') : __('Show tools')"
+			/>
+			<div v-if="posProfile.posa_input_qty" class="cmd-search-qty">
 				<v-text-field
 					density="compact"
 					variant="solo"
@@ -93,8 +89,8 @@
 					@click="$emit('clear-qty')"
 					@blur="$emit('blur-qty')"
 				></v-text-field>
-			</v-col>
-		</v-row>
+			</div>
+		</div>
 		<v-expand-transition>
 			<div v-if="toolsOpen" class="tools-panel">
 				<div class="tools-panel__actions">
@@ -150,7 +146,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 defineProps({
 	searchInput: { type: String, default: "" },
@@ -161,6 +157,12 @@ defineProps({
 	lastSyncTime: { type: String, default: "" },
 	syncStatus: { type: String, default: "" },
 	context: { type: String, default: "pos" },
+});
+
+const shortcutModifierLabel = computed(() => {
+	if (typeof navigator === "undefined") return "Ctrl";
+	const platform = (navigator.platform || navigator.userAgent || "").toLowerCase();
+	return /mac|iphone|ipad|ipod/.test(platform) ? "⌘" : "Ctrl";
 });
 
 defineEmits([
@@ -195,13 +197,43 @@ defineExpose({
 	top: 0;
 	z-index: 5;
 	background: transparent;
-	padding: 10px 4px 6px;
+	padding: 8px 4px 6px;
 	margin-bottom: 0;
 	border-bottom: none;
 }
 
 .items {
 	margin: 0;
+}
+
+/* Flex row: [search .........] [camera] [tools] [qty?] */
+.cmd-search-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+}
+
+.cmd-search-field {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.cmd-search-qty {
+	flex: 0 0 96px;
+}
+
+.cmd-search-side-btn {
+	flex: 0 0 auto;
+	opacity: 0.7;
+	transition: opacity 0.15s ease, background-color 0.15s ease;
+	border-radius: 10px;
+}
+
+.cmd-search-side-btn:hover,
+.cmd-search-side-btn:focus-visible {
+	opacity: 1;
+	background: var(--pos-hover-bg, rgba(148, 163, 184, 0.08));
 }
 
 .tools-panel {
@@ -244,20 +276,22 @@ defineExpose({
 }
 
 /* ── Command-center search field ─────────────────────────────
-   Single rounded surface, dark tier-2 background, subtle border,
-   pink focus ring. Mirrors the cc ProductSearch input. */
+   One clean rounded surface, dark tier-2 background, hairline
+   border only (no double outline, no filled variant layer).
+   Mirrors the cc ProductSearch input exactly. */
 .pos-cmd-search :deep(.v-field) {
-	border-radius: 12px !important;
+	border-radius: 14px !important;
 	background: var(--pos-surface-muted, #161c27) !important;
 	box-shadow: none !important;
-	min-height: 44px;
+	min-height: 46px;
 	transition:
 		border-color 0.18s ease,
 		box-shadow 0.18s ease;
 }
 
-.pos-cmd-search :deep(.v-field__outline) {
-	--v-field-border-opacity: 1;
+.pos-cmd-search :deep(.v-field__overlay) {
+	background: transparent !important;
+	opacity: 0 !important;
 }
 
 .pos-cmd-search :deep(.v-field__outline__start),
@@ -265,10 +299,12 @@ defineExpose({
 .pos-cmd-search :deep(.v-field__outline__notch) {
 	border-color: var(--pos-border, #252b37) !important;
 	border-width: 1px !important;
+	--v-field-border-opacity: 1 !important;
 }
 
-.pos-cmd-search :deep(.v-field--focused) {
-	box-shadow: 0 0 0 3px rgba(226, 54, 112, 0.08) !important;
+.pos-cmd-search :deep(.v-field__outline__notch::before),
+.pos-cmd-search :deep(.v-field__outline__notch::after) {
+	border-width: 0 !important;
 }
 
 .pos-cmd-search :deep(.v-field--focused .v-field__outline__start),
@@ -277,11 +313,16 @@ defineExpose({
 	border-color: rgba(226, 54, 112, 0.5) !important;
 }
 
+.pos-cmd-search :deep(.v-field--focused) {
+	box-shadow: 0 0 0 3px rgba(226, 54, 112, 0.12) !important;
+}
+
 .pos-cmd-search :deep(.v-field__input) {
-	min-height: 44px;
-	font-size: 0.92rem;
+	min-height: 46px;
+	font-size: 0.95rem;
 	font-weight: 500;
 	letter-spacing: 0.005em;
+	padding-inline-start: 2px;
 }
 
 .pos-cmd-search :deep(.v-field__input::placeholder) {
@@ -289,31 +330,30 @@ defineExpose({
 	opacity: 0.85;
 }
 
+.pos-cmd-search :deep(.v-field__prepend-inner) {
+	padding-inline-end: 6px;
+}
+
 .pos-cmd-search :deep(.v-field__prepend-inner .v-icon) {
 	color: var(--pos-text-secondary, #7b899d);
-	opacity: 0.85;
+	opacity: 0.9;
+	font-size: 20px;
 }
 
-/* Subtle tools toggle so the chrome stays close to the reference. */
-.cmd-search-tools-btn {
-	opacity: 0.55;
-	transition: opacity 0.15s ease;
-}
-
-.cmd-search-tools-btn:hover,
-.cmd-search-tools-btn:focus-visible {
-	opacity: 1;
+.pos-cmd-search :deep(.v-field__append-inner) {
+	align-items: center;
+	padding-inline-end: 10px;
 }
 
 /* Command-center style kbd hint inside the items search field. */
 .cmd-search-hint {
 	display: inline-flex;
 	align-items: center;
-	gap: 3px;
-	margin-inline-start: 8px;
+	gap: 4px;
+	margin-inline-start: 6px;
 	font-family:
 		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-	font-size: 0.68rem;
+	font-size: 0.72rem;
 	line-height: 1;
 	color: var(--pos-text-secondary, rgba(148, 163, 184, 0.85));
 	user-select: none;
@@ -340,13 +380,17 @@ defineExpose({
 	.cmd-search-hint {
 		display: none;
 	}
+
+	.cmd-search-qty {
+		flex-basis: 72px;
+	}
 }
 
 @media (max-width: 768px) {
 	.sticky-header {
 		top: 0;
 		z-index: 13;
-		padding: 12px 12px 2px;
+		padding: 10px 10px 2px;
 	}
 
 	.tools-panel {

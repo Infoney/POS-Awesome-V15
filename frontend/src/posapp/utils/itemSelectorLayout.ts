@@ -3,17 +3,13 @@
  */
 
 /**
- * Calculates the number of columns based on container width.
+ * Number of columns in the item card grid.
+ *
+ * The POS uses Command-Center-style horizontal row cards — a single
+ * column at every breakpoint. The classic 2/3-column grid is retained
+ * as dead code below in case a future flag re-enables it.
  */
-export const getCardColumns = (width: number): number => {
-    if (width <= 768) {
-        return 1;
-    }
-    if (width <= 1200) {
-        return 2;
-    }
-    return 3;
-};
+export const getCardColumns = (_width: number): number => 1;
 
 /**
  * Calculates the gap between cards based on container width.
