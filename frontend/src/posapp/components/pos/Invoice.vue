@@ -1341,16 +1341,17 @@ export default {
 }
 
 .invoice-section-heading {
-	padding: 8px 12px 0;
+	padding: 6px 10px 0;
 }
 
 .invoice-section-heading__title {
 	margin: 0;
-	font-size: 0.82rem;
+	font-size: 0.72rem;
 	font-weight: 700;
-	line-height: 1.25;
-	letter-spacing: 0.01em;
-	color: var(--pos-text-primary);
+	line-height: 1.2;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--pos-text-secondary);
 }
 
 .invoice-items-card {
