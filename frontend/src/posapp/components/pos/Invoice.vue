@@ -1263,7 +1263,7 @@ export default {
 
 .invoice-top-grid {
 	display: grid;
-	grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr);
+	grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
 	gap: var(--dynamic-sm);
 	flex: 0 0 auto;
 	align-items: stretch;
@@ -1308,22 +1308,15 @@ export default {
 }
 
 /* Compact inputs inside Customer Details + Find in Cart cards */
-.invoice-section-card--customer :deep(.v-field),
-.invoice-section-card--search :deep(.v-field) {
-	min-height: 34px;
-}
 .invoice-section-card--customer :deep(.v-field__input),
 .invoice-section-card--search :deep(.v-field__input) {
-	min-height: 34px;
-	padding-top: 4px;
-	padding-bottom: 4px;
-	font-size: 0.82rem;
+	font-size: 0.88rem;
 }
 .invoice-section-card--customer :deep(.v-field-label),
 .invoice-section-card--customer :deep(.v-label),
 .invoice-section-card--search :deep(.v-field-label),
 .invoice-section-card--search :deep(.v-label) {
-	font-size: 0.72rem;
+	font-size: 0.76rem;
 }
 .invoice-section-card--customer :deep(.v-btn),
 .invoice-section-card--search :deep(.v-btn) {
