@@ -121,6 +121,49 @@ describe("useBatchSerial.setBatchQty", () => {
 		]);
 	});
 
+	it("preserves the existing rate when the batch carries the default posa_batch_price of 0", () => {
+		const { setBatchQty } = useBatchSerial();
+		const context: any = {
+			items: [],
+			pos_profile: { currency: "USD" },
+			price_list_currency: "USD",
+			selected_currency: "USD",
+			exchange_rate: 1,
+			currency_precision: 2,
+			flt: (value: any) => Number(value),
+			forceUpdate: vi.fn(),
+		};
+
+		const item: any = {
+			item_code: "ITEM-NO-BATCH-PRICE",
+			qty: 2,
+			has_batch_no: 1,
+			has_serial_no: 0,
+			rate: 4.83,
+			price_list_rate: 4.83,
+			base_rate: 4.83,
+			base_price_list_rate: 4.83,
+			batch_no_data: [
+				{
+					batch_no: "B-DEFAULT-ZERO",
+					batch_qty: 10,
+					batch_price: 0,
+					is_expired: false,
+				},
+			],
+		};
+
+		setBatchQty(item, null, false, context);
+
+		expect(item.batch_no).toBe("B-DEFAULT-ZERO");
+		expect(item.rate).toBe(4.83);
+		expect(item.price_list_rate).toBe(4.83);
+		expect(item.base_rate).toBe(4.83);
+		expect(item.base_price_list_rate).toBe(4.83);
+		expect(item.batch_price).toBeNull();
+		expect(item.base_batch_price).toBeNull();
+	});
+
 	it("applies batch price immediately during auto batch selection", () => {
 		const { setBatchQty } = useBatchSerial();
 		const context: any = {
