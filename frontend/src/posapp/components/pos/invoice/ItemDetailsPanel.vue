@@ -126,35 +126,53 @@
 							</div>
 						</div>
 						<div
-							v-if="batchesByWarehouse.get(row.warehouse)?.length"
-							class="batch-list"
+							v-if="itemHasBatches"
+							class="batch-block"
 						>
+							<div class="batch-block__header">
+								<v-icon size="11" class="batch-block__icon">mdi-layers-triple-outline</v-icon>
+								<span class="batch-block__title">{{ __("Available Batches") }}</span>
+								<span
+									v-if="batchesByWarehouse.get(row.warehouse)?.length"
+									class="batch-block__count"
+								>
+									{{ batchesByWarehouse.get(row.warehouse)?.length }}
+								</span>
+							</div>
 							<div
-								v-for="batch in batchesByWarehouse.get(row.warehouse)"
-								:key="batch.batch_no"
-								class="batch-row"
-								:class="{ 'batch-row--expired': batch.is_expired }"
+								v-if="batchesByWarehouse.get(row.warehouse)?.length"
+								class="batch-list"
 							>
-								<v-icon size="12" class="batch-row__icon">mdi-package-variant-closed</v-icon>
-								<span class="batch-row__name" :title="batch.batch_no">
-									{{ batch.batch_no }}
-								</span>
-								<span
-									v-if="batch.expiry_date"
-									class="batch-row__expiry"
-									:title="__('Expiry')"
+								<div
+									v-for="batch in batchesByWarehouse.get(row.warehouse)"
+									:key="batch.batch_no"
+									class="batch-row"
+									:class="{ 'batch-row--expired': batch.is_expired }"
 								>
-									{{ formatDate(batch.expiry_date) }}
-								</span>
-								<span
-									v-if="batch.is_expired"
-									class="batch-row__expired-chip"
-								>
-									{{ __("Expired") }}
-								</span>
-								<span class="batch-row__qty">
-									{{ formatNumber(batch.qty, qtyPrecision) }}
-								</span>
+									<v-icon size="12" class="batch-row__icon">mdi-package-variant-closed</v-icon>
+									<span class="batch-row__name" :title="batch.batch_no">
+										{{ batch.batch_no }}
+									</span>
+									<span
+										v-if="batch.expiry_date"
+										class="batch-row__expiry"
+										:title="__('Expiry')"
+									>
+										{{ formatDate(batch.expiry_date) }}
+									</span>
+									<span
+										v-if="batch.is_expired"
+										class="batch-row__expired-chip"
+									>
+										{{ __("Expired") }}
+									</span>
+									<span class="batch-row__qty">
+										{{ formatNumber(batch.qty, qtyPrecision) }}
+									</span>
+								</div>
+							</div>
+							<div v-else class="batch-block__empty">
+								{{ __("No batches available in this warehouse") }}
 							</div>
 						</div>
 					</div>
@@ -304,6 +322,8 @@ const stockByWarehouse = computed<WarehouseRow[]>(
 );
 
 const batches = computed<BatchRow[]>(() => dashboard.value?.batches || []);
+
+const itemHasBatches = computed(() => Number(hero.value?.has_batch_no ?? 0) > 0);
 
 const batchesByWarehouse = computed<Map<string, BatchRow[]>>(() => {
 	const map = new Map<string, BatchRow[]>();
@@ -694,13 +714,61 @@ watch(
 	border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
+.batch-block {
+	margin-left: 28px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 6px 8px 8px 12px;
+	border-left: 2px dashed var(--cc-border, rgba(148, 163, 184, 0.18));
+}
+
+.batch-block__header {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.6rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--cc-muted, var(--pos-text-secondary));
+}
+
+.batch-block__icon {
+	color: var(--cc-pink, var(--pos-primary));
+	opacity: 0.9;
+}
+
+.batch-block__title {
+	line-height: 1;
+}
+
+.batch-block__count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0 6px;
+	height: 15px;
+	min-width: 18px;
+	border-radius: 999px;
+	background: rgba(var(--cc-pink-rgb, 226, 54, 112), 0.12);
+	color: var(--cc-pink, var(--pos-primary));
+	font-size: 0.6rem;
+	font-weight: 700;
+	letter-spacing: 0;
+}
+
+.batch-block__empty {
+	padding: 6px 4px;
+	font-size: 0.68rem;
+	color: var(--cc-subtle, var(--pos-text-secondary));
+	font-style: italic;
+}
+
 .batch-list {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	margin-left: 28px;
-	padding: 4px 8px 6px 12px;
-	border-left: 2px dashed rgba(148, 163, 184, 0.18);
 }
 
 .batch-row {

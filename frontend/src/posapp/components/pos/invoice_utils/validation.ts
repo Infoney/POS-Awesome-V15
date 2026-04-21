@@ -1,6 +1,12 @@
 declare const __: (_text: string, _args?: any[]) => string;
 declare const frappe: any;
 
+// `has_batch_no` can arrive as 1/0 number, true/false, or "1"/"0" string
+// depending on where the item was hydrated from (direct fetch vs. the
+// worker's serialized cache). A bare truthy check lets "0" slip through.
+const isBatchedItem = (item: any): boolean =>
+	Number(item?.has_batch_no ?? 0) > 0;
+
 export async function validate(context: any) {
 	// Await any pending tasks for items (UOM calculation, detail updates, etc.)
 	if (context._itemTaskCache instanceof Map && context.getItemTaskPromise) {
@@ -140,7 +146,7 @@ export async function ensure_auto_batch_selection(context: any) {
 	const ready: any[] = [];
 
 	context.items.forEach((item) => {
-		if (!item?.has_batch_no || item.batch_no) {
+		if (!isBatchedItem(item) || item.batch_no) {
 			return;
 		}
 
@@ -161,7 +167,7 @@ export async function ensure_auto_batch_selection(context: any) {
 
 	const refreshTargets = pending.length > 0 ? pending : ready;
 	refreshTargets.forEach((item) => {
-		if (!item?.has_batch_no || item.batch_no) {
+		if (!isBatchedItem(item) || item.batch_no) {
 			return;
 		}
 		if (Array.isArray(item.batch_no_data) && item.batch_no_data.length > 0) {

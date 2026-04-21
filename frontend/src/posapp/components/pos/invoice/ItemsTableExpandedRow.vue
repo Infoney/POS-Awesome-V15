@@ -161,8 +161,9 @@
 				</div>
 			</div>
 
-			<!-- Batches: always visible for batched items -->
-			<div v-if="item.has_batch_no || item.batch_no" class="posa-cc-section">
+			<!-- Batches: only for items flagged as batched (strict check — avoids
+			     rendering the section when has_batch_no is the string "0"). -->
+			<div v-if="itemHasBatchNo" class="posa-cc-section">
 				<span class="posa-cc-eyebrow">{{ __("Batch") }}</span>
 				<div class="posa-cc-batch-grid">
 					<div class="posa-cc-field posa-cc-field--wide">
@@ -216,7 +217,7 @@
 			</div>
 
 			<!-- Serial Numbers: always visible for serialized items -->
-			<div v-if="item.has_serial_no || item.serial_no" class="posa-cc-section">
+			<div v-if="itemHasSerialNo" class="posa-cc-section">
 				<span class="posa-cc-eyebrow">
 					{{ __("Serial Numbers") }}
 					<span class="posa-cc-eyebrow__count">{{ item.serial_no_selected_count || 0 }}</span>
@@ -341,6 +342,18 @@ const primaryBarcode = computed(() => {
 		(Array.isArray(i.item_barcode) && i.item_barcode[0]?.barcode) ||
 		""
 	);
+});
+
+// `has_batch_no`/`has_serial_no` are Frappe booleans that sometimes arrive as
+// string "0"/"1" via the worker cache. Strict numeric parse so non-batched
+// items don't render the Batch section (and block the sale).
+const itemHasBatchNo = computed(() => {
+	const flag = Number(props.item?.has_batch_no ?? 0) > 0;
+	return flag || !!props.item?.batch_no;
+});
+const itemHasSerialNo = computed(() => {
+	const flag = Number(props.item?.has_serial_no ?? 0) > 0;
+	return flag || !!props.item?.serial_no;
 });
 
 const stockStatus = computed(() => {

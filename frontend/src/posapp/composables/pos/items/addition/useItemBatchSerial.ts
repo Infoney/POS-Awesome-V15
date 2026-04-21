@@ -4,6 +4,13 @@ import { getDisplayableBatchOptions } from "../../shared/useBatchSerial";
 declare const frappe: any;
 declare const __: (_text: string) => string;
 
+// Strict check — `has_batch_no` may arrive as "0" / "1" (string) from the
+// worker cache, and a bare truthy test lets non-batched items through.
+const isBatched = (item: any): boolean =>
+	Number(item?.has_batch_no ?? 0) > 0;
+const hasSerial = (item: any): boolean =>
+	Number(item?.has_serial_no ?? 0) > 0;
+
 export function useItemBatchSerial() {
 	const shouldAutoSetBatch = (context: any, item: any) => {
 		if (
@@ -12,7 +19,7 @@ export function useItemBatchSerial() {
 		) {
 			return false;
 		}
-		if (!item?.has_batch_no || item.batch_no) {
+		if (!isBatched(item) || item.batch_no) {
 			return false;
 		}
 		return (
@@ -64,8 +71,8 @@ export function useItemBatchSerial() {
 		}
 
 		if (
-			(!context.pos_profile.posa_auto_set_batch && item.has_batch_no) ||
-			item.has_serial_no
+			(!context.pos_profile.posa_auto_set_batch && isBatched(item)) ||
+			hasSerial(item)
 		) {
 			nextTick(() => {
 				if (!item.posa_row_id) {
