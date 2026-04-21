@@ -521,8 +521,8 @@ const disableUomEdit = computed(
 // Frappe Check fields can arrive as number 1/0, boolean, or string "1"/"0"
 // depending on which caller populated posProfile. A bare truthy check treats
 // "0" as true and silently allows edits, so always coerce through Number().
-const posProfileFlag = (key: string): boolean =>
-	Number((props.posProfile as any)?.[key] ?? 0) > 0;
+const posProfileFlag = (key) =>
+	Number(props.posProfile?.[key] ?? 0) > 0;
 
 const disableRateEdit = computed(
 	() =>
