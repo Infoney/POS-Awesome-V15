@@ -7,71 +7,68 @@
 		<template v-for="column in visibleColumns" :key="column.key">
 		<!-- Item Name Column -->
 		<td v-if="column.key === 'item_name'" class="text-start" :data-column-key="'item_name'">
-			<div class="d-flex align-center">
-				<span>{{ item.item_name }}</span>
-				<v-chip v-if="item.is_bundle" color="secondary" size="x-small" class="ml-1">
-					{{ __("Bundle") }}
-				</v-chip>
-				<v-chip v-if="item.name_overridden" color="primary" size="x-small" class="ml-1">
-					{{ __("Edited") }}
-				</v-chip>
-				<v-chip
-					v-if="item.batch_no_is_expired"
-					color="error"
-					size="x-small"
-					variant="flat"
-					class="ml-1"
-				>
-					{{ __("Expired") }}
-				</v-chip>
-				<v-chip
-					v-if="item.has_batch_no && item.batch_no"
-					color="info"
-					size="x-small"
-					variant="tonal"
-					class="ml-1"
-				>
-					{{ __("Batch") }}: {{ item.batch_no }}
-				</v-chip>
-				<v-chip
-					v-if="item.posa_is_offer || item.is_free_item"
-					color="success"
-					size="x-small"
-					variant="flat"
-					class="me-1"
-				>
-					{{ __("Offer Item") }}
-				</v-chip>
-				<v-tooltip v-if="item.pricing_rule_badge" location="bottom">
-					<template #activator="{ props }">
-						<v-chip v-bind="props" color="primary" size="x-small" class="ml-1">
-							{{ item.pricing_rule_badge.label }}
-						</v-chip>
-					</template>
-					<span>{{ item.pricing_rule_badge.tooltip }}</span>
-				</v-tooltip>
-				<v-btn
-					v-if="posProfile.posa_allow_line_item_name_override && !item.posa_is_replace"
-					icon
-					size="x-small"
-					variant="text"
-					class="ml-1"
-					@click.stop="$emit('open-name-dialog', item)"
-					:aria-label="__('Edit item name')"
-				>
-					<v-icon size="small">mdi-pencil</v-icon>
-				</v-btn>
-				<v-btn
-					v-if="item.name_overridden"
-					icon
-					size="x-small"
-					variant="text"
-					class="ml-1"
-					@click.stop="$emit('reset-item-name', item)"
-					:aria-label="__('Reset item name')"
-				>
-					<v-icon size="small">mdi-undo</v-icon>
-				</v-btn>
+			<div class="posa-cart-name-cell">
+				<span class="posa-cart-name-cell__name">{{ item.item_name }}</span>
+				<div class="posa-cart-name-cell__chips">
+					<v-chip v-if="item.is_bundle" color="secondary" size="x-small">
+						{{ __("Bundle") }}
+					</v-chip>
+					<v-chip v-if="item.name_overridden" color="primary" size="x-small">
+						{{ __("Edited") }}
+					</v-chip>
+					<v-chip
+						v-if="item.batch_no_is_expired"
+						color="error"
+						size="x-small"
+						variant="flat"
+					>
+						{{ __("Expired") }}
+					</v-chip>
+					<v-chip
+						v-if="item.has_batch_no && item.batch_no"
+						color="info"
+						size="x-small"
+						variant="tonal"
+					>
+						{{ __("Batch") }}: {{ item.batch_no }}
+					</v-chip>
+					<v-chip
+						v-if="item.posa_is_offer || item.is_free_item"
+						color="success"
+						size="x-small"
+						variant="flat"
+					>
+						{{ __("Offer Item") }}
+					</v-chip>
+					<v-tooltip v-if="item.pricing_rule_badge" location="bottom">
+						<template #activator="{ props }">
+							<v-chip v-bind="props" color="primary" size="x-small">
+								{{ item.pricing_rule_badge.label }}
+							</v-chip>
+						</template>
+						<span>{{ item.pricing_rule_badge.tooltip }}</span>
+					</v-tooltip>
+					<v-btn
+						v-if="posProfile.posa_allow_line_item_name_override && !item.posa_is_replace"
+						icon
+						size="x-small"
+						variant="text"
+						@click.stop="$emit('open-name-dialog', item)"
+						:aria-label="__('Edit item name')"
+					>
+						<v-icon size="small">mdi-pencil</v-icon>
+					</v-btn>
+					<v-btn
+						v-if="item.name_overridden"
+						icon
+						size="x-small"
+						variant="text"
+						@click.stop="$emit('reset-item-name', item)"
+						:aria-label="__('Reset item name')"
+					>
+						<v-icon size="small">mdi-undo</v-icon>
+					</v-btn>
+				</div>
 			</div>
 		</td>
 
@@ -767,5 +764,42 @@ td {
 }
 .posa-cart-table__editor-display.is-locked:hover {
 	background: transparent;
+}
+
+/* Name cell layout — pin item name to the left edge, push status chips
+   (Bundle / Edited / Batch / Expired / Offer / pricing-rule) and the
+   inline edit/reset buttons to the right edge. Without this the chips
+   sit immediately after the name so short item codes (e.g. "3202")
+   look centred while long names look left-aligned, and the column
+   reads inconsistent row-to-row. */
+.posa-cart-name-cell {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+}
+
+.posa-cart-name-cell__name {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: start;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	-webkit-box-orient: vertical;
+	white-space: normal;
+	word-break: break-word;
+	line-height: 1.3;
+}
+
+.posa-cart-name-cell__chips {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	margin-inline-start: auto;
 }
 </style>
