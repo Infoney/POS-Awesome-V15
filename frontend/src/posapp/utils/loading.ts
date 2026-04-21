@@ -14,12 +14,38 @@ export interface LoadingState {
 	sources: Record<string, number>;
 	message: string;
 	sourceMessages: Record<string, string>;
+	/** Epoch-ms when the active bootstrap run started; 0 when idle. */
+	startedAt: number;
 }
 
 // Internal tracking variables
 let sourceCount = 0;
 let completedSum = 0;
 let isCompleting = false;
+
+/**
+ * Stuck-source reporting — after this many ms of continuous active loading
+ * without reaching 100%, we consider the bootstrap "stalled" and the UI can
+ * surface a diagnostic banner with the per-source breakdown.
+ */
+export const STALL_THRESHOLD_MS = 30_000;
+
+/**
+ * Tracks whether we're in a non-production build so dev-only warnings don't
+ * leak to production logs.
+ */
+const isDevBuild = (() => {
+	try {
+		// `import.meta.env` is the canonical Vite signal; fall back to process.env.
+		// Wrap in try/catch because `process` may be defined as a plain object in
+		// the bundled output without `.env`.
+		const viteEnv = (import.meta as any)?.env;
+		if (viteEnv) return !!viteEnv.DEV;
+		return (globalThis as any).process?.env?.NODE_ENV !== "production";
+	} catch {
+		return false;
+	}
+})();
 
 /**
  * Reactive loading state used by the UI.
@@ -34,6 +60,7 @@ export const loadingState = reactive<LoadingState>({
 		items: __("Loading product catalog..."),
 		customers: __("Loading customer database..."),
 	},
+	startedAt: 0,
 });
 
 /**
@@ -46,10 +73,12 @@ export function initLoadingSources(list: string[]): void {
 	sourceCount = list.length;
 	completedSum = 0;
 	isCompleting = false;
+	loadingState.startedAt = Date.now();
 
 	// Validate input
 	if (!list || list.length === 0) {
 		console.warn("No loading sources provided");
+		loadingState.startedAt = 0;
 		return;
 	}
 
@@ -74,9 +103,26 @@ export function initLoadingSources(list: string[]): void {
  * @param value Progress value (0-100)
  */
 export function setSourceProgress(name: string, value: number): void {
-	// Safety checks
-	if (!(name in loadingState.sources) || isCompleting || sourceCount === 0)
+	// Safety checks — with dev visibility so silent drops can be debugged.
+	if (!(name in loadingState.sources)) {
+		if (isDevBuild) {
+			console.warn(
+				`[loading] setSourceProgress ignored — unknown source "${name}". ` +
+					`Known: [${Object.keys(loadingState.sources).join(", ") || "<none>"}]. ` +
+					`Did initLoadingSources register it?`,
+			);
+		}
 		return;
+	}
+	if (isCompleting || sourceCount === 0) {
+		if (isDevBuild) {
+			console.warn(
+				`[loading] setSourceProgress ignored for "${name}" (value=${value}) — ` +
+					`${isCompleting ? "loading already completing" : "no sources registered"}.`,
+			);
+		}
+		return;
+	}
 
 	// Clamp value between 0 and 100 and prevent regressions
 	const clampedValue = Math.max(0, Math.min(100, value));
@@ -171,6 +217,7 @@ function completeLoading(): void {
 		setTimeout(() => {
 			loadingState.active = false;
 			loadingState.message = __("Loading app data...");
+			loadingState.startedAt = 0;
 			stopBootstrapLoading();
 			// Reset for next use
 			sourceCount = 0;
@@ -195,10 +242,48 @@ export function resetLoadingState(): void {
 	loadingState.progress = 0;
 	loadingState.message = __("Loading app data...");
 	loadingState.sources = {};
+	loadingState.startedAt = 0;
 	sourceCount = 0;
 	completedSum = 0;
 	isCompleting = false;
 	stopBootstrapLoading();
+}
+
+/**
+ * Returns the elapsed ms since the current bootstrap run started, or 0
+ * when no run is active.
+ */
+export function getBootstrapElapsedMs(): number {
+	if (!loadingState.active || !loadingState.startedAt) return 0;
+	return Math.max(0, Date.now() - loadingState.startedAt);
+}
+
+/**
+ * Returns the sources that have not yet reported 100% while loading is still
+ * active. Intended for the stall-diagnostic UI so operators can see *which*
+ * source is holding up the splash screen.
+ */
+export function getStuckSources(): Array<{
+	name: string;
+	progress: number;
+	message: string;
+}> {
+	if (!loadingState.active) return [];
+	return Object.entries(loadingState.sources)
+		.filter(([, progress]) => (progress ?? 0) < 100)
+		.map(([name, progress]) => ({
+			name,
+			progress: progress ?? 0,
+			message: loadingState.sourceMessages[name] || name,
+		}));
+}
+
+/**
+ * True when the bootstrap has been active for longer than STALL_THRESHOLD_MS
+ * without reaching 100%. Pairs with `getStuckSources()` for UI reporting.
+ */
+export function isBootstrapStalled(): boolean {
+	return getBootstrapElapsedMs() >= STALL_THRESHOLD_MS;
 }
 
 /**
@@ -212,5 +297,8 @@ export function getLoadingStatus() {
 		sourceCount,
 		completedSum,
 		isCompleting,
+		startedAt: loadingState.startedAt,
+		elapsedMs: getBootstrapElapsedMs(),
+		stuck: getStuckSources(),
 	};
 }
