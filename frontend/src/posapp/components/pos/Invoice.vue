@@ -1277,11 +1277,11 @@ export default {
 }
 
 .invoice-section-body {
-	padding: 0 8px 8px;
+	padding: 0 8px 6px;
 }
 
 .invoice-section-body--search {
-	padding: 4px 8px 10px;
+	padding: 2px 8px 8px;
 }
 
 .invoice-section-card--search {
@@ -1307,6 +1307,29 @@ export default {
 	margin-right: 8px;
 }
 
+/* Compact inputs inside Customer Details + Find in Cart cards */
+.invoice-section-card--customer :deep(.v-field),
+.invoice-section-card--search :deep(.v-field) {
+	min-height: 34px;
+}
+.invoice-section-card--customer :deep(.v-field__input),
+.invoice-section-card--search :deep(.v-field__input) {
+	min-height: 34px;
+	padding-top: 4px;
+	padding-bottom: 4px;
+	font-size: 0.82rem;
+}
+.invoice-section-card--customer :deep(.v-field-label),
+.invoice-section-card--customer :deep(.v-label),
+.invoice-section-card--search :deep(.v-field-label),
+.invoice-section-card--search :deep(.v-label) {
+	font-size: 0.72rem;
+}
+.invoice-section-card--customer :deep(.v-btn),
+.invoice-section-card--search :deep(.v-btn) {
+	font-size: 0.72rem;
+}
+
 .invoice-section-card {
 	background: var(--pos-card-bg) !important;
 	border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
@@ -1318,14 +1341,15 @@ export default {
 }
 
 .invoice-section-heading {
-	padding: 14px 16px 0;
+	padding: 8px 12px 0;
 }
 
 .invoice-section-heading__title {
 	margin: 0;
-	font-size: 1rem;
+	font-size: 0.82rem;
 	font-weight: 700;
 	line-height: 1.25;
+	letter-spacing: 0.01em;
 	color: var(--pos-text-primary);
 }
 

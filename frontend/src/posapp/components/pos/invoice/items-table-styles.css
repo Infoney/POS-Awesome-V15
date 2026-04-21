@@ -133,10 +133,10 @@
 /* Table headers */
 .posa-cart-table th {
 	font-weight: 600;
-	font-size: 0.8rem;
+	font-size: 0.72rem;
 	text-transform: none;
 	letter-spacing: 0.02em;
-	padding: 12px;
+	padding: 8px 10px;
 	border-bottom: 1px solid var(--pos-border-light);
 	background-color: var(--pos-surface-muted);
 	color: var(--pos-text-secondary);
@@ -150,7 +150,7 @@
 	text-align: center;
 	vertical-align: middle !important;
 	line-height: 1.2 !important;
-	height: 48px;
+	height: 38px;
 	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	background-clip: padding-box;
 	border-radius: 0;
