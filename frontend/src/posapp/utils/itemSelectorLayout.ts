@@ -16,23 +16,25 @@ export const getCardColumns = (_width: number): number => 1;
  */
 export const getCardGap = (width: number): number => {
     if (width <= 768) {
-        return 10;
+        return 4;
     }
     if (width <= 1200) {
-        return 12;
+        return 5;
     }
-    return 16;
+    return 6;
 };
 
 /**
  * Calculates the padding for the card container based on container width.
+ * Kept minimal so the panel width tracks the card width with no visible
+ * side gutter.
  */
 export const getCardPadding = (width: number): number => {
     if (width <= 768) {
-        return 10;
+        return 2;
     }
     if (width <= 1200) {
-        return 12;
+        return 2;
     }
-    return 16;
+    return 2;
 };

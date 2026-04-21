@@ -581,8 +581,23 @@ const visibleBootstrapWarningMessages = computed(() =>
 const visibleBootstrapRecoveryMessage = computed(() =>
 	visibleBootstrapWarningActive.value ? bootstrapRecoveryMessage.value : "",
 );
+// Capabilities whose primary warning should never surface as a disruptive
+// snackbar toast. The header status pill + tooltip still reflect them.
+const SUPPRESSED_FROM_SNACKBAR = ["pricing_offline"];
+
+const primaryWarningCapabilityId = computed(
+	() => bootstrapStatus.value?.primary_warning?.capabilityId || "",
+);
+
 const bootstrapWarningSignature = computed(() => {
 	if (!visibleBootstrapWarningActive.value) {
+		return "";
+	}
+
+	if (
+		primaryWarningCapabilityId.value &&
+		SUPPRESSED_FROM_SNACKBAR.includes(primaryWarningCapabilityId.value)
+	) {
 		return "";
 	}
 

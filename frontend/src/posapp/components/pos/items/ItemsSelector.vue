@@ -1484,9 +1484,17 @@ defineExpose({
 }
 
 .selector-results-card {
-	padding: var(--dynamic-xs);
+	padding: 0;
 	overflow: hidden;
 	min-width: 0;
+}
+
+.selector-results-card :deep(.v-row.items) {
+	margin: 0;
+}
+
+.selector-results-card :deep(.v-row.items > .v-col) {
+	padding: 0;
 }
 
 .dynamic-scroll {

@@ -10,20 +10,24 @@
 		@dragstart="onDragStart"
 		@dragend="onDragEnd"
 	>
-		<div class="pos-row-card__thumb">
+		<div class="pos-row-card__thumb" :class="{ 'pos-row-card__thumb--fallback': !item.image }">
 			<v-img
-				:src="item.image || placeholderImage"
+				v-if="item.image"
+				:src="item.image"
 				class="pos-row-card__image"
 				aspect-ratio="1"
 				:alt="item.item_name"
 				cover
 			>
 				<template #placeholder>
-					<div class="pos-row-card__placeholder">
-						<v-icon size="22" color="grey-lighten-2">mdi-image-outline</v-icon>
+					<div class="pos-row-card__fallback">
+						<v-icon size="26" color="white">mdi-currency-usd</v-icon>
 					</div>
 				</template>
 			</v-img>
+			<div v-else class="pos-row-card__fallback" :aria-label="item.item_name">
+				<v-icon size="26" color="white">mdi-currency-usd</v-icon>
+			</div>
 		</div>
 
 		<div class="pos-row-card__main">
@@ -91,7 +95,6 @@
 
 <script setup>
 import { computed } from "vue";
-import placeholderImage from "../placeholder-image.png";
 import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
 import ItemStockInfoMenu from "./ItemStockInfoMenu.vue";
 
@@ -278,13 +281,19 @@ const onDragEnd = (event) => emit("dragend", event);
 	object-fit: cover;
 }
 
-.pos-row-card__placeholder {
+.pos-row-card__thumb--fallback {
+	border: none;
+}
+
+.pos-row-card__fallback {
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	width: 100%;
 	height: 100%;
-	background: var(--pos-surface-muted);
+	background: linear-gradient(135deg, #ec4899 0%, #be185d 55%, #9d174d 100%);
+	color: #ffffff;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .pos-row-card__main {

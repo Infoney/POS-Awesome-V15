@@ -194,20 +194,20 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 }
 
 .virtual-scroller :deep(.items-virtual-list) {
-	padding: 16px;
+	padding: 2px;
 	contain: layout style;
 	box-sizing: border-box;
 }
 
 @media (max-width: 1200px) {
 	.virtual-scroller :deep(.items-virtual-list) {
-		padding: 12px;
+		padding: 2px;
 	}
 }
 
 @media (max-width: 768px) {
 	.virtual-scroller :deep(.items-virtual-list) {
-		padding: 10px;
+		padding: 2px;
 	}
 }
 </style>

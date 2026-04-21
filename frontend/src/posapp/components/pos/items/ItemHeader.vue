@@ -278,15 +278,17 @@ defineExpose({
 /* ── Command-center search field ─────────────────────────────
    One clean rounded surface, dark tier-2 background, hairline
    border only (no double outline, no filled variant layer).
-   Mirrors the cc ProductSearch input exactly. */
+   Mirrors the cc ProductSearch input exactly.
+   Implementation: we fully zero out the three Vuetify outlined
+   segments (start / notch / end) — otherwise you see a visible
+   seam where they meet — and draw a single hairline outline via
+   an inset box-shadow on the parent `.v-field`. */
 .pos-cmd-search :deep(.v-field) {
 	border-radius: 14px !important;
 	background: var(--pos-surface-muted, #161c27) !important;
-	box-shadow: none !important;
 	min-height: 46px;
-	transition:
-		border-color 0.18s ease,
-		box-shadow 0.18s ease;
+	box-shadow: inset 0 0 0 1px var(--pos-border, #252b37) !important;
+	transition: box-shadow 0.18s ease;
 }
 
 .pos-cmd-search :deep(.v-field__overlay) {
@@ -294,27 +296,30 @@ defineExpose({
 	opacity: 0 !important;
 }
 
+.pos-cmd-search :deep(.v-field__outline) {
+	--v-field-border-opacity: 0 !important;
+	--v-field-border-width: 0 !important;
+	display: none !important;
+}
+
 .pos-cmd-search :deep(.v-field__outline__start),
 .pos-cmd-search :deep(.v-field__outline__end),
 .pos-cmd-search :deep(.v-field__outline__notch) {
-	border-color: var(--pos-border, #252b37) !important;
-	border-width: 1px !important;
-	--v-field-border-opacity: 1 !important;
+	border: 0 !important;
+	border-width: 0 !important;
+	--v-field-border-opacity: 0 !important;
 }
 
 .pos-cmd-search :deep(.v-field__outline__notch::before),
 .pos-cmd-search :deep(.v-field__outline__notch::after) {
+	border: 0 !important;
 	border-width: 0 !important;
 }
 
-.pos-cmd-search :deep(.v-field--focused .v-field__outline__start),
-.pos-cmd-search :deep(.v-field--focused .v-field__outline__end),
-.pos-cmd-search :deep(.v-field--focused .v-field__outline__notch) {
-	border-color: rgba(226, 54, 112, 0.5) !important;
-}
-
 .pos-cmd-search :deep(.v-field--focused) {
-	box-shadow: 0 0 0 3px rgba(226, 54, 112, 0.12) !important;
+	box-shadow:
+		inset 0 0 0 1px rgba(226, 54, 112, 0.6),
+		0 0 0 3px rgba(226, 54, 112, 0.12) !important;
 }
 
 .pos-cmd-search :deep(.v-field__input) {
