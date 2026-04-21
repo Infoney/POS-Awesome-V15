@@ -138,37 +138,23 @@
 			<div class="posa-cc-section">
 				<span class="posa-cc-eyebrow">{{ __("At a glance") }}</span>
 				<div class="posa-cc-tiles">
-					<div class="posa-cc-tile">
-						<span class="posa-cc-tile__label">{{ __("Avail.") }}</span>
+					<div
+						class="posa-cc-tile"
+						:title="__('Available stock in your POS warehouse')"
+					>
+						<span class="posa-cc-tile__label">{{ __("In Stock") }}</span>
 						<span class="posa-cc-tile__value">{{ formatFloat(item._base_actual_qty) }}</span>
 						<span class="posa-cc-tile__unit">{{ item.stock_uom }}</span>
 					</div>
-					<div class="posa-cc-tile">
-						<span class="posa-cc-tile__label">{{ __("Stock") }}</span>
-						<span class="posa-cc-tile__value">{{ formatFloat(item.stock_qty) }}</span>
-						<span class="posa-cc-tile__unit">{{ item.stock_uom }}</span>
-					</div>
-					<div class="posa-cc-tile">
-						<span class="posa-cc-tile__label">{{ __("List") }}</span>
+					<div class="posa-cc-tile" :title="__('Catalog price (price list rate)')">
+						<span class="posa-cc-tile__label">{{ __("List Price") }}</span>
 						<span class="posa-cc-tile__value">{{ formatCurrency(item.price_list_rate ?? 0) }}</span>
 						<span class="posa-cc-tile__unit">{{ currencyCode }}</span>
 					</div>
-					<div class="posa-cc-tile">
-						<span class="posa-cc-tile__label">{{ __("Line") }}</span>
-						<span class="posa-cc-tile__value">{{ formatCurrency(item.qty * item.rate) }}</span>
+					<div class="posa-cc-tile" :title="__('Line total — qty × rate after discount')">
+						<span class="posa-cc-tile__label">{{ __("Line Total") }}</span>
+						<span class="posa-cc-tile__value">{{ formatCurrency(item.amount ?? item.qty * item.rate) }}</span>
 						<span class="posa-cc-tile__unit">{{ currencyCode }}</span>
-					</div>
-					<div class="posa-cc-tile">
-						<span class="posa-cc-tile__label">{{ __("Warehouse") }}</span>
-						<span class="posa-cc-tile__value posa-cc-tile__value--text" :title="item.warehouse">
-							{{ item.warehouse || "—" }}
-						</span>
-					</div>
-					<div class="posa-cc-tile">
-						<span class="posa-cc-tile__label">{{ __("Group") }}</span>
-						<span class="posa-cc-tile__value posa-cc-tile__value--text" :title="item.item_group">
-							{{ item.item_group || "—" }}
-						</span>
 					</div>
 				</div>
 			</div>
@@ -587,8 +573,8 @@ const onRateClick = () => {
 /* Tiles */
 .posa-cc-tiles {
 	display: grid;
-	grid-template-columns: repeat(6, minmax(0, 1fr));
-	gap: 6px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
 }
 
 .posa-cc-tile {
@@ -652,11 +638,8 @@ const onRateClick = () => {
 	width: fit-content;
 }
 
-/* Responsive: drop tiles to 3 cols, edit grid wraps */
+/* Responsive: edit grid wraps, tiles stay readable */
 @media (max-width: 900px) {
-	.posa-cc-tiles {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
 	.posa-cc-edit-grid {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}

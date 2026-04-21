@@ -13,7 +13,7 @@
 					variant="solo"
 					color="primary"
 					class="pos-themed-input pos-cmd-search"
-					:label="frappe._('Search, scan or browse item')"
+					:label="frappe._('Search by SKU, barcode, or product name…')"
 					hide-details
 					:model-value="searchInput"
 					@update:model-value="
@@ -55,9 +55,10 @@
 						</v-btn>
 						<v-btn
 							icon="mdi-tune-vertical"
-							size="small"
+							size="x-small"
 							color="primary"
 							variant="text"
+							class="cmd-search-tools-btn"
 							@click.stop="toolsOpen = !toolsOpen"
 							:aria-label="toolsOpen ? __('Hide search tools') : __('Show search tools')"
 						>
@@ -68,7 +69,6 @@
 							aria-hidden="true"
 						>
 							<kbd class="cmd-search-hint__key">Alt</kbd>
-							<span class="cmd-search-hint__plus">+</span>
 							<kbd class="cmd-search-hint__key">3</kbd>
 						</span>
 					</template>
@@ -246,41 +246,46 @@ defineExpose({
 	border-radius: 16px;
 }
 
+/* Subtle tools toggle so the chrome stays close to the reference. */
+.cmd-search-tools-btn {
+	opacity: 0.55;
+	transition: opacity 0.15s ease;
+}
+
+.cmd-search-tools-btn:hover,
+.cmd-search-tools-btn:focus-visible {
+	opacity: 1;
+}
+
 /* Command-center style kbd hint inside the items search field. */
 .cmd-search-hint {
 	display: inline-flex;
 	align-items: center;
-	gap: 2px;
-	margin-inline-start: 6px;
-	padding: 2px 4px;
+	gap: 3px;
+	margin-inline-start: 8px;
 	font-family:
 		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-	font-size: 0.66rem;
+	font-size: 0.68rem;
 	line-height: 1;
 	color: var(--pos-text-secondary, rgba(148, 163, 184, 0.85));
 	user-select: none;
 	pointer-events: none;
-	opacity: 0.85;
 }
 
 .cmd-search-hint__key {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	min-width: 18px;
-	padding: 1px 5px;
-	border-radius: 5px;
-	background: rgba(148, 163, 184, 0.18);
-	border: 1px solid rgba(148, 163, 184, 0.28);
+	min-width: 22px;
+	padding: 3px 6px;
+	border-radius: 6px;
+	background: rgba(148, 163, 184, 0.14);
+	border: 1px solid rgba(148, 163, 184, 0.22);
 	font-weight: 600;
 	font-family: inherit;
 	font-size: inherit;
 	letter-spacing: 0.02em;
-}
-
-.cmd-search-hint__plus {
-	opacity: 0.6;
-	font-weight: 600;
+	color: var(--pos-text-primary);
 }
 
 @media (max-width: 640px) {

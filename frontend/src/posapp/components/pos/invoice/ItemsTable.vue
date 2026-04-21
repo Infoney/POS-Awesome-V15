@@ -342,8 +342,8 @@ const { windowWidth } = useResponsive();
 // (viewport - 16) on small screens. Reactive on resize via useResponsive.
 const detailsDrawerWidth = computed(() => {
 	const viewport = windowWidth.value || 1280;
-	const desired = Math.round(viewport * 0.5);
-	const max = Math.min(viewport - 16, 960);
+	const desired = Math.round(viewport * 0.42);
+	const max = Math.min(viewport - 16, 720);
 	return Math.max(360, Math.min(desired, max));
 });
 
