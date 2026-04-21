@@ -387,8 +387,8 @@ const onRateClick = () => {
 .posa-cc-form {
 	display: flex;
 	flex-direction: column;
-	gap: 14px;
-	padding: 4px 2px 8px;
+	gap: 10px;
+	padding: 2px 2px 6px;
 }
 
 /* Identity strip */
@@ -410,12 +410,12 @@ const onRateClick = () => {
 .posa-cc-pill {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 10px;
+	gap: 5px;
+	padding: 3px 8px;
 	border-radius: 999px;
 	background: var(--cc-bg-ter, var(--pos-surface-muted, rgba(148, 163, 184, 0.1)));
 	border: 1px solid var(--cc-border, var(--pos-border-light, rgba(148, 163, 184, 0.2)));
-	font-size: 0.74rem;
+	font-size: 0.68rem;
 	color: var(--cc-muted, var(--pos-text-secondary));
 	line-height: 1.1;
 }
@@ -437,10 +437,10 @@ const onRateClick = () => {
 .posa-cc-status {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 10px;
+	gap: 5px;
+	padding: 3px 8px;
 	border-radius: 999px;
-	font-size: 0.74rem;
+	font-size: 0.68rem;
 	font-weight: 600;
 	border: 1px solid currentColor;
 	background: rgba(0, 0, 0, 0);
@@ -564,9 +564,9 @@ const onRateClick = () => {
 
 /* Compact input override — kills the 56px Vuetify default */
 .posa-cc-input :deep(.v-field) {
-	min-height: 36px;
+	min-height: 32px;
 	border-radius: 8px;
-	font-size: 0.88rem;
+	font-size: 0.8rem;
 	font-variant-numeric: tabular-nums;
 	background: var(--cc-bg-sec, var(--pos-input-bg, rgba(255, 255, 255, 0.02))) !important;
 	transition:
@@ -586,17 +586,17 @@ const onRateClick = () => {
 }
 
 .posa-cc-input :deep(.v-field__field) {
-	min-height: 36px;
+	min-height: 32px;
 }
 
 .posa-cc-input :deep(.v-field__input) {
-	padding: 6px 10px;
-	min-height: 36px;
+	padding: 4px 10px;
+	min-height: 32px;
 	font-weight: 600;
 }
 
 .posa-cc-input :deep(.v-field__append-inner) {
-	padding-top: 6px;
+	padding-top: 4px;
 }
 
 .posa-cc-input--clickable :deep(.v-field) {
@@ -614,8 +614,8 @@ const onRateClick = () => {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding: 10px 12px;
-	border-radius: 10px;
+	padding: 8px 10px;
+	border-radius: 9px;
 	background: var(--cc-bg-sec, var(--pos-surface-muted, rgba(148, 163, 184, 0.08)));
 	border: 1px solid var(--cc-border, var(--pos-border-light, rgba(148, 163, 184, 0.16)));
 	min-width: 0;
@@ -630,7 +630,7 @@ const onRateClick = () => {
 }
 
 .posa-cc-tile--inline {
-	min-height: 56px;
+	min-height: 48px;
 }
 
 .posa-cc-tile__label {
@@ -642,7 +642,7 @@ const onRateClick = () => {
 }
 
 .posa-cc-tile__value {
-	font-size: 1.1rem;
+	font-size: 0.96rem;
 	font-weight: 700;
 	color: var(--cc-text, var(--pos-text-primary));
 	font-variant-numeric: tabular-nums;
@@ -654,7 +654,7 @@ const onRateClick = () => {
 }
 
 .posa-cc-tile__value--text {
-	font-size: 0.86rem;
+	font-size: 0.78rem;
 	font-weight: 600;
 	font-variant-numeric: normal;
 	letter-spacing: 0;

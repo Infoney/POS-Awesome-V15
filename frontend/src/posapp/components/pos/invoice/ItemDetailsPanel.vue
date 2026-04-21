@@ -54,44 +54,47 @@
 			<span>{{ error }}</span>
 		</div>
 
-		<template v-else>
-			<!-- Stat tiles -->
-			<div class="stat-grid">
-				<div class="stat-tile stat-tile--revenue">
-					<div class="stat-tile__value">
-						<span class="stat-tile__currency">{{ currencyLabel }}</span>
-						<span>{{ formatNumber(totals.total_revenue, 0) }}</span>
-					</div>
-					<div class="stat-tile__label">{{ __("Total Revenue") }}</div>
+		<!-- Stat tiles (when loaded) -->
+		<div v-if="!loading && !error" class="stat-grid">
+			<div class="stat-tile stat-tile--revenue">
+				<div class="stat-tile__value">
+					<span class="stat-tile__currency">{{ currencyLabel }}</span>
+					<span>{{ formatNumber(totals.total_revenue, 0) }}</span>
 				</div>
-				<div class="stat-tile stat-tile--invoices">
-					<div class="stat-tile__value">{{ formatInteger(totals.sales_invoices) }}</div>
-					<div class="stat-tile__label">{{ __("Sales Invoices") }}</div>
-				</div>
-				<div class="stat-tile stat-tile--orders">
-					<div class="stat-tile__value">{{ formatInteger(totals.sales_orders) }}</div>
-					<div class="stat-tile__label">{{ __("Sales Orders") }}</div>
-				</div>
-				<div class="stat-tile stat-tile--qty">
-					<div class="stat-tile__value">{{ formatNumber(totals.qty_sold, qtyPrecision) }}</div>
-					<div class="stat-tile__label">{{ __("Qty Sold") }}</div>
-				</div>
-				<div class="stat-tile stat-tile--avg">
-					<div class="stat-tile__value">
-						<span class="stat-tile__currency">{{ currencyLabel }}</span>
-						<span>{{ formatNumber(totals.avg_price, 0) }}</span>
-					</div>
-					<div class="stat-tile__label">{{ __("Avg Price") }}</div>
-				</div>
-				<div
-					class="stat-tile stat-tile--stock"
-					:class="{ 'stat-tile--empty': totalStock <= 0 }"
-				>
-					<div class="stat-tile__value">{{ formatNumber(totalStock, qtyPrecision) }}</div>
-					<div class="stat-tile__label">{{ __("Total Stock") }}</div>
-				</div>
+				<div class="stat-tile__label">{{ __("Total Revenue") }}</div>
 			</div>
+			<div class="stat-tile stat-tile--invoices">
+				<div class="stat-tile__value">{{ formatInteger(totals.sales_invoices) }}</div>
+				<div class="stat-tile__label">{{ __("Sales Invoices") }}</div>
+			</div>
+			<div class="stat-tile stat-tile--orders">
+				<div class="stat-tile__value">{{ formatInteger(totals.sales_orders) }}</div>
+				<div class="stat-tile__label">{{ __("Sales Orders") }}</div>
+			</div>
+			<div class="stat-tile stat-tile--qty">
+				<div class="stat-tile__value">{{ formatNumber(totals.qty_sold, qtyPrecision) }}</div>
+				<div class="stat-tile__label">{{ __("Qty Sold") }}</div>
+			</div>
+			<div class="stat-tile stat-tile--avg">
+				<div class="stat-tile__value">
+					<span class="stat-tile__currency">{{ currencyLabel }}</span>
+					<span>{{ formatNumber(totals.avg_price, 0) }}</span>
+				</div>
+				<div class="stat-tile__label">{{ __("Avg Price") }}</div>
+			</div>
+			<div
+				class="stat-tile stat-tile--stock"
+				:class="{ 'stat-tile--empty': totalStock <= 0 }"
+			>
+				<div class="stat-tile__value">{{ formatNumber(totalStock, qtyPrecision) }}</div>
+				<div class="stat-tile__label">{{ __("Total Stock") }}</div>
+			</div>
+		</div>
 
+		<!-- Inline slot (e.g. Edit Line Item) — sits between stats and warehouse -->
+		<slot name="after-stats" />
+
+		<template v-if="!loading && !error">
 			<!-- Stock by warehouse -->
 			<section class="panel-section">
 				<header class="panel-section__header">
@@ -102,24 +105,57 @@
 					<div
 						v-for="(row, index) in stockByWarehouse"
 						:key="row.warehouse"
-						class="warehouse-row"
-						:class="warehouseToneClass(index)"
+						class="warehouse-group"
 					>
-						<div class="warehouse-row__icon">
-							<v-icon size="18">mdi-warehouse</v-icon>
-						</div>
-						<div class="warehouse-row__body">
-							<div class="warehouse-row__name">{{ row.warehouse }}</div>
-							<div class="warehouse-row__bar">
-								<span
-									class="warehouse-row__bar-fill"
-									:style="{ width: warehouseBarWidth(row) }"
-								/>
+						<div class="warehouse-row" :class="warehouseToneClass(index)">
+							<div class="warehouse-row__icon">
+								<v-icon size="18">mdi-warehouse</v-icon>
+							</div>
+							<div class="warehouse-row__body">
+								<div class="warehouse-row__name">{{ row.warehouse }}</div>
+								<div class="warehouse-row__bar">
+									<span
+										class="warehouse-row__bar-fill"
+										:style="{ width: warehouseBarWidth(row) }"
+									/>
+								</div>
+							</div>
+							<div class="warehouse-row__qty">
+								<strong>{{ formatNumber(row.actual_qty, qtyPrecision) }}</strong>
+								<span>{{ __("units") }}</span>
 							</div>
 						</div>
-						<div class="warehouse-row__qty">
-							<strong>{{ formatNumber(row.actual_qty, qtyPrecision) }}</strong>
-							<span>{{ __("units") }}</span>
+						<div
+							v-if="batchesByWarehouse.get(row.warehouse)?.length"
+							class="batch-list"
+						>
+							<div
+								v-for="batch in batchesByWarehouse.get(row.warehouse)"
+								:key="batch.batch_no"
+								class="batch-row"
+								:class="{ 'batch-row--expired': batch.is_expired }"
+							>
+								<v-icon size="12" class="batch-row__icon">mdi-package-variant-closed</v-icon>
+								<span class="batch-row__name" :title="batch.batch_no">
+									{{ batch.batch_no }}
+								</span>
+								<span
+									v-if="batch.expiry_date"
+									class="batch-row__expiry"
+									:title="__('Expiry')"
+								>
+									{{ formatDate(batch.expiry_date) }}
+								</span>
+								<span
+									v-if="batch.is_expired"
+									class="batch-row__expired-chip"
+								>
+									{{ __("Expired") }}
+								</span>
+								<span class="batch-row__qty">
+									{{ formatNumber(batch.qty, qtyPrecision) }}
+								</span>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -193,6 +229,14 @@ interface WarehouseRow {
 	actual_qty: number;
 }
 
+interface BatchRow {
+	batch_no: string;
+	warehouse: string;
+	qty: number;
+	expiry_date: string;
+	is_expired: boolean;
+}
+
 interface RecentInvoice {
 	name: string;
 	customer: string;
@@ -208,6 +252,7 @@ interface DashboardPayload {
 	currency: string;
 	totals: Totals;
 	stock_by_warehouse: WarehouseRow[];
+	batches?: BatchRow[];
 	recent_invoices: RecentInvoice[];
 }
 
@@ -257,6 +302,19 @@ const totals = computed<Totals>(() =>
 const stockByWarehouse = computed<WarehouseRow[]>(
 	() => dashboard.value?.stock_by_warehouse || [],
 );
+
+const batches = computed<BatchRow[]>(() => dashboard.value?.batches || []);
+
+const batchesByWarehouse = computed<Map<string, BatchRow[]>>(() => {
+	const map = new Map<string, BatchRow[]>();
+	for (const b of batches.value) {
+		const key = b.warehouse || "";
+		const bucket = map.get(key) || [];
+		bucket.push(b);
+		map.set(key, bucket);
+	}
+	return map;
+});
 
 const recentInvoices = computed<RecentInvoice[]>(
 	() => dashboard.value?.recent_invoices || [],
@@ -376,23 +434,23 @@ watch(
 .item-details-panel {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
-	padding-bottom: 12px;
+	gap: 10px;
+	padding-bottom: 8px;
 }
 
 .item-details-hero {
 	display: flex;
-	gap: 16px;
+	gap: 12px;
 	align-items: flex-start;
 }
 
 .item-details-hero__media {
-	width: 96px;
-	height: 96px;
+	width: 72px;
+	height: 72px;
 	flex-shrink: 0;
-	border-radius: 14px;
+	border-radius: 12px;
 	overflow: hidden;
-	background: rgba(255, 255, 255, 0.06);
+	background: var(--cc-bg-ter, rgba(148, 163, 184, 0.12));
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -412,11 +470,11 @@ watch(
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 6px;
 }
 
 .item-details-hero__title {
-	font-size: 1.4rem;
+	font-size: 1.05rem;
 	font-weight: 700;
 	color: var(--pos-text-primary);
 	line-height: 1.2;
@@ -434,12 +492,12 @@ watch(
 .info-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 10px;
-	border-radius: 8px;
+	gap: 5px;
+	padding: 3px 8px;
+	border-radius: 7px;
 	background: rgba(148, 163, 184, 0.1);
 	border: 1px solid rgba(148, 163, 184, 0.18);
-	font-size: 0.78rem;
+	font-size: 0.7rem;
 }
 
 .info-chip__label {
@@ -456,10 +514,10 @@ watch(
 .status-chip {
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 10px;
+	gap: 5px;
+	padding: 3px 8px;
 	border-radius: 999px;
-	font-size: 0.74rem;
+	font-size: 0.68rem;
 	font-weight: 600;
 	border: 1px solid currentColor;
 }
@@ -491,7 +549,7 @@ watch(
 	align-items: center;
 	gap: 4px;
 	color: rgb(var(--v-theme-primary));
-	font-size: 0.82rem;
+	font-size: 0.72rem;
 	font-weight: 600;
 	text-decoration: none;
 	width: fit-content;
@@ -517,44 +575,44 @@ watch(
 .stat-grid {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 10px;
+	gap: 8px;
 }
 
 .stat-tile {
-	padding: 14px 12px;
-	border-radius: 12px;
+	padding: 10px;
+	border-radius: 10px;
 	background: rgba(148, 163, 184, 0.06);
-	border: 1px solid rgba(148, 163, 184, 0.12);
+	border: 1px solid rgba(148, 163, 184, 0.14);
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 4px;
 	transition: transform 0.18s ease, border-color 0.18s ease;
 }
 
 .stat-tile:hover {
 	transform: translateY(-1px);
-	border-color: rgba(148, 163, 184, 0.24);
+	border-color: rgba(148, 163, 184, 0.28);
 }
 
 .stat-tile__value {
-	font-size: 1.5rem;
+	font-size: 1.1rem;
 	font-weight: 700;
 	line-height: 1.1;
 	display: inline-flex;
 	align-items: baseline;
-	gap: 4px;
+	gap: 3px;
 	overflow-wrap: anywhere;
 }
 
 .stat-tile__currency {
-	font-size: 0.78rem;
+	font-size: 0.64rem;
 	font-weight: 600;
 	color: inherit;
 	opacity: 0.8;
 }
 
 .stat-tile__label {
-	font-size: 0.7rem;
+	font-size: 0.62rem;
 	font-weight: 700;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
@@ -588,18 +646,18 @@ watch(
 	align-items: baseline;
 	justify-content: space-between;
 	gap: 10px;
-	margin-bottom: 8px;
+	margin-bottom: 6px;
 }
 
 .panel-section__title {
-	font-size: 0.95rem;
+	font-size: 0.8rem;
 	font-weight: 700;
 	color: var(--pos-text-primary);
 	margin: 0;
 }
 
 .panel-section__hint {
-	font-size: 0.72rem;
+	font-size: 0.66rem;
 	color: var(--pos-text-secondary);
 	letter-spacing: 0.04em;
 }
@@ -616,27 +674,98 @@ watch(
 .warehouse-list {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 6px;
+}
+
+.warehouse-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 }
 
 .warehouse-row {
 	display: grid;
-	grid-template-columns: 36px minmax(0, 1fr) auto;
-	gap: 12px;
+	grid-template-columns: 28px minmax(0, 1fr) auto;
+	gap: 10px;
 	align-items: center;
-	padding: 10px 12px;
-	border-radius: 12px;
+	padding: 8px 10px;
+	border-radius: 10px;
 	background: rgba(148, 163, 184, 0.05);
 	border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.batch-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-left: 28px;
+	padding: 4px 8px 6px 12px;
+	border-left: 2px dashed rgba(148, 163, 184, 0.18);
+}
+
+.batch-row {
+	display: grid;
+	grid-template-columns: 14px minmax(0, 1.3fr) minmax(0, 0.8fr) auto auto;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 4px;
+	font-size: 0.68rem;
+	color: var(--pos-text-primary);
+	line-height: 1.2;
+}
+
+.batch-row__icon {
+	color: var(--pos-text-secondary);
+	opacity: 0.7;
+}
+
+.batch-row__name {
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.batch-row__expiry {
+	color: var(--pos-text-secondary);
+	font-size: 0.62rem;
+	white-space: nowrap;
+}
+
+.batch-row__expired-chip {
+	color: rgb(var(--v-theme-error));
+	background: rgba(248, 113, 113, 0.1);
+	padding: 1px 6px;
+	border-radius: 999px;
+	font-size: 0.58rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.batch-row--expired .batch-row__name,
+.batch-row--expired .batch-row__expiry {
+	color: rgb(var(--v-theme-error));
+	opacity: 0.85;
+}
+
+.batch-row__qty {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: inherit;
+	text-align: end;
+	white-space: nowrap;
+	min-width: 40px;
 }
 
 .warehouse-row__icon {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 36px;
-	height: 36px;
-	border-radius: 9px;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
 	background: rgba(148, 163, 184, 0.08);
 }
 
@@ -648,7 +777,7 @@ watch(
 }
 
 .warehouse-row__name {
-	font-size: 0.86rem;
+	font-size: 0.76rem;
 	font-weight: 600;
 	color: var(--pos-text-primary);
 	overflow: hidden;
@@ -681,7 +810,7 @@ watch(
 }
 
 .warehouse-row__qty span {
-	font-size: 0.7rem;
+	font-size: 0.64rem;
 	color: var(--pos-text-secondary);
 	font-weight: 500;
 	letter-spacing: 0.04em;
@@ -706,21 +835,21 @@ watch(
 .invoice-list {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 4px;
 }
 
 .invoice-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) minmax(0, 1fr) auto;
-	gap: 10px;
+	gap: 8px;
 	align-items: center;
-	padding: 10px 12px;
-	border-radius: 10px;
+	padding: 7px 10px;
+	border-radius: 8px;
 	background: rgba(148, 163, 184, 0.05);
 	border: 1px solid rgba(148, 163, 184, 0.1);
 	color: var(--pos-text-primary);
 	text-decoration: none;
-	font-size: 0.82rem;
+	font-size: 0.74rem;
 	transition: background 0.15s ease;
 }
 
@@ -756,7 +885,7 @@ watch(
 
 .invoice-row__date {
 	color: var(--pos-text-secondary);
-	font-size: 0.74rem;
+	font-size: 0.66rem;
 	white-space: nowrap;
 }
 

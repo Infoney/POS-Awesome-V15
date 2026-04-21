@@ -5,12 +5,12 @@
 			<v-autocomplete
 				ref="customerDropdown"
 				class="customer-autocomplete sleek-field pos-themed-input"
-				density="compact"
+				density="comfortable"
 				clearable
 				variant="solo"
 				color="primary"
-				:label="customerFieldLabel"
 				:placeholder="customerFieldPlaceholder"
+				:aria-label="customerFieldLabel"
 				:loading="isCustomerSearchLocked"
 				v-model="internalCustomer"
 				:items="filteredCustomers"

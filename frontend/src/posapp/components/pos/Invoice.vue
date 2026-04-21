@@ -32,40 +32,32 @@
 					{{ __("Invoices saved as POS Invoices") }}
 				</v-alert>
 				<div class="invoice-sections">
-					<div class="invoice-top-grid">
-						<v-card flat class="invoice-section-card pos-themed-card invoice-section-card--customer">
-							<div class="invoice-section-heading">
-								<h3 class="invoice-section-heading__title">{{ __("Customer Details") }}</h3>
-							</div>
-							<InvoiceCustomerSection
-								ref="customerSection"
-								:pos_profile="pos_profile"
-								:invoiceTypes="invoiceTypes"
-								v-model="invoiceType"
-							/>
-						</v-card>
+					<v-card flat class="invoice-section-card pos-themed-card invoice-section-card--customer">
+						<div class="invoice-section-heading">
+							<h3 class="invoice-section-heading__title">{{ __("Customer Details") }}</h3>
+						</div>
+						<InvoiceCustomerSection
+							ref="customerSection"
+							:pos_profile="pos_profile"
+							:invoiceTypes="invoiceTypes"
+							v-model="invoiceType"
+						/>
+					</v-card>
 
-						<v-card flat class="invoice-section-card pos-themed-card invoice-section-card--search">
-							<div class="invoice-section-heading">
-								<h3 class="invoice-section-heading__title">{{ __("Find in Cart") }}</h3>
-							</div>
-							<div class="invoice-section-body invoice-section-body--search">
-								<InvoiceItemsActionToolbar
-									ref="actionToolbar"
-									:itemSearch="itemSearch"
-									:availableColumns="available_columns"
-									:selectedColumns="selected_columns"
-									@update:itemSearch="itemSearch = $event"
-									@update:selectedColumns="
-										(cols) => {
-											selected_columns = cols;
-											saveColumnPreferences();
-										}
-									"
-								/>
-							</div>
-						</v-card>
-					</div>
+					<!-- Hidden host — shortcut Alt+F opens the search overlay -->
+					<InvoiceItemsActionToolbar
+						ref="actionToolbar"
+						:itemSearch="itemSearch"
+						:availableColumns="available_columns"
+						:selectedColumns="selected_columns"
+						@update:itemSearch="itemSearch = $event"
+						@update:selectedColumns="
+							(cols) => {
+								selected_columns = cols;
+								saveColumnPreferences();
+							}
+						"
+					/>
 
 					<div
 						v-if="pos_profile.posa_allow_change_posting_date || pos_profile.posa_use_delivery_charges"
@@ -129,8 +121,16 @@
 					</div>
 
 					<v-card flat class="invoice-section-card invoice-items-card pos-themed-card">
-						<div class="invoice-section-heading">
+						<div class="invoice-section-heading invoice-section-heading--row">
 							<h3 class="invoice-section-heading__title">{{ __("Invoice Items") }}</h3>
+							<v-btn
+								variant="text"
+								density="compact"
+								icon="mdi-cog-outline"
+								:title="__('Columns')"
+								class="invoice-items-columns-btn"
+								@click="$refs.actionToolbar?.openColumns?.()"
+							/>
 						</div>
 						<div class="items-table-wrapper">
 							<ItemsTable
@@ -1261,12 +1261,15 @@ export default {
 	align-items: stretch;
 }
 
-.invoice-top-grid {
-	display: grid;
-	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-	gap: var(--dynamic-sm);
-	flex: 0 0 auto;
-	align-items: stretch;
+.invoice-section-heading--row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.invoice-items-columns-btn {
+	margin: 2px 0;
 }
 
 .invoice-meta-grid {
@@ -1277,34 +1280,19 @@ export default {
 }
 
 .invoice-section-body {
-	padding: 0 8px 8px;
+	padding: 0 8px 6px;
 }
 
-.invoice-section-body--search {
-	padding: 4px 8px 10px;
+/* Compact inputs inside the Customer Details card */
+.invoice-section-card--customer :deep(.v-field__input) {
+	font-size: 0.88rem;
 }
-
-.invoice-section-card--search {
-	display: flex;
-	flex-direction: column;
+.invoice-section-card--customer :deep(.v-field-label),
+.invoice-section-card--customer :deep(.v-label) {
+	font-size: 0.76rem;
 }
-
-.invoice-section-card--search .invoice-section-body {
-	flex: 1 1 auto;
-	display: flex;
-	align-items: stretch;
-}
-
-.invoice-section-card--search :deep(.column-selector-container) {
-	background: transparent;
-	padding: 0;
-	margin: 0;
-	width: 100%;
-}
-
-.invoice-section-card--search :deep(.item-search-field) {
-	max-width: 100%;
-	margin-right: 8px;
+.invoice-section-card--customer :deep(.v-btn) {
+	font-size: 0.72rem;
 }
 
 .invoice-section-card {
@@ -1318,15 +1306,17 @@ export default {
 }
 
 .invoice-section-heading {
-	padding: 14px 16px 0;
+	padding: 6px 10px 0;
 }
 
 .invoice-section-heading__title {
 	margin: 0;
-	font-size: 1rem;
+	font-size: 0.72rem;
 	font-weight: 700;
-	line-height: 1.25;
-	color: var(--pos-text-primary);
+	line-height: 1.2;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--pos-text-secondary);
 }
 
 .invoice-items-card {
@@ -1366,10 +1356,6 @@ export default {
 	}
 
 	.invoice-meta-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.invoice-top-grid {
 		grid-template-columns: 1fr;
 	}
 
@@ -1414,10 +1400,6 @@ export default {
 	}
 
 	.invoice-meta-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.invoice-top-grid {
 		grid-template-columns: 1fr;
 	}
 

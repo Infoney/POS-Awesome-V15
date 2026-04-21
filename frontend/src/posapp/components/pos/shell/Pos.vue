@@ -31,17 +31,21 @@
 			<Payments dialog-mode />
 		</v-dialog>
 		<v-row
+			ref="mainRowRef"
 			v-show="!dialog"
 			dense
 			class="ma-0 dynamic-main-row"
-			:class="{ 'dynamic-main-row--phone': isPhone }"
+			:class="{
+				'dynamic-main-row--phone': isPhone,
+				'dynamic-main-row--resizing': isResizingPanels,
+			}"
 		>
 			<v-col
 				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'items'"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
+				:xl="useCompactPosSwitcher ? 12 : selectorCols"
+				:lg="useCompactPosSwitcher ? 12 : selectorCols"
+				:md="useCompactPosSwitcher ? 12 : selectorCols"
+				:sm="useCompactPosSwitcher ? 12 : selectorCols"
 				cols="12"
 				class="pos dynamic-col dynamic-col--selector"
 			>
@@ -49,10 +53,10 @@
 			</v-col>
 			<v-col
 				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'offers'"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
+				:xl="useCompactPosSwitcher ? 12 : selectorCols"
+				:lg="useCompactPosSwitcher ? 12 : selectorCols"
+				:md="useCompactPosSwitcher ? 12 : selectorCols"
+				:sm="useCompactPosSwitcher ? 12 : selectorCols"
 				cols="12"
 				class="pos dynamic-col dynamic-col--selector"
 			>
@@ -60,10 +64,10 @@
 			</v-col>
 			<v-col
 				v-show="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'coupons'"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
+				:xl="useCompactPosSwitcher ? 12 : selectorCols"
+				:lg="useCompactPosSwitcher ? 12 : selectorCols"
+				:md="useCompactPosSwitcher ? 12 : selectorCols"
+				:sm="useCompactPosSwitcher ? 12 : selectorCols"
 				cols="12"
 				class="pos dynamic-col dynamic-col--selector"
 			>
@@ -71,10 +75,10 @@
 			</v-col>
 			<v-col
 				v-if="(!useCompactPosSwitcher || compactPanel === 'selector') && activeView === 'payment' && !usePaymentDialog"
-				:xl="useCompactPosSwitcher ? 12 : 5"
-				:lg="useCompactPosSwitcher ? 12 : 5"
-				:md="useCompactPosSwitcher ? 12 : 5"
-				:sm="useCompactPosSwitcher ? 12 : 5"
+				:xl="useCompactPosSwitcher ? 12 : selectorCols"
+				:lg="useCompactPosSwitcher ? 12 : selectorCols"
+				:md="useCompactPosSwitcher ? 12 : selectorCols"
+				:sm="useCompactPosSwitcher ? 12 : selectorCols"
 				cols="12"
 				class="pos dynamic-col dynamic-col--selector"
 			>
@@ -83,15 +87,27 @@
 
 			<v-col
 				v-show="!useCompactPosSwitcher || compactPanel === 'invoice'"
-				:xl="useCompactPosSwitcher ? 12 : 7"
-				:lg="useCompactPosSwitcher ? 12 : 7"
-				:md="useCompactPosSwitcher ? 12 : 7"
-				:sm="useCompactPosSwitcher ? 12 : 7"
+				:xl="useCompactPosSwitcher ? 12 : invoiceCols"
+				:lg="useCompactPosSwitcher ? 12 : invoiceCols"
+				:md="useCompactPosSwitcher ? 12 : invoiceCols"
+				:sm="useCompactPosSwitcher ? 12 : invoiceCols"
 				cols="12"
 				class="pos dynamic-col dynamic-col--invoice"
 			>
 				<Invoice ref="invoicePanel"></Invoice>
 			</v-col>
+
+			<div
+				v-show="!useCompactPosSwitcher"
+				class="pos-split-handle"
+				:class="{ 'pos-split-handle--active': isResizingPanels }"
+				:style="splitHandleStyle"
+				:title="__('Drag to resize — double-click to reset')"
+				@pointerdown="startPanelResize"
+				@dblclick="resetPanelSplit"
+			>
+				<span class="pos-split-handle__grip" aria-hidden="true" />
+			</div>
 		</v-row>
 		<div v-if="showBottomDock" ref="mobileDock" class="mobile-pos-stack">
 			<div class="mobile-sale-dock">
@@ -450,6 +466,75 @@ export default {
 			eventBus,
 		});
 
+		// ── Resizable selector / invoice split ───────────────────────────
+		const SPLIT_STORAGE_KEY = "posa.panelSplit.selectorCols";
+		const SPLIT_MIN = 3;
+		const SPLIT_MAX = 9;
+		const readStoredSplit = () => {
+			try {
+				const raw = localStorage.getItem(SPLIT_STORAGE_KEY);
+				const n = Number(raw);
+				if (Number.isFinite(n) && n >= SPLIT_MIN && n <= SPLIT_MAX) return n;
+			} catch {}
+			return 7;
+		};
+		const selectorCols = ref(readStoredSplit());
+		const invoiceCols = computed(() => 12 - selectorCols.value);
+		const mainRowRef = ref(null);
+		const isResizingPanels = ref(false);
+
+		const onPanelResize = (e) => {
+			if (!isResizingPanels.value) return;
+			const host = mainRowRef.value?.$el || mainRowRef.value;
+			if (!host || typeof host.getBoundingClientRect !== "function") return;
+			const rect = host.getBoundingClientRect();
+			if (rect.width <= 0) return;
+			const ratio = (e.clientX - rect.left) / rect.width;
+			const cols = Math.round(ratio * 12);
+			const clamped = Math.min(SPLIT_MAX, Math.max(SPLIT_MIN, cols));
+			if (clamped !== selectorCols.value) {
+				selectorCols.value = clamped;
+			}
+		};
+
+		const endPanelResize = () => {
+			if (!isResizingPanels.value) return;
+			isResizingPanels.value = false;
+			document.body.style.cursor = "";
+			document.body.style.userSelect = "";
+			window.removeEventListener("pointermove", onPanelResize);
+			window.removeEventListener("pointerup", endPanelResize);
+			try {
+				localStorage.setItem(SPLIT_STORAGE_KEY, String(selectorCols.value));
+			} catch {}
+		};
+
+		const startPanelResize = (e) => {
+			if (useCompactPosSwitcher.value) return;
+			isResizingPanels.value = true;
+			document.body.style.cursor = "col-resize";
+			document.body.style.userSelect = "none";
+			window.addEventListener("pointermove", onPanelResize);
+			window.addEventListener("pointerup", endPanelResize);
+			e.preventDefault();
+		};
+
+		const resetPanelSplit = () => {
+			selectorCols.value = 7;
+			try {
+				localStorage.setItem(SPLIT_STORAGE_KEY, String(selectorCols.value));
+			} catch {}
+		};
+
+		const splitHandleStyle = computed(() => ({
+			left: `${(selectorCols.value / 12) * 100}%`,
+		}));
+
+		onBeforeUnmount(() => {
+			window.removeEventListener("pointermove", onPanelResize);
+			window.removeEventListener("pointerup", endPanelResize);
+		});
+
 		onMounted(() => {
 			if (typeof window !== "undefined" && "ResizeObserver" in window) {
 				mobileDockObserver = new ResizeObserver(() => {
@@ -581,6 +666,13 @@ export default {
 			invoicePanel,
 			eventBus,
 			dialog,
+			selectorCols,
+			invoiceCols,
+			mainRowRef,
+			isResizingPanels,
+			startPanelResize,
+			resetPanelSplit,
+			splitHandleStyle,
 		};
 	},
 	data: function () {
@@ -680,6 +772,7 @@ export default {
 .dynamic-main-row {
 	padding: 0;
 	margin: 0;
+	position: relative;
 }
 
 .dynamic-main-row--phone {
@@ -698,6 +791,47 @@ export default {
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0;
+}
+
+/* ─── Resizable split handle between selector and invoice panels ── */
+.pos-split-handle {
+	position: absolute;
+	top: var(--dynamic-sm);
+	bottom: var(--dynamic-sm);
+	width: 10px;
+	transform: translateX(-50%);
+	cursor: col-resize;
+	z-index: 4;
+	background: transparent;
+	touch-action: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.pos-split-handle__grip {
+	display: block;
+	width: 3px;
+	height: 44px;
+	border-radius: 3px;
+	background: var(--pos-border, rgba(148, 163, 184, 0.25));
+	transition: background-color 0.18s ease, height 0.18s ease, width 0.18s ease;
+}
+
+.pos-split-handle:hover .pos-split-handle__grip,
+.pos-split-handle--active .pos-split-handle__grip {
+	background: var(--pos-primary);
+	height: 64px;
+	width: 4px;
+}
+
+.dynamic-main-row--resizing {
+	cursor: col-resize;
+	user-select: none;
+}
+
+.dynamic-main-row--resizing .dynamic-col {
+	transition: none;
 }
 
 .mobile-pos-stack {

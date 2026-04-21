@@ -133,10 +133,10 @@
 /* Table headers */
 .posa-cart-table th {
 	font-weight: 600;
-	font-size: 0.8rem;
+	font-size: 0.72rem;
 	text-transform: none;
 	letter-spacing: 0.02em;
-	padding: 12px;
+	padding: 8px 10px;
 	border-bottom: 1px solid var(--pos-border-light);
 	background-color: var(--pos-surface-muted);
 	color: var(--pos-text-secondary);
@@ -150,7 +150,7 @@
 	text-align: center;
 	vertical-align: middle !important;
 	line-height: 1.2 !important;
-	height: 48px;
+	height: 38px;
 	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	background-clip: padding-box;
 	border-radius: 0;
@@ -210,7 +210,7 @@
 	max-width: 100% !important;
 	margin: 0 !important;
 	padding: 0 !important;
-	min-height: var(--cell-height, 60px);
+	min-height: var(--cell-height, 44px);
 }
 
 .posa-cart-table tr:hover {
@@ -223,9 +223,10 @@
 
 /* Table cells */
 .posa-cart-table td {
-	padding: 14px 12px;
+	padding: 8px 8px;
 	vertical-align: middle;
-	height: 60px;
+	height: 44px;
+	font-size: 0.78rem;
 	text-align: center;
 	color: var(--pos-text-primary);
 	position: relative;
@@ -248,10 +249,10 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 6px;
-	padding: 4px;
-	min-width: 140px;
-	max-width: 160px;
+	gap: 4px;
+	padding: 2px;
+	min-width: 108px;
+	max-width: 130px;
 	width: auto;
 	height: auto;
 	background: var(--pos-surface-variant);
@@ -533,8 +534,8 @@
 
 /* Ensure table rows have consistent spacing */
 .posa-cart-table tbody tr:not([style*="height: 0"]) {
-	height: var(--cell-height, 60px);
-	min-height: var(--cell-height, 60px);
+	height: var(--cell-height, 44px);
+	min-height: var(--cell-height, 44px);
 }
 
 /* Clean up any unwanted spacing from virtual scrolling */
@@ -728,38 +729,38 @@
    ================================================================= */
 
 .posa-responsive-table-container.breakpoint-xs {
-	--table-padding: 8px;
-	--header-font-size: 0.65rem;
-	--cell-padding: 8px 4px;
-	--cell-height: 48px;
+	--table-padding: 6px;
+	--header-font-size: 0.6rem;
+	--cell-padding: 6px 4px;
+	--cell-height: 38px;
 }
 
 .posa-responsive-table-container.breakpoint-sm {
-	--table-padding: 12px;
-	--header-font-size: 0.7rem;
-	--cell-padding: 12px 6px;
-	--cell-height: 52px;
+	--table-padding: 8px;
+	--header-font-size: 0.64rem;
+	--cell-padding: 7px 6px;
+	--cell-height: 40px;
 }
 
 .posa-responsive-table-container.breakpoint-md {
-	--table-padding: 16px;
-	--header-font-size: 0.75rem;
-	--cell-padding: 14px 8px;
-	--cell-height: 56px;
+	--table-padding: 10px;
+	--header-font-size: 0.68rem;
+	--cell-padding: 8px 6px;
+	--cell-height: 42px;
 }
 
 .posa-responsive-table-container.breakpoint-lg {
-	--table-padding: 16px;
-	--header-font-size: 0.8rem;
-	--cell-padding: 16px 12px;
-	--cell-height: 60px;
+	--table-padding: 12px;
+	--header-font-size: 0.72rem;
+	--cell-padding: 8px 8px;
+	--cell-height: 44px;
 }
 
 .posa-responsive-table-container.breakpoint-xl {
-	--table-padding: 20px;
-	--header-font-size: 0.85rem;
-	--cell-padding: 18px 12px;
-	--cell-height: 64px;
+	--table-padding: 14px;
+	--header-font-size: 0.76rem;
+	--cell-padding: 10px 10px;
+	--cell-height: 48px;
 }
 
 /* Container-aware responsive adjustments */
