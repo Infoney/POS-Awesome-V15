@@ -83,15 +83,17 @@
 				@update:model-value="(open) => !open && closeDetailsDrawer()"
 			>
 				<v-card
-					class="posa-details-drawer pos-themed-card"
+					class="posa-details-drawer pos-themed-card card-accent-top"
 					:height="'100dvh'"
 				>
 					<div class="posa-details-drawer__header">
 						<div class="posa-details-drawer__title">
-							<v-icon size="20" class="posa-details-drawer__title-icon">mdi-information-outline</v-icon>
+							<span class="icon-badge icon-badge--pink posa-details-drawer__title-badge">
+								<v-icon size="18">mdi-information-outline</v-icon>
+							</span>
 							<div class="posa-details-drawer__heading">
-								<span class="posa-details-drawer__eyebrow">{{ __("Product Details") }}</span>
-								<strong v-if="drawerItem" class="posa-details-drawer__name">
+								<span class="posa-details-drawer__eyebrow cc-eyebrow">{{ __("Product Details") }}</span>
+								<strong v-if="drawerItem" class="posa-details-drawer__name gradient-text">
 									{{ drawerItem.item_name || drawerItem.item_code }}
 								</strong>
 							</div>
@@ -100,11 +102,12 @@
 							icon="mdi-close"
 							variant="text"
 							density="compact"
+							class="posa-details-drawer__close"
 							:aria-label="__('Close')"
 							@click="closeDetailsDrawer"
 						/>
 					</div>
-					<v-divider />
+					<v-divider class="posa-details-drawer__top-divider" />
 					<div class="posa-details-drawer__body">
 						<ItemDetailsPanel
 							v-if="drawerItem"
@@ -499,81 +502,115 @@ defineExpose({
 }
 
 .posa-details-drawer {
-	background: var(--pos-surface-muted, #0f172a) !important;
+	background: var(--cc-bg, var(--pos-surface-muted, #0e121b)) !important;
 	border-radius: 0 !important;
+	border-left: 1px solid var(--cc-border, var(--pos-border, rgba(148, 163, 184, 0.2))) !important;
+	box-shadow: var(--cc-shadow-lg, 0 20px 60px rgba(0, 0, 0, 0.55));
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
 }
 
+.posa-details-drawer.card-accent-top::before {
+	border-radius: 0 !important;
+	opacity: 0.85;
+}
+
 .posa-details-drawer__header {
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
-	padding: 16px 18px 12px;
+	padding: 18px 20px 14px;
+	background: linear-gradient(
+		180deg,
+		var(--cc-bg-sec, rgba(255, 255, 255, 0.02)) 0%,
+		transparent 100%
+	);
 }
 
 .posa-details-drawer__title {
 	display: flex;
-	align-items: flex-start;
-	gap: 10px;
+	align-items: center;
+	gap: 12px;
 	min-width: 0;
 }
 
-.posa-details-drawer__title-icon {
-	color: var(--pos-primary, rgb(var(--v-theme-primary)));
-	margin-top: 2px;
+.posa-details-drawer__title-badge {
+	margin-top: 0;
 	flex-shrink: 0;
+	box-shadow: var(--cc-glow-pink, 0 0 18px rgba(226, 54, 112, 0.18));
 }
 
 .posa-details-drawer__heading {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: 4px;
 	min-width: 0;
 }
 
 .posa-details-drawer__eyebrow {
-	font-size: 0.7rem;
-	font-weight: 700;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--pos-text-secondary);
+	font-size: 0.66rem;
 }
 
 .posa-details-drawer__name {
-	font-size: 1.05rem;
-	line-height: 1.25;
-	color: var(--pos-text-primary);
+	font-size: 1.15rem;
+	font-weight: 700;
+	line-height: 1.2;
+	letter-spacing: -0.01em;
 	overflow-wrap: anywhere;
+}
+
+.posa-details-drawer__close {
+	color: var(--cc-muted, var(--pos-text-secondary)) !important;
+}
+
+.posa-details-drawer__close:hover {
+	color: var(--cc-text, var(--pos-text-primary)) !important;
+	background: var(--cc-bg-ter, rgba(255, 255, 255, 0.06)) !important;
+}
+
+.posa-details-drawer__top-divider {
+	border-color: var(--cc-border, var(--pos-border)) !important;
+	opacity: 1;
 }
 
 .posa-details-drawer__body {
 	flex: 1 1 auto;
 	overflow-y: auto;
-	padding: 14px 16px 28px;
+	padding: 16px 18px 28px;
+	background: var(--cc-bg, var(--pos-surface-muted));
 }
 
 .posa-details-drawer__divider {
-	margin: 18px 0;
+	margin: 20px 0;
+	border-color: var(--cc-border, var(--pos-border)) !important;
+	opacity: 1;
 }
 
 .posa-details-drawer__edit {
-	border: 1px solid rgba(148, 163, 184, 0.18);
+	position: relative;
+	border: 1px solid var(--cc-border, rgba(148, 163, 184, 0.18));
 	border-radius: 12px;
-	background: rgba(148, 163, 184, 0.04);
+	background: var(--cc-bg-sec, rgba(148, 163, 184, 0.04));
 	overflow: hidden;
+	transition: border-color var(--cc-ease-base, 220ms ease-out);
+}
+
+.posa-details-drawer__edit:hover {
+	border-color: var(--cc-border-hover, rgba(148, 163, 184, 0.32));
 }
 
 .posa-details-drawer__edit-summary {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 10px 14px;
+	padding: 12px 14px;
 	font-weight: 700;
-	font-size: 0.84rem;
-	color: var(--pos-text-primary);
+	font-size: 0.78rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--cc-muted, var(--pos-text-secondary));
 	cursor: pointer;
 	user-select: none;
 	list-style: none;

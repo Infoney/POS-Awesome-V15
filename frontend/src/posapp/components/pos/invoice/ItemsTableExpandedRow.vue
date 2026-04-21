@@ -413,10 +413,10 @@ const onRateClick = () => {
 	gap: 6px;
 	padding: 4px 10px;
 	border-radius: 999px;
-	background: var(--pos-surface-muted, rgba(148, 163, 184, 0.1));
-	border: 1px solid var(--pos-border-light, rgba(148, 163, 184, 0.2));
+	background: var(--cc-bg-ter, var(--pos-surface-muted, rgba(148, 163, 184, 0.1)));
+	border: 1px solid var(--cc-border, var(--pos-border-light, rgba(148, 163, 184, 0.2)));
 	font-size: 0.74rem;
-	color: var(--pos-text-secondary);
+	color: var(--cc-muted, var(--pos-text-secondary));
 	line-height: 1.1;
 }
 
@@ -429,8 +429,9 @@ const onRateClick = () => {
 
 .posa-cc-pill__value {
 	font-weight: 700;
-	color: var(--pos-text-primary);
+	color: var(--cc-text, var(--pos-text-primary));
 	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.01em;
 }
 
 .posa-cc-status {
@@ -453,15 +454,21 @@ const onRateClick = () => {
 }
 
 .posa-cc-status--in {
-	color: #22c55e;
+	color: var(--cc-green, #22c55e);
+	background: rgba(var(--cc-green-rgb, 52, 178, 157), 0.08);
+	border-color: rgba(var(--cc-green-rgb, 52, 178, 157), 0.3);
 }
 
 .posa-cc-status--out {
-	color: #f59e0b;
+	color: var(--cc-orange, #f59e0b);
+	background: rgba(var(--cc-orange-rgb, 244, 106, 37), 0.08);
+	border-color: rgba(var(--cc-orange-rgb, 244, 106, 37), 0.3);
 }
 
 .posa-cc-status--neg {
-	color: #ef4444;
+	color: var(--cc-pink, #ef4444);
+	background: rgba(var(--cc-pink-rgb, 226, 54, 112), 0.08);
+	border-color: rgba(var(--cc-pink-rgb, 226, 54, 112), 0.3);
 }
 
 .posa-cc-erp-link {
@@ -470,7 +477,7 @@ const onRateClick = () => {
 	gap: 4px;
 	font-size: 0.78rem;
 	font-weight: 600;
-	color: var(--pos-primary);
+	color: var(--cc-pink, var(--pos-primary));
 	text-decoration: none;
 }
 
@@ -493,17 +500,17 @@ const onRateClick = () => {
 	font-weight: 700;
 	letter-spacing: 0.12em;
 	text-transform: uppercase;
-	color: var(--pos-text-secondary);
-	opacity: 0.85;
+	color: var(--cc-muted, var(--pos-text-secondary));
 }
 
 .posa-cc-eyebrow__count {
-	background: var(--pos-primary-container, rgba(0, 151, 167, 0.15));
-	color: var(--pos-primary);
+	background: rgba(var(--cc-pink-rgb, 226, 54, 112), 0.12);
+	color: var(--cc-pink, var(--pos-primary));
 	padding: 1px 8px;
 	border-radius: 999px;
 	font-size: 0.7rem;
 	letter-spacing: 0;
+	font-weight: 700;
 }
 
 /* Edit grid: 2 stacked rows — QTY+UOM, then Rate+Disc%+Disc<Currency> */
@@ -547,11 +554,12 @@ const onRateClick = () => {
 	font-weight: 700;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
-	color: var(--pos-text-secondary);
+	color: var(--cc-muted, var(--pos-text-secondary));
 }
 
 .posa-cc-field__hint-icon {
 	opacity: 0.7;
+	color: var(--cc-pink, var(--pos-primary));
 }
 
 /* Compact input override — kills the 56px Vuetify default */
@@ -560,6 +568,21 @@ const onRateClick = () => {
 	border-radius: 8px;
 	font-size: 0.88rem;
 	font-variant-numeric: tabular-nums;
+	background: var(--cc-bg-sec, var(--pos-input-bg, rgba(255, 255, 255, 0.02))) !important;
+	transition:
+		border-color var(--cc-ease-base, 220ms ease-out),
+		box-shadow var(--cc-ease-base, 220ms ease-out);
+}
+
+.posa-cc-input :deep(.v-field--focused) {
+	box-shadow: 0 0 0 3px rgba(var(--cc-pink-rgb, 226, 54, 112), 0.08) !important;
+}
+
+.posa-cc-input :deep(.v-field--focused .v-field__outline__start),
+.posa-cc-input :deep(.v-field--focused .v-field__outline__end),
+.posa-cc-input :deep(.v-field--focused .v-field__outline__notch::before),
+.posa-cc-input :deep(.v-field--focused .v-field__outline__notch::after) {
+	border-color: rgba(var(--cc-pink-rgb, 226, 54, 112), 0.5) !important;
 }
 
 .posa-cc-input :deep(.v-field__field) {
@@ -591,11 +614,19 @@ const onRateClick = () => {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding: 8px 10px;
+	padding: 10px 12px;
 	border-radius: 10px;
-	background: var(--pos-surface-muted, rgba(148, 163, 184, 0.08));
-	border: 1px solid var(--pos-border-light, rgba(148, 163, 184, 0.16));
+	background: var(--cc-bg-sec, var(--pos-surface-muted, rgba(148, 163, 184, 0.08)));
+	border: 1px solid var(--cc-border, var(--pos-border-light, rgba(148, 163, 184, 0.16)));
 	min-width: 0;
+	transition:
+		border-color var(--cc-ease-base, 220ms ease-out),
+		transform var(--cc-ease-base, 220ms ease-out);
+}
+
+.posa-cc-tile:hover {
+	border-color: var(--cc-border-hover, rgba(148, 163, 184, 0.32));
+	transform: translateY(-1px);
 }
 
 .posa-cc-tile--inline {
@@ -605,17 +636,17 @@ const onRateClick = () => {
 .posa-cc-tile__label {
 	font-size: 0.62rem;
 	font-weight: 700;
-	letter-spacing: 0.08em;
+	letter-spacing: 0.1em;
 	text-transform: uppercase;
-	color: var(--pos-text-secondary);
-	opacity: 0.85;
+	color: var(--cc-muted, var(--pos-text-secondary));
 }
 
 .posa-cc-tile__value {
-	font-size: 1.05rem;
+	font-size: 1.1rem;
 	font-weight: 700;
-	color: var(--pos-text-primary);
+	color: var(--cc-text, var(--pos-text-primary));
 	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.01em;
 	line-height: 1.15;
 	white-space: nowrap;
 	overflow: hidden;
@@ -626,12 +657,12 @@ const onRateClick = () => {
 	font-size: 0.86rem;
 	font-weight: 600;
 	font-variant-numeric: normal;
+	letter-spacing: 0;
 }
 
 .posa-cc-tile__unit {
 	font-size: 0.62rem;
-	color: var(--pos-text-secondary);
-	opacity: 0.85;
+	color: var(--cc-subtle, var(--pos-text-secondary));
 }
 
 /* Offer flag */
@@ -641,8 +672,8 @@ const onRateClick = () => {
 	gap: 6px;
 	padding: 4px 10px;
 	border-radius: 999px;
-	background: rgba(34, 197, 94, 0.12);
-	color: #22c55e;
+	background: rgba(var(--cc-green-rgb, 52, 178, 157), 0.12);
+	color: var(--cc-green, #22c55e);
 	font-size: 0.78rem;
 	font-weight: 600;
 	width: fit-content;

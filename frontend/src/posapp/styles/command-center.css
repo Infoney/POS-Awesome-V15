@@ -1,0 +1,422 @@
+/**
+ * Command Center theme overlay for POSAwesome
+ *
+ * Source of truth: https://github.com/Infoney/command-center
+ *   frontend/src/style.css         (tokens)
+ *   frontend/tailwind.config.js    (palette aliases)
+ *
+ * Strategy
+ * --------
+ *  1. Always expose `--cc-*` tokens + utility classes (.card-accent-top,
+ *     .gradient-text, .icon-badge, .skeleton, .status-dot, .num) so any
+ *     POS component can opt in to CC patterns without redefining colors.
+ *  2. In dark mode, REMAP the existing `--pos-*` tokens to CC values so
+ *     every surface that already reads from --pos-* automatically picks
+ *     up the CC palette without per-component changes.
+ *  3. Light mode is left alone — CC is a dark-only theme.
+ */
+
+/* ─── 1. CC tokens — always available ─────────────────────────────────── */
+:root {
+	/* Surface layers */
+	--cc-bg: #0e121b;
+	--cc-bg-sec: #161c27;
+	--cc-bg-ter: #1f2533;
+	--cc-bg-card: rgba(22, 28, 39, 0.8);
+
+	/* Borders */
+	--cc-border: #252b37;
+	--cc-border-hover: #3d4660;
+	--cc-border-focus: rgba(226, 54, 112, 0.6);
+
+	/* Text */
+	--cc-text: #edf2f7;
+	--cc-muted: #7b899d;
+	--cc-subtle: #4a5568;
+
+	/* Brand palette */
+	--cc-pink: #e23670;
+	--cc-orange: #f46a25;
+	--cc-green: #34b29d;
+	--cc-purple: #a14dcb;
+	--cc-blue: #60a5fa;
+
+	/* Brand RGB triplets for color-mix / opacity utilities */
+	--cc-pink-rgb: 226, 54, 112;
+	--cc-orange-rgb: 244, 106, 37;
+	--cc-green-rgb: 52, 178, 157;
+	--cc-purple-rgb: 161, 77, 203;
+	--cc-blue-rgb: 96, 165, 250;
+
+	/* Elevation */
+	--cc-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--cc-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+	--cc-shadow-md: 0 6px 20px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+	--cc-shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.65), 0 4px 12px rgba(0, 0, 0, 0.45);
+
+	/* Brand glows */
+	--cc-glow-pink: 0 0 28px rgba(226, 54, 112, 0.25);
+	--cc-glow-green: 0 0 28px rgba(52, 178, 157, 0.25);
+	--cc-glow-orange: 0 0 28px rgba(244, 106, 37, 0.2);
+
+	/* Easings */
+	--cc-ease-fast: 150ms ease-out;
+	--cc-ease-base: 220ms ease-out;
+	--cc-ease-slow: 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── 2. Dark-mode pos token remap ────────────────────────────────────── */
+/* Wins over theme.css because command-center.css is imported after it. */
+[data-theme="dark"],
+[data-theme-mode="dark"],
+.v-theme--dark {
+	--pos-bg-primary: var(--cc-bg);
+	--pos-bg-secondary: var(--cc-bg);
+	--pos-bg-tertiary: var(--cc-bg-ter);
+
+	--pos-surface: var(--cc-bg-sec);
+	--pos-surface-variant: var(--cc-bg-ter);
+	--pos-surface-container: var(--cc-bg-sec);
+	--pos-surface-raised: var(--cc-bg-card);
+	--pos-surface-muted: var(--cc-bg-sec);
+
+	--pos-text-primary: var(--cc-text);
+	--pos-text-secondary: var(--cc-muted);
+	--pos-text-disabled: var(--cc-subtle);
+	--pos-text-hint: var(--cc-subtle);
+	--pos-text-muted: var(--cc-muted);
+
+	/* Pink replaces the cyan primary so accents/buttons feel CC */
+	--pos-primary: var(--cc-pink);
+	--pos-primary-variant: #b91c5c;
+	--pos-primary-container: rgba(var(--cc-pink-rgb), 0.12);
+	--pos-on-primary: #ffffff;
+
+	--pos-secondary: var(--cc-orange);
+	--pos-secondary-variant: #c75418;
+	--pos-secondary-container: rgba(var(--cc-orange-rgb), 0.12);
+	--pos-on-secondary: #ffffff;
+
+	--pos-accent: var(--cc-orange);
+	--pos-accent-variant: #c75418;
+
+	--pos-success: var(--cc-green);
+	--pos-success-container: rgba(var(--cc-green-rgb), 0.12);
+	--pos-warning: var(--cc-orange);
+	--pos-warning-container: rgba(var(--cc-orange-rgb), 0.12);
+	--pos-error: var(--cc-pink);
+	--pos-error-container: rgba(var(--cc-pink-rgb), 0.12);
+	--pos-info: var(--cc-blue);
+	--pos-info-container: rgba(var(--cc-blue-rgb), 0.12);
+
+	--pos-border: var(--cc-border);
+	--pos-border-light: rgba(255, 255, 255, 0.04);
+	--pos-divider: var(--cc-border);
+	--pos-outline: var(--cc-border-hover);
+
+	--pos-shadow: rgba(0, 0, 0, 0.55);
+	--pos-shadow-dark: rgba(0, 0, 0, 0.7);
+	--pos-shadow-light: rgba(0, 0, 0, 0.35);
+
+	--pos-hover-bg: rgba(255, 255, 255, 0.04);
+	--pos-pressed-bg: rgba(255, 255, 255, 0.08);
+	--pos-selected-bg: rgba(var(--cc-pink-rgb), 0.08);
+	--pos-focus-bg: rgba(var(--cc-pink-rgb), 0.1);
+
+	--pos-card-bg: var(--cc-bg-sec);
+	--pos-input-bg: var(--cc-bg-sec);
+	--pos-button-bg: var(--cc-bg-ter);
+	--pos-menu-bg: var(--cc-bg-sec);
+	--pos-dialog-bg: var(--cc-bg);
+	--pos-tooltip-bg: var(--cc-bg-ter);
+	--pos-tooltip-border: var(--cc-border);
+	--pos-tooltip-shadow: rgba(0, 0, 0, 0.55);
+
+	--pos-navbar-bg: var(--cc-bg);
+	--pos-sidebar-bg: var(--cc-bg);
+	--pos-invoice-bg: var(--cc-bg-sec);
+	--pos-table-header-bg: var(--cc-bg-sec);
+	--pos-table-row-hover: rgba(var(--cc-pink-rgb), 0.04);
+}
+
+/* Same remap for the automatic-mode media query so system-dark inherits CC. */
+@media (prefers-color-scheme: dark) {
+	[data-theme-mode="automatic"] {
+		--pos-bg-primary: var(--cc-bg);
+		--pos-bg-secondary: var(--cc-bg);
+		--pos-bg-tertiary: var(--cc-bg-ter);
+		--pos-surface: var(--cc-bg-sec);
+		--pos-surface-raised: var(--cc-bg-card);
+		--pos-surface-muted: var(--cc-bg-sec);
+		--pos-text-primary: var(--cc-text);
+		--pos-text-secondary: var(--cc-muted);
+		--pos-primary: var(--cc-pink);
+		--pos-primary-container: rgba(var(--cc-pink-rgb), 0.12);
+		--pos-secondary: var(--cc-orange);
+		--pos-success: var(--cc-green);
+		--pos-warning: var(--cc-orange);
+		--pos-error: var(--cc-pink);
+		--pos-info: var(--cc-blue);
+		--pos-border: var(--cc-border);
+		--pos-card-bg: var(--cc-bg-sec);
+		--pos-input-bg: var(--cc-bg-sec);
+		--pos-button-bg: var(--cc-bg-ter);
+		--pos-navbar-bg: var(--cc-bg);
+		--pos-sidebar-bg: var(--cc-bg);
+		--pos-invoice-bg: var(--cc-bg-sec);
+	}
+}
+
+/* ─── 3. Utility classes ──────────────────────────────────────────────── */
+
+/* Tabular numbers — every metric should carry this */
+.num,
+.posapp .num {
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: "tnum";
+	letter-spacing: -0.01em;
+}
+
+/* Pink → orange gradient clipped to text — for hero metrics */
+.gradient-text {
+	background: linear-gradient(135deg, var(--cc-pink), var(--cc-orange));
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+	color: transparent;
+}
+
+.gradient-text-green {
+	background: linear-gradient(135deg, var(--cc-green), #60d9c8);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+	color: transparent;
+}
+
+/* 2px gradient bar at the top of every card */
+.card-accent-top {
+	position: relative;
+}
+.card-accent-top::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: linear-gradient(90deg, var(--cc-pink), var(--cc-orange));
+	border-radius: inherit;
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+	opacity: 0.7;
+	pointer-events: none;
+	z-index: 1;
+}
+
+.card-accent-top--green::before {
+	background: linear-gradient(90deg, var(--cc-green), #60d9c8);
+}
+
+/* Standard hover lift used on every interactive card */
+.card-hover {
+	transition:
+		border-color var(--cc-ease-base),
+		box-shadow var(--cc-ease-base),
+		transform var(--cc-ease-base);
+}
+.card-hover:hover {
+	border-color: var(--cc-border-hover);
+	box-shadow: var(--cc-shadow-md);
+	transform: translateY(-1px);
+}
+
+/* Square icon badge used at the top-right of cards */
+.icon-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.25rem;
+	height: 2.25rem;
+	border-radius: 0.625rem;
+	flex-shrink: 0;
+}
+
+.icon-badge--pink {
+	background: rgba(var(--cc-pink-rgb), 0.1);
+	color: var(--cc-pink);
+}
+.icon-badge--orange {
+	background: rgba(var(--cc-orange-rgb), 0.1);
+	color: var(--cc-orange);
+}
+.icon-badge--green {
+	background: rgba(var(--cc-green-rgb), 0.1);
+	color: var(--cc-green);
+}
+.icon-badge--purple {
+	background: rgba(var(--cc-purple-rgb), 0.1);
+	color: var(--cc-purple);
+}
+.icon-badge--blue {
+	background: rgba(var(--cc-blue-rgb), 0.1);
+	color: var(--cc-blue);
+}
+
+/* 7px status dot */
+.status-dot {
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+/* Live pulse — green ring expanding around a dot */
+@keyframes cc-pulse-live {
+	0%,
+	100% {
+		opacity: 1;
+		box-shadow: 0 0 0 0 rgba(52, 178, 157, 0.5);
+	}
+	50% {
+		opacity: 0.6;
+		box-shadow: 0 0 0 5px rgba(52, 178, 157, 0);
+	}
+}
+.cc-pulse-live {
+	animation: cc-pulse-live 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Skeleton shimmer for async surfaces */
+@keyframes cc-skeleton-shimmer {
+	0% {
+		background-position: 200% center;
+	}
+	100% {
+		background-position: -200% center;
+	}
+}
+.skeleton {
+	background: linear-gradient(
+		90deg,
+		var(--cc-bg-ter) 25%,
+		var(--cc-border) 50%,
+		var(--cc-bg-ter) 75%
+	);
+	background-size: 400% 100%;
+	animation: cc-skeleton-shimmer 1.8s ease-in-out infinite;
+	border-radius: 4px;
+}
+
+/* Bar grow on first paint — for revenue progress bars */
+@keyframes cc-bar-grow {
+	from {
+		transform: scaleX(0);
+	}
+	to {
+		transform: scaleX(1);
+	}
+}
+.bar-animate {
+	transform-origin: left;
+	animation: cc-bar-grow 600ms var(--cc-ease-slow) forwards;
+}
+
+/* ─── 4. Dark-mode card chrome polish ─────────────────────────────────── */
+/* Make every pos-themed-card feel like a CC card without per-component edits. */
+[data-theme="dark"] .posapp .pos-themed-card,
+[data-theme-mode="dark"] .posapp .pos-themed-card,
+.v-theme--dark .posapp .pos-themed-card {
+	background-color: var(--cc-bg-sec) !important;
+	border: 1px solid var(--cc-border) !important;
+	border-radius: 12px !important;
+	box-shadow: var(--cc-shadow-sm);
+}
+
+/* Eyebrow utility — uppercase muted micro-label */
+.cc-eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--cc-muted);
+}
+
+/* Kbd hint chip — matches the cc search field */
+.cc-kbd {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 22px;
+	height: 20px;
+	padding: 0 6px;
+	border-radius: 5px;
+	background: var(--cc-bg-ter);
+	border: 1px solid var(--cc-border);
+	color: var(--cc-subtle);
+	font-family:
+		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+
+/* Brand-colored pill chips */
+.cc-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	line-height: 1.2;
+}
+.cc-chip--pink {
+	background: rgba(var(--cc-pink-rgb), 0.1);
+	color: var(--cc-pink);
+}
+.cc-chip--orange {
+	background: rgba(var(--cc-orange-rgb), 0.1);
+	color: var(--cc-orange);
+}
+.cc-chip--green {
+	background: rgba(var(--cc-green-rgb), 0.1);
+	color: var(--cc-green);
+}
+.cc-chip--purple {
+	background: rgba(var(--cc-purple-rgb), 0.1);
+	color: var(--cc-purple);
+}
+.cc-chip--blue {
+	background: rgba(var(--cc-blue-rgb), 0.1);
+	color: var(--cc-blue);
+}
+
+/* ─── 5. CC-flavored scrollbar (dark mode only) ───────────────────────── */
+[data-theme="dark"] ::-webkit-scrollbar,
+[data-theme-mode="dark"] ::-webkit-scrollbar,
+.v-theme--dark ::-webkit-scrollbar {
+	width: 5px;
+	height: 5px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-track,
+[data-theme-mode="dark"] ::-webkit-scrollbar-track,
+.v-theme--dark ::-webkit-scrollbar-track {
+	background: var(--cc-bg-sec);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb,
+[data-theme-mode="dark"] ::-webkit-scrollbar-thumb,
+.v-theme--dark ::-webkit-scrollbar-thumb {
+	background: var(--cc-border);
+	border-radius: 3px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover,
+[data-theme-mode="dark"] ::-webkit-scrollbar-thumb:hover,
+.v-theme--dark ::-webkit-scrollbar-thumb:hover {
+	background: var(--cc-border-hover);
+}
