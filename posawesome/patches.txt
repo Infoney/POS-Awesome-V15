@@ -17,3 +17,4 @@ posawesome.patches.add_gift_card_invoice_redemption_fields
 posawesome.patches.add_gift_card_to_workspace
 posawesome.patches.add_pos_branding_settings
 posawesome.patches.add_pos_hide_brand_text_setting
+posawesome.patches.add_pos_menu_logo_setting

@@ -92,6 +92,7 @@
 			v-model:item="item"
 			:company="company"
 			:company-img="companyImg"
+			:menu-logo="menuLogo"
 			:items="items"
 			:footer-action="drawerFooterAction"
 			@open-settings="openSettingsPanel"
@@ -349,6 +350,12 @@ export default {
 	computed: {
 		appBarColor() {
 			return this.isDark ? this.$vuetify.theme.themes.dark.colors.surface : "white";
+		},
+		// Per-POS-Profile drawer avatar override. Falls back to the bundled
+		// company image when blank so existing sites are unchanged.
+		menuLogo() {
+			const raw = this.posProfile?.posa_menu_logo;
+			return typeof raw === "string" ? raw.trim() : "";
 		},
 		offlineStatusState() {
 			return {
