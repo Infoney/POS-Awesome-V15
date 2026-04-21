@@ -13,10 +13,15 @@ const hasSerial = (item: any): boolean =>
 
 export function useItemBatchSerial() {
 	const shouldAutoSetBatch = (context: any, item: any) => {
-		if (
-			!context?.setBatchQty ||
-			!context?.pos_profile?.posa_auto_set_batch
-		) {
+		// NOTE: we intentionally do NOT require `context.setBatchQty` to exist
+		// here. The `callSetBatchQty` helper in useItemAddition already falls
+		// back to the shared `useBatchSerial().setBatchQty` when the context
+		// doesn't inject one (e.g. ItemsSelector's add-to-cart path), so
+		// gating on `context.setBatchQty` here would silently defer the
+		// allocation to the much later `update_items_details` round-trip and
+		// the cashier would watch the cart sit without a batch pill for 5–10s
+		// even though the batch data is already cached locally.
+		if (!context?.pos_profile?.posa_auto_set_batch) {
 			return false;
 		}
 		if (!isBatched(item) || item.batch_no) {
