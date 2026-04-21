@@ -1263,7 +1263,7 @@ export default {
 
 .invoice-top-grid {
 	display: grid;
-	grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+	grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr);
 	gap: var(--dynamic-sm);
 	flex: 0 0 auto;
 	align-items: stretch;

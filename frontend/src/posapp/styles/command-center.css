@@ -167,6 +167,45 @@
 	}
 }
 
+/* ─── 2b. Light-mode cc-* remap ──────────────────────────────────────── */
+/* Surface/text/border cc tokens get flipped for light theme so any component
+   reading `--cc-*` (drawer, tiles, expanded row) stays legible. Brand
+   colors (pink/orange/green/purple/blue) intentionally stay the same. */
+[data-theme="light"],
+[data-theme-mode="light"],
+.v-theme--light {
+	--cc-bg: #ffffff;
+	--cc-bg-sec: #f4f7fb;
+	--cc-bg-ter: #e9eef5;
+	--cc-bg-card: rgba(255, 255, 255, 0.94);
+
+	--cc-border: rgba(15, 23, 42, 0.12);
+	--cc-border-hover: rgba(15, 23, 42, 0.24);
+
+	--cc-text: #0f172a;
+	--cc-muted: #64748b;
+	--cc-subtle: #94a3b8;
+
+	--cc-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.06);
+	--cc-shadow-sm: 0 2px 6px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+	--cc-shadow-md: 0 6px 20px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.05);
+	--cc-shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.1), 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+@media (prefers-color-scheme: light) {
+	[data-theme-mode="automatic"] {
+		--cc-bg: #ffffff;
+		--cc-bg-sec: #f4f7fb;
+		--cc-bg-ter: #e9eef5;
+		--cc-bg-card: rgba(255, 255, 255, 0.94);
+		--cc-border: rgba(15, 23, 42, 0.12);
+		--cc-border-hover: rgba(15, 23, 42, 0.24);
+		--cc-text: #0f172a;
+		--cc-muted: #64748b;
+		--cc-subtle: #94a3b8;
+	}
+}
+
 /* ─── 3. Utility classes ──────────────────────────────────────────────── */
 
 /* Tabular numbers — every metric should carry this */

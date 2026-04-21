@@ -114,43 +114,42 @@
 							:item-code="drawerItem.item_code"
 							:pos-profile="pos_profile"
 							:hide-qty-decimals="hide_qty_decimals"
-						/>
-
-						<v-divider class="posa-details-drawer__divider" />
-
-						<details class="posa-details-drawer__edit" open>
-							<summary class="posa-details-drawer__edit-summary">
-								<v-icon size="16">mdi-pencil-outline</v-icon>
-								<span>{{ __("Edit line item") }}</span>
-							</summary>
-							<div class="posa-details-drawer__edit-body">
-								<ItemsTableExpandedRow
-									v-if="drawerItem"
-									:item="drawerItem"
-									:is-expanded="true"
-									render-as="div"
-									:pos_profile="pos_profile"
-									:invoice-type="invoiceType"
-									:is-return-invoice="isReturnInvoice"
-									:invoice_doc="invoice_doc"
-									:hide_qty_decimals="hide_qty_decimals"
-									:expanded-content-classes="expandedContentClasses"
-									:format-float="memoizedFormatFloat"
-									:format-currency="memoizedFormatCurrency"
-									:currency-symbol="currencySymbol"
-									:is-number="isNumber"
-									:set-formated-currency="setFormatedCurrency"
-									:calc-prices="calcPrices"
-									:calc-uom="calcUom"
-									:change-price-list-rate="changePriceListRate"
-									:get-serial-options="getSerialOptions"
-									:set-serial-no="setSerialNo"
-									:set-batch-qty="setBatchQty"
-									:validate-due-date="validateDueDate"
-									@qty-change="handleQtyChange"
-								/>
-							</div>
-						</details>
+						>
+							<template #after-stats>
+								<details class="posa-details-drawer__edit" open>
+									<summary class="posa-details-drawer__edit-summary">
+										<v-icon size="14">mdi-pencil-outline</v-icon>
+										<span>{{ __("Edit line item") }}</span>
+									</summary>
+									<div class="posa-details-drawer__edit-body">
+										<ItemsTableExpandedRow
+											:item="drawerItem"
+											:is-expanded="true"
+											render-as="div"
+											:pos_profile="pos_profile"
+											:invoice-type="invoiceType"
+											:is-return-invoice="isReturnInvoice"
+											:invoice_doc="invoice_doc"
+											:hide_qty_decimals="hide_qty_decimals"
+											:expanded-content-classes="expandedContentClasses"
+											:format-float="memoizedFormatFloat"
+											:format-currency="memoizedFormatCurrency"
+											:currency-symbol="currencySymbol"
+											:is-number="isNumber"
+											:set-formated-currency="setFormatedCurrency"
+											:calc-prices="calcPrices"
+											:calc-uom="calcUom"
+											:change-price-list-rate="changePriceListRate"
+											:get-serial-options="getSerialOptions"
+											:set-serial-no="setSerialNo"
+											:set-batch-qty="setBatchQty"
+											:validate-due-date="validateDueDate"
+											@qty-change="handleQtyChange"
+										/>
+									</div>
+								</details>
+							</template>
+						</ItemDetailsPanel>
 					</div>
 				</v-card>
 			</v-dialog>
@@ -520,8 +519,8 @@ defineExpose({
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	padding: 18px 20px 14px;
+	gap: 10px;
+	padding: 12px 16px 10px;
 	background: linear-gradient(
 		180deg,
 		var(--cc-bg-sec, rgba(255, 255, 255, 0.02)) 0%,
@@ -554,7 +553,7 @@ defineExpose({
 }
 
 .posa-details-drawer__name {
-	font-size: 1.15rem;
+	font-size: 1rem;
 	font-weight: 700;
 	line-height: 1.2;
 	letter-spacing: -0.01em;
@@ -578,7 +577,7 @@ defineExpose({
 .posa-details-drawer__body {
 	flex: 1 1 auto;
 	overflow-y: auto;
-	padding: 16px 18px 28px;
+	padding: 10px 14px 20px;
 	background: var(--cc-bg, var(--pos-surface-muted));
 }
 
@@ -604,10 +603,10 @@ defineExpose({
 .posa-details-drawer__edit-summary {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	padding: 12px 14px;
+	gap: 7px;
+	padding: 8px 12px;
 	font-weight: 700;
-	font-size: 0.78rem;
+	font-size: 0.68rem;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 	color: var(--cc-muted, var(--pos-text-secondary));
@@ -637,6 +636,6 @@ defineExpose({
 }
 
 .posa-details-drawer__edit-body {
-	padding: 4px 12px 14px;
+	padding: 2px 10px 10px;
 }
 </style>
