@@ -87,6 +87,7 @@
 							</v-icon>
 						</label>
 						<v-text-field
+							id="rate"
 							density="compact"
 							variant="outlined"
 							hide-details
@@ -104,6 +105,7 @@
 					<div class="posa-cc-field">
 						<label class="posa-cc-field__label">{{ __("Disc %") }}</label>
 						<v-text-field
+							id="discount_percentage"
 							density="compact"
 							variant="outlined"
 							hide-details
@@ -121,6 +123,7 @@
 							{{ __("Disc") }} {{ currencyCode }}
 						</label>
 						<v-text-field
+							id="discount_amount"
 							density="compact"
 							variant="outlined"
 							hide-details

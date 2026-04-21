@@ -132,7 +132,7 @@
 									class="batch-row__expiry"
 									:title="__('Expiry')"
 								>
-									{{ formatDate(batch.expiry_date) }}
+									{{ formatFullDate(batch.expiry_date) }}
 								</span>
 								<span
 									v-if="batch.is_expired"
@@ -440,6 +440,21 @@ const formatDate = (value: string) => {
 		const d = new Date(value);
 		if (Number.isNaN(d.getTime())) return value;
 		return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+	} catch {
+		return value;
+	}
+};
+
+const formatFullDate = (value: string) => {
+	if (!value) return "";
+	try {
+		const d = new Date(value);
+		if (Number.isNaN(d.getTime())) return value;
+		return d.toLocaleDateString("en-GB", {
+			day: "numeric",
+			month: "long",
+			year: "numeric",
+		});
 	} catch {
 		return value;
 	}
