@@ -313,7 +313,7 @@ const onDragEnd = (event) => emit("dragend", event);
 
 .pos-row-card__name {
 	margin: 0;
-	font-size: 0.96rem;
+	font-size: 0.82rem;
 	font-weight: 700;
 	line-height: 1.25;
 	color: var(--pos-text-primary);
