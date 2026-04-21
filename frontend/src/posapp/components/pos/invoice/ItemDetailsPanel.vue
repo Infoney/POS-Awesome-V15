@@ -105,24 +105,57 @@
 					<div
 						v-for="(row, index) in stockByWarehouse"
 						:key="row.warehouse"
-						class="warehouse-row"
-						:class="warehouseToneClass(index)"
+						class="warehouse-group"
 					>
-						<div class="warehouse-row__icon">
-							<v-icon size="18">mdi-warehouse</v-icon>
-						</div>
-						<div class="warehouse-row__body">
-							<div class="warehouse-row__name">{{ row.warehouse }}</div>
-							<div class="warehouse-row__bar">
-								<span
-									class="warehouse-row__bar-fill"
-									:style="{ width: warehouseBarWidth(row) }"
-								/>
+						<div class="warehouse-row" :class="warehouseToneClass(index)">
+							<div class="warehouse-row__icon">
+								<v-icon size="18">mdi-warehouse</v-icon>
+							</div>
+							<div class="warehouse-row__body">
+								<div class="warehouse-row__name">{{ row.warehouse }}</div>
+								<div class="warehouse-row__bar">
+									<span
+										class="warehouse-row__bar-fill"
+										:style="{ width: warehouseBarWidth(row) }"
+									/>
+								</div>
+							</div>
+							<div class="warehouse-row__qty">
+								<strong>{{ formatNumber(row.actual_qty, qtyPrecision) }}</strong>
+								<span>{{ __("units") }}</span>
 							</div>
 						</div>
-						<div class="warehouse-row__qty">
-							<strong>{{ formatNumber(row.actual_qty, qtyPrecision) }}</strong>
-							<span>{{ __("units") }}</span>
+						<div
+							v-if="batchesByWarehouse.get(row.warehouse)?.length"
+							class="batch-list"
+						>
+							<div
+								v-for="batch in batchesByWarehouse.get(row.warehouse)"
+								:key="batch.batch_no"
+								class="batch-row"
+								:class="{ 'batch-row--expired': batch.is_expired }"
+							>
+								<v-icon size="12" class="batch-row__icon">mdi-package-variant-closed</v-icon>
+								<span class="batch-row__name" :title="batch.batch_no">
+									{{ batch.batch_no }}
+								</span>
+								<span
+									v-if="batch.expiry_date"
+									class="batch-row__expiry"
+									:title="__('Expiry')"
+								>
+									{{ formatDate(batch.expiry_date) }}
+								</span>
+								<span
+									v-if="batch.is_expired"
+									class="batch-row__expired-chip"
+								>
+									{{ __("Expired") }}
+								</span>
+								<span class="batch-row__qty">
+									{{ formatNumber(batch.qty, qtyPrecision) }}
+								</span>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -196,6 +229,14 @@ interface WarehouseRow {
 	actual_qty: number;
 }
 
+interface BatchRow {
+	batch_no: string;
+	warehouse: string;
+	qty: number;
+	expiry_date: string;
+	is_expired: boolean;
+}
+
 interface RecentInvoice {
 	name: string;
 	customer: string;
@@ -211,6 +252,7 @@ interface DashboardPayload {
 	currency: string;
 	totals: Totals;
 	stock_by_warehouse: WarehouseRow[];
+	batches?: BatchRow[];
 	recent_invoices: RecentInvoice[];
 }
 
@@ -260,6 +302,19 @@ const totals = computed<Totals>(() =>
 const stockByWarehouse = computed<WarehouseRow[]>(
 	() => dashboard.value?.stock_by_warehouse || [],
 );
+
+const batches = computed<BatchRow[]>(() => dashboard.value?.batches || []);
+
+const batchesByWarehouse = computed<Map<string, BatchRow[]>>(() => {
+	const map = new Map<string, BatchRow[]>();
+	for (const b of batches.value) {
+		const key = b.warehouse || "";
+		const bucket = map.get(key) || [];
+		bucket.push(b);
+		map.set(key, bucket);
+	}
+	return map;
+});
 
 const recentInvoices = computed<RecentInvoice[]>(
 	() => dashboard.value?.recent_invoices || [],
@@ -622,6 +677,12 @@ watch(
 	gap: 6px;
 }
 
+.warehouse-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
 .warehouse-row {
 	display: grid;
 	grid-template-columns: 28px minmax(0, 1fr) auto;
@@ -631,6 +692,71 @@ watch(
 	border-radius: 10px;
 	background: rgba(148, 163, 184, 0.05);
 	border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.batch-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-left: 28px;
+	padding: 4px 8px 6px 12px;
+	border-left: 2px dashed rgba(148, 163, 184, 0.18);
+}
+
+.batch-row {
+	display: grid;
+	grid-template-columns: 14px minmax(0, 1.3fr) minmax(0, 0.8fr) auto auto;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 4px;
+	font-size: 0.68rem;
+	color: var(--pos-text-primary);
+	line-height: 1.2;
+}
+
+.batch-row__icon {
+	color: var(--pos-text-secondary);
+	opacity: 0.7;
+}
+
+.batch-row__name {
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.batch-row__expiry {
+	color: var(--pos-text-secondary);
+	font-size: 0.62rem;
+	white-space: nowrap;
+}
+
+.batch-row__expired-chip {
+	color: rgb(var(--v-theme-error));
+	background: rgba(248, 113, 113, 0.1);
+	padding: 1px 6px;
+	border-radius: 999px;
+	font-size: 0.58rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.batch-row--expired .batch-row__name,
+.batch-row--expired .batch-row__expiry {
+	color: rgb(var(--v-theme-error));
+	opacity: 0.85;
+}
+
+.batch-row__qty {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: inherit;
+	text-align: end;
+	white-space: nowrap;
+	min-width: 40px;
 }
 
 .warehouse-row__icon {

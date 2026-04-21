@@ -195,6 +195,70 @@ def _stock_by_warehouse(item_code: str, profile_dict: dict[str, Any]) -> list[di
     ]
 
 
+def _batches_available(
+    item_code: str,
+    hero: dict[str, Any],
+    stock_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Per-warehouse batch balances for a batched item.
+
+    Skip non-batched items cheaply. Derives qty from Stock Ledger Entry rather
+    than the Batch doctype's cached `batch_qty` so cancellations stay accurate.
+    Returns only positive-qty batches, ordered by expiry (NULL last) then name.
+    """
+
+    if not hero.get("has_batch_no"):
+        return []
+
+    warehouses = [row.get("warehouse") for row in stock_rows if row.get("warehouse")]
+    if not warehouses:
+        return []
+
+    rows = (
+        frappe.db.sql(
+            """
+            SELECT
+                sle.batch_no,
+                sle.warehouse,
+                b.expiry_date,
+                COALESCE(SUM(sle.actual_qty), 0) AS qty
+            FROM `tabStock Ledger Entry` sle
+            LEFT JOIN `tabBatch` b ON b.name = sle.batch_no
+            WHERE sle.item_code = %(item_code)s
+              AND sle.batch_no IS NOT NULL
+              AND sle.batch_no != ''
+              AND sle.warehouse IN %(warehouses)s
+              AND sle.is_cancelled = 0
+            GROUP BY sle.batch_no, sle.warehouse, b.expiry_date
+            HAVING qty > 0
+            ORDER BY sle.warehouse ASC, (b.expiry_date IS NULL), b.expiry_date ASC, sle.batch_no ASC
+            """,
+            {
+                "item_code": item_code,
+                "warehouses": tuple(warehouses),
+            },
+            as_dict=True,
+        )
+        or []
+    )
+
+    today = frappe.utils.getdate()
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        expiry = row.get("expiry_date")
+        is_expired = bool(expiry and frappe.utils.getdate(expiry) < today)
+        result.append(
+            {
+                "batch_no": row.get("batch_no"),
+                "warehouse": row.get("warehouse"),
+                "qty": flt(row.get("qty") or 0),
+                "expiry_date": cstr(expiry) if expiry else "",
+                "is_expired": is_expired,
+            }
+        )
+    return result
+
+
 def _recent_invoices(item_code: str, company: str, limit: int = _RECENT_INVOICE_LIMIT) -> list[dict[str, Any]]:
     if not company:
         return []
@@ -283,6 +347,7 @@ def get_item_dashboard(item_code: str, pos_profile=None, recent_limit: int = _RE
             "profile_stock": profile_stock,
         },
         "stock_by_warehouse": stock_rows,
+        "batches": _batches_available(item_code, hero, stock_rows),
         "recent_invoices": _recent_invoices(item_code, company, limit=recent_limit),
     }
 
@@ -291,6 +356,7 @@ def get_item_dashboard(item_code: str, pos_profile=None, recent_limit: int = _RE
         started_at,
         item_code=item_code,
         warehouses=len(stock_rows),
+        batches=len(payload["batches"]),
         invoices=len(payload["recent_invoices"]),
     )
     return payload

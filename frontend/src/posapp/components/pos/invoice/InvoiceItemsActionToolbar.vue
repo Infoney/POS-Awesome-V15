@@ -1,37 +1,7 @@
 <template>
-	<div class="column-selector-container">
-		<button
-			type="button"
-			class="find-in-cart-trigger"
-			:title="__('Find items in cart — Alt+F')"
-			@click="openSearchDialog"
-		>
-			<v-icon size="18" class="find-in-cart-trigger__icon">mdi-magnify</v-icon>
-			<span class="find-in-cart-trigger__label">
-				{{ itemSearch ? itemSearch : __("Search") }}
-			</span>
-			<span class="find-in-cart-trigger__spacer" />
-			<span
-				class="search-shortcut-hint"
-				:title="__('Press Alt+F to open')"
-				aria-hidden="true"
-			>
-				<kbd class="search-shortcut-hint__key">Alt</kbd>
-				<span class="search-shortcut-hint__plus">+</span>
-				<kbd class="search-shortcut-hint__key">F</kbd>
-			</span>
-		</button>
-		<v-btn
-			density="compact"
-			variant="text"
-			color="primary"
-			icon="mdi-cog-outline"
-			:title="__('Columns')"
-			@click="toggleColumnSelection"
-			class="column-selector-btn"
-		/>
-
-		<!-- Search overlay -->
+	<!-- Invisible host — Alt+F opens the overlay, Columns opens via parent ref.
+	     Both dialogs teleport to <body> so no visible layout is produced here. -->
+	<div class="invoice-items-action-host">
 		<v-dialog
 			v-model="showSearchDialog"
 			:max-width="560"
@@ -170,10 +140,6 @@ const updateSelectedColumns = () => {
 	showColumnSelector.value = false;
 };
 
-const openSearchDialog = () => {
-	showSearchDialog.value = true;
-};
-
 const focusSearchField = () => {
 	nextTick(() => {
 		const node = itemSearchField.value;
@@ -196,61 +162,19 @@ const focusSearch = () => {
 	focusSearchField();
 };
 
+const openColumns = () => {
+	toggleColumnSelection();
+};
+
 defineExpose({
 	focusSearch,
+	openColumns,
 });
 </script>
 
 <style scoped>
-.column-selector-container {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	width: 100%;
-}
-
-.find-in-cart-trigger {
-	flex: 1 1 auto;
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	min-height: 34px;
-	padding: 6px 10px 6px 12px;
-	border-radius: 10px;
-	background: var(--pos-input-bg, rgba(148, 163, 184, 0.08));
-	border: 1px solid var(--pos-border, rgba(148, 163, 184, 0.18));
-	color: var(--pos-text-secondary);
-	font-size: 0.8rem;
-	cursor: text;
-	text-align: start;
-	transition: border-color 0.18s ease, background 0.18s ease;
-}
-
-.find-in-cart-trigger:hover {
-	border-color: var(--pos-primary);
-	background: var(--pos-surface-muted, rgba(148, 163, 184, 0.12));
-}
-
-.find-in-cart-trigger__icon {
-	color: var(--pos-text-secondary);
-	flex-shrink: 0;
-}
-
-.find-in-cart-trigger__label {
-	flex: 1 1 auto;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	color: var(--pos-text-secondary);
-}
-
-.find-in-cart-trigger__spacer {
-	flex: 0 0 auto;
-}
-
-.column-selector-btn {
-	flex-shrink: 0;
+.invoice-items-action-host {
+	display: contents;
 }
 
 .search-shortcut-hint {
@@ -325,7 +249,6 @@ defineExpose({
 }
 
 @media (max-width: 640px) {
-	.find-in-cart-trigger .search-shortcut-hint,
 	.find-in-cart-dialog__hint {
 		display: none;
 	}
