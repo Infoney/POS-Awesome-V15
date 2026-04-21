@@ -834,7 +834,8 @@ watch(
 	width: 28px;
 	height: 28px;
 	border-radius: 8px;
-	background: rgba(148, 163, 184, 0.08);
+	background: rgba(var(--cc-green-rgb, 52, 178, 157), 0.12);
+	color: var(--cc-green, #34b29d);
 }
 
 .warehouse-row__body {
@@ -857,7 +858,7 @@ watch(
 	width: 100%;
 	height: 4px;
 	border-radius: 999px;
-	background: rgba(148, 163, 184, 0.18);
+	background: rgba(var(--cc-green-rgb, 52, 178, 157), 0.16);
 	overflow: hidden;
 }
 
@@ -884,20 +885,14 @@ watch(
 	letter-spacing: 0.04em;
 }
 
-.warehouse-row--tone-pink {
-	color: #f472b6;
-}
-.warehouse-row--tone-orange {
-	color: #fb923c;
-}
-.warehouse-row--tone-teal {
-	color: #2dd4bf;
-}
-.warehouse-row--tone-violet {
-	color: #a78bfa;
-}
+/* All warehouse rows share the green CC accent for the bar fill + qty pill;
+   tone modifier classes kept for backward compatibility but resolve to green. */
+.warehouse-row--tone-pink,
+.warehouse-row--tone-orange,
+.warehouse-row--tone-teal,
+.warehouse-row--tone-violet,
 .warehouse-row--tone-cyan {
-	color: #67e8f9;
+	color: var(--cc-green, #34b29d);
 }
 
 .invoice-list {
