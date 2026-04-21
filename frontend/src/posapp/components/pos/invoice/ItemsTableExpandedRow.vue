@@ -368,17 +368,22 @@ const erpUrl = computed(() => {
 	return code ? `/app/item/${encodeURIComponent(code)}` : "";
 });
 
+// Frappe Check fields can arrive as number 1/0, boolean, or string "1"/"0".
+// Coerce through Number() so "0" doesn't leak through as truthy.
+const posProfileFlag = (key: string): boolean =>
+	Number((props.pos_profile as any)?.[key] ?? 0) > 0;
+
 const canEditRate = computed(
-	() => props.pos_profile?.posa_allow_user_to_edit_rate && !props.item?.posa_is_replace,
+	() => posProfileFlag("posa_allow_user_to_edit_rate") && !props.item?.posa_is_replace,
 );
 
 const canChangeListRate = computed(
-	() => !!props.pos_profile?.posa_allow_price_list_rate_change,
+	() => posProfileFlag("posa_allow_price_list_rate_change"),
 );
 
 const canEditDiscount = computed(
 	() =>
-		props.pos_profile?.posa_allow_user_to_edit_item_discount &&
+		posProfileFlag("posa_allow_user_to_edit_item_discount") &&
 		!props.item?.posa_is_replace &&
 		!props.item?.posa_offer_applied,
 );

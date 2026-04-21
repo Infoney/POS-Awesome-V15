@@ -95,6 +95,63 @@
 		<slot name="after-stats" />
 
 		<template v-if="!loading && !error">
+			<!-- Available Batches (flat section, below the 6 stat cards) -->
+			<section v-if="itemHasBatches" class="panel-section">
+				<header class="panel-section__header">
+					<h3 class="panel-section__title">{{ __("Available Batches") }}</h3>
+					<span v-if="batches.length" class="panel-section__hint">
+						{{ __("{0} total", [batches.length]) }}
+					</span>
+				</header>
+				<div v-if="warehousesWithBatches.length" class="batches-by-warehouse">
+					<div
+						v-for="entry in warehousesWithBatches"
+						:key="entry.warehouse || 'unassigned'"
+						class="batches-wh-group"
+					>
+						<div class="batches-wh-group__header">
+							<v-icon size="12" class="batches-wh-group__icon">mdi-warehouse</v-icon>
+							<span class="batches-wh-group__name">
+								{{ entry.warehouse || __("Unassigned") }}
+							</span>
+							<span class="batches-wh-group__count">{{ entry.rows.length }}</span>
+						</div>
+						<div class="batch-list">
+							<div
+								v-for="batch in entry.rows"
+								:key="`${entry.warehouse}-${batch.batch_no}`"
+								class="batch-row"
+								:class="{ 'batch-row--expired': batch.is_expired }"
+							>
+								<v-icon size="12" class="batch-row__icon">mdi-package-variant-closed</v-icon>
+								<span class="batch-row__name" :title="batch.batch_no">
+									{{ batch.batch_no }}
+								</span>
+								<span
+									v-if="batch.expiry_date"
+									class="batch-row__expiry"
+									:title="__('Expiry')"
+								>
+									{{ formatDate(batch.expiry_date) }}
+								</span>
+								<span
+									v-if="batch.is_expired"
+									class="batch-row__expired-chip"
+								>
+									{{ __("Expired") }}
+								</span>
+								<span class="batch-row__qty">
+									{{ formatNumber(batch.qty, qtyPrecision) }}
+								</span>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div v-else class="panel-section__empty">
+					{{ __("No batches available in the current warehouses") }}
+				</div>
+			</section>
+
 			<!-- Stock by warehouse -->
 			<section class="panel-section">
 				<header class="panel-section__header">
@@ -123,56 +180,6 @@
 							<div class="warehouse-row__qty">
 								<strong>{{ formatNumber(row.actual_qty, qtyPrecision) }}</strong>
 								<span>{{ __("units") }}</span>
-							</div>
-						</div>
-						<div
-							v-if="itemHasBatches"
-							class="batch-block"
-						>
-							<div class="batch-block__header">
-								<v-icon size="11" class="batch-block__icon">mdi-layers-triple-outline</v-icon>
-								<span class="batch-block__title">{{ __("Available Batches") }}</span>
-								<span
-									v-if="batchesByWarehouse.get(row.warehouse)?.length"
-									class="batch-block__count"
-								>
-									{{ batchesByWarehouse.get(row.warehouse)?.length }}
-								</span>
-							</div>
-							<div
-								v-if="batchesByWarehouse.get(row.warehouse)?.length"
-								class="batch-list"
-							>
-								<div
-									v-for="batch in batchesByWarehouse.get(row.warehouse)"
-									:key="batch.batch_no"
-									class="batch-row"
-									:class="{ 'batch-row--expired': batch.is_expired }"
-								>
-									<v-icon size="12" class="batch-row__icon">mdi-package-variant-closed</v-icon>
-									<span class="batch-row__name" :title="batch.batch_no">
-										{{ batch.batch_no }}
-									</span>
-									<span
-										v-if="batch.expiry_date"
-										class="batch-row__expiry"
-										:title="__('Expiry')"
-									>
-										{{ formatDate(batch.expiry_date) }}
-									</span>
-									<span
-										v-if="batch.is_expired"
-										class="batch-row__expired-chip"
-									>
-										{{ __("Expired") }}
-									</span>
-									<span class="batch-row__qty">
-										{{ formatNumber(batch.qty, qtyPrecision) }}
-									</span>
-								</div>
-							</div>
-							<div v-else class="batch-block__empty">
-								{{ __("No batches available in this warehouse") }}
 							</div>
 						</div>
 					</div>
@@ -334,6 +341,29 @@ const batchesByWarehouse = computed<Map<string, BatchRow[]>>(() => {
 		map.set(key, bucket);
 	}
 	return map;
+});
+
+// Flat, ordered list for the standalone "Available Batches" section.
+// Warehouses follow the stock-by-warehouse order so the drawer reads top-down.
+const warehousesWithBatches = computed<{ warehouse: string; rows: BatchRow[] }[]>(() => {
+	const map = batchesByWarehouse.value;
+	const seen = new Set<string>();
+	const result: { warehouse: string; rows: BatchRow[] }[] = [];
+	for (const row of stockByWarehouse.value) {
+		const wh = row.warehouse || "";
+		const rows = map.get(wh);
+		if (rows && rows.length) {
+			result.push({ warehouse: wh, rows });
+			seen.add(wh);
+		}
+	}
+	// Pick up any batches whose warehouse isn't in the stock-by-warehouse list
+	for (const [wh, rows] of map.entries()) {
+		if (!seen.has(wh) && rows.length) {
+			result.push({ warehouse: wh, rows });
+		}
+	}
+	return result;
 });
 
 const recentInvoices = computed<RecentInvoice[]>(
@@ -714,36 +744,48 @@ watch(
 	border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
-.batch-block {
-	margin-left: 28px;
+.batches-by-warehouse {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.batches-wh-group {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	padding: 6px 8px 8px 12px;
-	border-left: 2px dashed var(--cc-border, rgba(148, 163, 184, 0.18));
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: rgba(148, 163, 184, 0.05);
+	border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
-.batch-block__header {
+.batches-wh-group__header {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 0.6rem;
+	font-size: 0.62rem;
 	font-weight: 700;
-	letter-spacing: 0.1em;
+	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	color: var(--cc-muted, var(--pos-text-secondary));
 }
 
-.batch-block__icon {
-	color: var(--cc-pink, var(--pos-primary));
+.batches-wh-group__icon {
+	color: var(--cc-green, var(--pos-primary));
 	opacity: 0.9;
 }
 
-.batch-block__title {
-	line-height: 1;
+.batches-wh-group__name {
+	color: var(--pos-text-primary);
+	letter-spacing: 0.04em;
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-.batch-block__count {
+.batches-wh-group__count {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -756,13 +798,6 @@ watch(
 	font-size: 0.6rem;
 	font-weight: 700;
 	letter-spacing: 0;
-}
-
-.batch-block__empty {
-	padding: 6px 4px;
-	font-size: 0.68rem;
-	color: var(--cc-subtle, var(--pos-text-secondary));
-	font-style: italic;
 }
 
 .batch-list {

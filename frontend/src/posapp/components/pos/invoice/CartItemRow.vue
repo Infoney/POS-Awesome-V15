@@ -209,6 +209,8 @@
 				<div
 					v-if="!isEditingDiscountPercent"
 					class="posa-cart-table__editor-display"
+					:class="{ 'is-locked': disableDiscountEdit }"
+					:title="disableDiscountEdit ? __('Enable \u201cAllow User to Edit Item Discount\u201d in the POS Profile to edit') : undefined"
 					@click.stop="openDiscountPercentEdit"
 					tabindex="0"
 					role="button"
@@ -256,6 +258,8 @@
 				<div
 					v-if="!isEditingDiscountAmount"
 					class="posa-cart-table__editor-display"
+					:class="{ 'is-locked': disableDiscountEdit }"
+					:title="disableDiscountEdit ? __('Enable \u201cAllow User to Edit Item Discount\u201d in the POS Profile to edit') : undefined"
 					@click.stop="openDiscountAmountEdit"
 					tabindex="0"
 					role="button"
@@ -291,6 +295,8 @@
 				<div
 					v-if="!isEditingRate"
 					class="posa-cart-table__editor-display"
+					:class="{ 'is-locked': disableRateEdit }"
+					:title="disableRateEdit ? __('Enable \u201cAllow user to edit Rate\u201d in the POS Profile to edit') : undefined"
 					@click.stop="openRateEdit"
 					tabindex="0"
 					role="button"
@@ -512,15 +518,21 @@ const disableUomEdit = computed(
 		!!props.item.posa_is_replace,
 );
 
+// Frappe Check fields can arrive as number 1/0, boolean, or string "1"/"0"
+// depending on which caller populated posProfile. A bare truthy check treats
+// "0" as true and silently allows edits, so always coerce through Number().
+const posProfileFlag = (key: string): boolean =>
+	Number((props.posProfile as any)?.[key] ?? 0) > 0;
+
 const disableRateEdit = computed(
 	() =>
-		!props.posProfile.posa_allow_user_to_edit_rate ||
+		!posProfileFlag("posa_allow_user_to_edit_rate") ||
 		!!props.item.posa_is_replace,
 );
 
 const disableDiscountEdit = computed(
 	() =>
-		!props.posProfile.posa_allow_user_to_edit_item_discount ||
+		!posProfileFlag("posa_allow_user_to_edit_item_discount") ||
 		!!props.item.posa_is_replace ||
 		!!props.item.posa_offer_applied,
 );
@@ -723,11 +735,21 @@ td {
 }
 
 /* Keyboard focus styles */
-/* Keyboard focus styles */
 .posa-cart-table__qty-display:focus-visible,
 .posa-cart-table__editor-display:focus-visible {
 	outline: 2px solid var(--pos-primary);
 	outline-offset: 2px;
 	z-index: 10;
+}
+
+/* Permission-locked display (rate/discount edit disabled in POS Profile).
+   Signals to cashiers that the field is read-only because of a profile
+   setting, not because of a transient state. */
+.posa-cart-table__editor-display.is-locked {
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+.posa-cart-table__editor-display.is-locked:hover {
+	background: transparent;
 }
 </style>

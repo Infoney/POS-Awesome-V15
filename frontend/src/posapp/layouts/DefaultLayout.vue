@@ -118,8 +118,6 @@ import {
 	toggleManualOffline,
 	isManualOffline as getIsManualOffline,
 	syncOfflineInvoices,
-	getPendingOfflineInvoiceCount,
-	getPendingOfflineCashMovementCount,
 	syncOfflineCashMovements,
 	isOffline,
 	getLastSyncTotals,
@@ -966,20 +964,10 @@ const handleCloseShift = () => {
 };
 
 const handleSyncInvoices = async () => {
-	const pending = getPendingOfflineInvoiceCount();
-	const pendingCashMovements = getPendingOfflineCashMovementCount();
-	if (pending) {
-		toastStore.show({
-			title: `${pending} invoice${pending > 1 ? "s" : ""} pending for sync`,
-			color: "warning",
-		});
-	}
-	if (pendingCashMovements) {
-		toastStore.show({
-			title: `${pendingCashMovements} cash movement${pendingCashMovements > 1 ? "s" : ""} pending for sync`,
-			color: "warning",
-		});
-	}
+	// Pending-count announcements used to fire on every reconnect (and at POS
+	// bootstrap) which flashed warning toasts too fast for cashiers to read.
+	// The sync badge in the header already surfaces pending counts, so only
+	// announce the *results* of a sync below.
 	if (isOffline()) {
 		return;
 	}
