@@ -10,11 +10,12 @@
 					density="compact"
 					clearable
 					autofocus
-					variant="solo"
+					variant="outlined"
 					color="primary"
 					class="pos-themed-input pos-cmd-search"
-					:label="frappe._('Search by SKU, barcode, or product name…')"
+					:placeholder="frappe._('Search by SKU, barcode, or product name…')"
 					hide-details
+					flat
 					:model-value="searchInput"
 					@update:model-value="
 						(val) => {
@@ -193,10 +194,10 @@ defineExpose({
 	position: sticky;
 	top: 0;
 	z-index: 5;
-	background: var(--pos-surface);
-	padding: 12px 12px 0 12px;
-	border-bottom: 1px solid var(--pos-border);
+	background: transparent;
+	padding: 10px 4px 6px;
 	margin-bottom: 0;
+	border-bottom: none;
 }
 
 .items {
@@ -242,8 +243,55 @@ defineExpose({
 	margin-top: 4px;
 }
 
-:deep(.sticky-header .v-field) {
-	border-radius: 16px;
+/* ── Command-center search field ─────────────────────────────
+   Single rounded surface, dark tier-2 background, subtle border,
+   pink focus ring. Mirrors the cc ProductSearch input. */
+.pos-cmd-search :deep(.v-field) {
+	border-radius: 12px !important;
+	background: var(--pos-surface-muted, #161c27) !important;
+	box-shadow: none !important;
+	min-height: 44px;
+	transition:
+		border-color 0.18s ease,
+		box-shadow 0.18s ease;
+}
+
+.pos-cmd-search :deep(.v-field__outline) {
+	--v-field-border-opacity: 1;
+}
+
+.pos-cmd-search :deep(.v-field__outline__start),
+.pos-cmd-search :deep(.v-field__outline__end),
+.pos-cmd-search :deep(.v-field__outline__notch) {
+	border-color: var(--pos-border, #252b37) !important;
+	border-width: 1px !important;
+}
+
+.pos-cmd-search :deep(.v-field--focused) {
+	box-shadow: 0 0 0 3px rgba(226, 54, 112, 0.08) !important;
+}
+
+.pos-cmd-search :deep(.v-field--focused .v-field__outline__start),
+.pos-cmd-search :deep(.v-field--focused .v-field__outline__end),
+.pos-cmd-search :deep(.v-field--focused .v-field__outline__notch) {
+	border-color: rgba(226, 54, 112, 0.5) !important;
+}
+
+.pos-cmd-search :deep(.v-field__input) {
+	min-height: 44px;
+	font-size: 0.92rem;
+	font-weight: 500;
+	letter-spacing: 0.005em;
+}
+
+.pos-cmd-search :deep(.v-field__input::placeholder) {
+	color: var(--pos-text-secondary, #7b899d);
+	opacity: 0.85;
+}
+
+.pos-cmd-search :deep(.v-field__prepend-inner .v-icon) {
+	color: var(--pos-text-secondary, #7b899d);
+	opacity: 0.85;
 }
 
 /* Subtle tools toggle so the chrome stays close to the reference. */

@@ -1452,6 +1452,11 @@ defineExpose({
 	position: sticky;
 	top: 0;
 	z-index: 8;
+	/* The search field is its own chrome now (CC style),
+	   so the wrapping card needs to disappear visually. */
+	background: transparent !important;
+	border: none !important;
+	box-shadow: none !important;
 }
 
 .selector-results-card {

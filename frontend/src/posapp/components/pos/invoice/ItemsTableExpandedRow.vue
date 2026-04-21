@@ -40,10 +40,10 @@
 				</a>
 			</div>
 
-			<!-- EDIT row: only the inputs that actually mutate the line -->
+			<!-- EDIT: row 1 = QTY + UOM, row 2 = Rate + Disc% + Disc <Currency> -->
 			<div class="posa-cc-section">
 				<span class="posa-cc-eyebrow">{{ __("Edit") }}</span>
-				<div class="posa-cc-edit-grid">
+				<div class="posa-cc-edit-grid posa-cc-edit-grid--row1">
 					<div class="posa-cc-field">
 						<label class="posa-cc-field__label">{{ __("QTY") }}</label>
 						<v-text-field
@@ -72,6 +72,8 @@
 							:disabled="!!item.posa_is_replace || (isReturnInvoice && invoice_doc.return_against)"
 						/>
 					</div>
+				</div>
+				<div class="posa-cc-edit-grid posa-cc-edit-grid--row2">
 					<div class="posa-cc-field">
 						<label class="posa-cc-field__label">
 							{{ __("Rate") }}
@@ -504,11 +506,19 @@ const onRateClick = () => {
 	letter-spacing: 0;
 }
 
-/* Edit grid: 5 inputs in one row, wraps gracefully */
+/* Edit grid: 2 stacked rows — QTY+UOM, then Rate+Disc%+Disc<Currency> */
 .posa-cc-edit-grid {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 8px;
+}
+
+.posa-cc-edit-grid--row1 {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	margin-bottom: 8px;
+}
+
+.posa-cc-edit-grid--row2 {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .posa-cc-batch-grid {
@@ -638,21 +648,12 @@ const onRateClick = () => {
 	width: fit-content;
 }
 
-/* Responsive: edit grid wraps, tiles stay readable */
-@media (max-width: 900px) {
-	.posa-cc-edit-grid {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-	.posa-cc-batch-grid {
-		grid-template-columns: 1fr 1fr;
-	}
-}
-
+/* Responsive: tiles + batch grid wrap on narrow drawers */
 @media (max-width: 560px) {
 	.posa-cc-tiles {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
-	.posa-cc-edit-grid {
+	.posa-cc-edit-grid--row2 {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 	.posa-cc-batch-grid {
