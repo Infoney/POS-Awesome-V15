@@ -59,7 +59,7 @@
 				</v-row>
 			</div>
 
-			<div class="table-section mt-6">
+			<div v-if="multiCurrencyTotals.length" class="table-section mt-6">
 				<div class="table-header mb-2">
 					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
 						{{ __("Totals by Invoice Currency") }}
@@ -69,7 +69,7 @@
 					</p>
 				</div>
 
-				<div v-if="multiCurrencyTotals.length" class="overview-table-wrapper">
+				<div class="overview-table-wrapper">
 					<table class="overview-table">
 						<thead>
 							<tr>
@@ -127,13 +127,14 @@
 						</tbody>
 					</table>
 				</div>
-				<div v-else class="overview-empty text-body-2">
-					{{ __("No invoices recorded for this shift.") }}
-				</div>
 			</div>
 
-			<v-row dense class="mt-4">
-				<v-col cols="12" md="6">
+			<v-row
+				v-if="creditInvoicesByCurrency.length || returnsByCurrency.length"
+				dense
+				class="mt-4"
+			>
+				<v-col v-if="creditInvoicesByCurrency.length" cols="12" md="6">
 					<div class="table-section">
 						<div class="table-header mb-2">
 							<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
@@ -143,7 +144,7 @@
 								{{ __("Credit sales remaining to be collected") }}
 							</p>
 						</div>
-						<div v-if="creditInvoicesByCurrency.length" class="overview-table-wrapper">
+						<div class="overview-table-wrapper">
 							<table class="overview-table">
 								<thead>
 									<tr>
@@ -206,12 +207,9 @@
 								</tbody>
 							</table>
 						</div>
-						<div v-else class="overview-empty text-body-2">
-							{{ __("No outstanding credit invoices for this shift.") }}
-						</div>
 					</div>
 				</v-col>
-				<v-col cols="12" md="6">
+				<v-col v-if="returnsByCurrency.length" cols="12" md="6">
 					<div class="table-section">
 						<div class="table-header mb-2">
 							<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
@@ -221,7 +219,7 @@
 								{{ __("Processed returns impacting the shift totals") }}
 							</p>
 						</div>
-						<div v-if="returnsByCurrency.length" class="overview-table-wrapper">
+						<div class="overview-table-wrapper">
 							<table class="overview-table">
 								<thead>
 									<tr>
@@ -281,16 +279,21 @@
 								</tbody>
 							</table>
 						</div>
-						<div v-else class="overview-empty text-body-2">
-							{{ __("No returns were processed in this shift.") }}
-						</div>
 					</div>
 				</v-col>
 			</v-row>
 
-			<v-row dense class="mt-4">
+			<v-row
+				v-if="
+					changeReturnedRows.length ||
+					cashExpectedByCurrency.length ||
+					cashMovementSummary?.count
+				"
+				dense
+				class="mt-4"
+			>
 				<v-col cols="12" md="6">
-					<div class="table-section">
+					<div v-if="changeReturnedRows.length" class="table-section">
 						<div class="table-header mb-2">
 							<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
 								{{ __("Change Returned") }}
@@ -299,7 +302,7 @@
 								{{ __("Track how much cash was handed back to customers") }}
 							</p>
 						</div>
-						<div v-if="changeReturnedRows.length" class="overview-table-wrapper">
+						<div class="overview-table-wrapper">
 							<table class="overview-table">
 								<thead>
 									<tr>
@@ -461,12 +464,12 @@
 								</tbody>
 							</table>
 						</div>
-						<div v-else class="overview-empty text-body-2">
-							{{ __("No change returned recorded for this shift.") }}
-						</div>
 					</div>
 					<!-- End: Change Returned -->
-					<div class="table-section">
+					<div
+						v-if="cashExpectedByCurrency.length"
+						:class="['table-section', { 'mt-4': changeReturnedRows.length }]"
+					>
 						<div class="table-header mb-2">
 							<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
 								{{ __("Cash Drawer Snapshot") }}
@@ -475,7 +478,7 @@
 								{{ __("Expected cash on hand grouped by currency") }}
 							</p>
 						</div>
-						<div v-if="cashExpectedByCurrency.length" class="overview-table-wrapper">
+						<div class="overview-table-wrapper">
 							<table class="overview-table">
 								<thead>
 									<tr>
@@ -545,11 +548,14 @@
 								</tbody>
 							</table>
 						</div>
-						<div v-else class="overview-empty text-body-2">
-							{{ __("No cash expected for this shift.") }}
-						</div>
 					</div>
-					<div class="table-section mt-4">
+					<div
+						v-if="cashMovementSummary?.count"
+						:class="[
+							'table-section',
+							{ 'mt-4': changeReturnedRows.length || cashExpectedByCurrency.length },
+						]"
+					>
 						<div class="table-header mb-2">
 							<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
 								{{ __("Submitted Cash Movements") }}
@@ -558,7 +564,7 @@
 								{{ __("Expenses and deposits posted during this shift") }}
 							</p>
 						</div>
-						<div v-if="cashMovementSummary?.count" class="overview-table-wrapper">
+						<div class="overview-table-wrapper">
 							<table class="overview-table">
 								<thead>
 									<tr>
@@ -592,14 +598,11 @@
 								</tbody>
 							</table>
 						</div>
-						<div v-else class="overview-empty text-body-2">
-							{{ __("No submitted cash movements in this shift.") }}
-						</div>
 					</div>
 				</v-col>
 			</v-row>
 
-			<div class="table-section mt-4">
+			<div v-if="paymentsByMode.length" class="table-section mt-4">
 				<div class="table-header mb-2">
 					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
 						{{ __("Payments by Mode of Payment") }}
@@ -609,7 +612,7 @@
 					</p>
 				</div>
 
-				<div v-if="paymentsByMode.length" class="overview-table-wrapper">
+				<div class="overview-table-wrapper">
 					<table class="overview-table">
 						<thead>
 							<tr>
@@ -664,9 +667,6 @@
 							</tr>
 						</tbody>
 					</table>
-				</div>
-				<div v-else class="overview-empty text-body-2">
-					{{ __("No payments registered for this shift.") }}
 				</div>
 			</div>
 		</div>

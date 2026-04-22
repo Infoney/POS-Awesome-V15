@@ -1,5 +1,9 @@
 <template>
-	<v-dialog v-model="closingDialog" max-width="900px" persistent>
+	<v-dialog
+		v-model="closingDialog"
+		:max-width="shiftSubmitted ? '620px' : '900px'"
+		persistent
+	>
 		<v-card elevation="8" class="closing-dialog-card">
 			<ClosingHeader @close="onHeaderClose" />
 
@@ -638,7 +642,7 @@ export default {
 			transparent 60%
 		),
 		rgb(var(--v-theme-surface));
-	padding: 56px 48px 48px;
+	padding: 36px 32px 32px;
 }
 
 .post-submit {
@@ -650,12 +654,12 @@ export default {
 }
 
 .post-submit__icon-wrap {
-	width: 92px;
-	height: 92px;
+	width: 72px;
+	height: 72px;
 	display: grid;
 	place-items: center;
 	border-radius: 50%;
-	margin-bottom: 20px;
+	margin-bottom: 14px;
 	background: linear-gradient(
 		135deg,
 		rgba(34, 197, 94, 0.18),
@@ -666,13 +670,13 @@ export default {
 }
 
 .post-submit__icon {
-	font-size: 56px !important;
+	font-size: 44px !important;
 	color: #22c55e !important;
 }
 
 .post-submit__title {
-	margin: 0 0 8px;
-	font-size: 1.5rem;
+	margin: 0 0 6px;
+	font-size: 1.3rem;
 	font-weight: 700;
 	letter-spacing: 0.01em;
 	background: linear-gradient(135deg, #e23670, #f59e0b);
@@ -682,10 +686,10 @@ export default {
 }
 
 .post-submit__subtitle {
-	margin: 0 0 28px;
-	max-width: 460px;
+	margin: 0 0 20px;
+	max-width: 420px;
 	color: rgba(var(--v-theme-on-surface), 0.7);
-	font-size: 0.95rem;
+	font-size: 0.88rem;
 	line-height: 1.5;
 }
 
@@ -709,9 +713,9 @@ export default {
 	gap: 12px;
 	width: 100%;
 	max-width: 360px;
-	margin: 26px 0;
+	margin: 18px 0;
 	color: rgba(var(--v-theme-on-surface), 0.5);
-	font-size: 0.8rem;
+	font-size: 0.78rem;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
@@ -736,6 +740,7 @@ export default {
 	justify-content: center;
 	width: 100%;
 	max-width: 520px;
+	padding-bottom: 8px;
 }
 
 .post-nav-btn {
@@ -784,11 +789,11 @@ export default {
 
 @media (max-width: 600px) {
 	.post-submit-card {
-		padding: 40px 24px 32px;
+		padding: 28px 20px 24px;
 	}
 
 	.post-submit__title {
-		font-size: 1.25rem;
+		font-size: 1.15rem;
 	}
 
 	.post-submit__actions .pos-action-btn,

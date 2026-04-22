@@ -151,8 +151,8 @@ const handlePrimaryAction = (payment) => {
 
 <style scoped>
 .payment-methods {
-	display: flex;
-	flex-direction: column;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: var(--pos-space-2);
 }
 
@@ -160,10 +160,10 @@ const handlePrimaryAction = (payment) => {
 	background: var(--pos-surface-raised);
 	border: 1px solid var(--pos-border-light);
 	border-radius: var(--pos-radius-md);
-	padding: var(--pos-space-3);
+	padding: 12px;
 	display: flex;
 	flex-direction: column;
-	gap: var(--pos-space-3);
+	gap: 10px;
 }
 
 .payment-method-card__header {
@@ -199,13 +199,16 @@ const handlePrimaryAction = (payment) => {
 }
 
 .payment-method-card__badge {
-	padding: 6px 10px;
+	padding: 5px 10px;
 	border-radius: 999px;
-	background: rgba(var(--v-theme-primary), 0.12);
-	color: rgb(var(--v-theme-primary));
-	font-size: 0.78rem;
+	background: rgba(139, 92, 246, 0.16);
+	border: 1px solid rgba(139, 92, 246, 0.32);
+	color: rgb(167, 122, 250);
+	font-size: 0.72rem;
 	font-weight: 700;
 	white-space: nowrap;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
 }
 
 .payment-method-card__badge--refund {
@@ -220,16 +223,23 @@ const handlePrimaryAction = (payment) => {
 
 .payment-method-action-btn {
 	--v-theme-overlay-multiplier: 0 !important;
-	min-height: 44px;
-	border-radius: var(--pos-radius-sm);
+	min-height: 40px;
+	border-radius: 10px;
 	font-weight: 700;
 	text-transform: none;
 	letter-spacing: 0.01em;
 	transition:
 		box-shadow 0.18s ease,
-		background-color 0.18s ease,
-		transform 0.18s ease !important;
-	background-color: rgb(var(--v-theme-primary)) !important;
+		background 0.18s ease,
+		transform 0.18s ease,
+		filter 0.18s ease !important;
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.95),
+		rgba(167, 122, 250, 0.95)
+	) !important;
+	border: 1px solid rgba(139, 92, 246, 0.45) !important;
+	box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25) !important;
 	color: #ffffff !important;
 }
 
@@ -237,13 +247,13 @@ const handlePrimaryAction = (payment) => {
 	display: block;
 }
 
-.payment-method-action-btn:hover,
-.payment-method-action-btn:focus,
-.payment-method-action-btn:focus-visible,
-.payment-method-action-btn:active {
-	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18) !important;
+.payment-method-action-btn:not(:disabled):hover,
+.payment-method-action-btn:not(:disabled):focus,
+.payment-method-action-btn:not(:disabled):focus-visible,
+.payment-method-action-btn:not(:disabled):active {
+	box-shadow: 0 6px 18px rgba(139, 92, 246, 0.35) !important;
 	transform: translateY(-1px);
-	background-color: rgba(var(--v-theme-primary), 0.9) !important;
+	filter: brightness(1.06);
 }
 
 .payment-method-action-btn:active {
@@ -257,27 +267,30 @@ const handlePrimaryAction = (payment) => {
 }
 
 .payment-method-action-btn--success {
-	background: rgb(var(--v-theme-success)) !important;
+	background: linear-gradient(
+		135deg,
+		rgba(34, 197, 94, 0.95),
+		rgba(74, 222, 128, 0.95)
+	) !important;
+	border: 1px solid rgba(34, 197, 94, 0.45) !important;
+	box-shadow: 0 2px 8px rgba(34, 197, 94, 0.25) !important;
 	color: #ffffff !important;
 }
 
-.payment-method-action-btn--success:hover,
-.payment-method-action-btn--success:focus,
-.payment-method-action-btn--success:focus-visible,
-.payment-method-action-btn--success:active {
-	background-color: rgba(var(--v-theme-success), 0.9) !important;
+.payment-method-action-btn--success:not(:disabled):hover {
+	box-shadow: 0 6px 18px rgba(34, 197, 94, 0.35) !important;
 }
 
 .payment-method-action-btn--secondary {
-	background: rgba(var(--v-theme-success), 0.14) !important;
-	color: rgb(var(--v-theme-success)) !important;
+	background: rgba(34, 197, 94, 0.14) !important;
+	border: 1px solid rgba(34, 197, 94, 0.35) !important;
+	box-shadow: none !important;
+	color: rgb(74, 222, 128) !important;
 }
 
-.payment-method-action-btn--secondary:hover,
-.payment-method-action-btn--secondary:focus,
-.payment-method-action-btn--secondary:focus-visible,
-.payment-method-action-btn--secondary:active {
-	background-color: rgba(var(--v-theme-success), 0.2) !important;
+.payment-method-action-btn--secondary:not(:disabled):hover {
+	background: rgba(34, 197, 94, 0.22) !important;
+	box-shadow: 0 4px 14px rgba(34, 197, 94, 0.18) !important;
 }
 
 .payment-denominations {
@@ -293,6 +306,10 @@ const handlePrimaryAction = (payment) => {
 }
 
 @media (max-width: 768px) {
+	.payment-methods {
+		grid-template-columns: 1fr;
+	}
+
 	.payment-method-card {
 		padding: var(--pos-space-2);
 		gap: var(--pos-space-2);

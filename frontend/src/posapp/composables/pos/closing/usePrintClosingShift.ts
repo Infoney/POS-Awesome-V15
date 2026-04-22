@@ -219,7 +219,6 @@ const buildReconciliationRows = (
 export function printReceiptClosingShift(payload: PrintClosingShiftPayload) {
 	const {
 		shiftName,
-		companyName,
 		posProfileName,
 		cashierName,
 		periodStart,
@@ -326,8 +325,7 @@ export function printReceiptClosingShift(payload: PrintClosingShiftPayload) {
 
 		<div class="center">
 			<h1>${escapeHtml(tt("Shift Closing"))}</h1>
-			<div class="bold">${escapeHtml(companyName)}</div>
-			<div>${escapeHtml(posProfileName)}</div>
+			<div class="bold">${escapeHtml(posProfileName)}</div>
 		</div>
 
 		<div class="divider"></div>
@@ -365,7 +363,6 @@ export function printReceiptClosingShift(payload: PrintClosingShiftPayload) {
 export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 	const {
 		shiftName,
-		companyName,
 		posProfileName,
 		cashierName,
 		periodStart,
@@ -629,10 +626,7 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 		<div class="header">
 			<div>
 				<h2>${escapeHtml(tt("Shift Closing Report"))}</h2>
-				<h1>${escapeHtml(companyName)}</h1>
-				<div style="font-size:12px;color:#4b5563;margin-top:2px;">
-					${escapeHtml(posProfileName)}
-				</div>
+				<h1>${escapeHtml(posProfileName)}</h1>
 			</div>
 			<div class="header__meta">
 				<div><strong>${escapeHtml(tt("Shift"))}:</strong> ${escapeHtml(shiftName)}</div>

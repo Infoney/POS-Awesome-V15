@@ -73,17 +73,21 @@ const __ = window.__;
 
 .compact :deep(.v-btn),
 :deep(.compact .v-btn) {
-	min-height: 42px;
+	min-height: 40px;
 }
 
 .payment-footer-btn {
 	--v-theme-overlay-multiplier: 0 !important;
 	transition:
 		box-shadow 0.18s ease,
-		background-color 0.18s ease,
-		transform 0.18s ease !important;
+		background 0.18s ease,
+		transform 0.18s ease,
+		filter 0.18s ease !important;
 	color: #ffffff !important;
-	min-height: 48px !important;
+	min-height: 44px !important;
+	border-radius: 10px !important;
+	font-weight: 700;
+	letter-spacing: 0.02em;
 }
 
 :deep(.payment-footer-btn .v-btn__content) {
@@ -98,45 +102,58 @@ const __ = window.__;
 	align-items: center;
 }
 
+/* CC violet → pink Submit button */
 .payment-submit-btn {
-	background-color: rgb(var(--v-theme-primary)) !important;
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.95),
+		rgba(167, 122, 250, 0.95)
+	) !important;
+	box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25) !important;
+	border: 1px solid rgba(139, 92, 246, 0.45) !important;
 }
 
+/* CC pink → peach Submit & Print button */
 .payment-submit-print-btn {
-	background-color: rgb(var(--v-theme-success)) !important;
+	background: linear-gradient(
+		135deg,
+		rgba(226, 54, 112, 0.95),
+		rgba(244, 114, 182, 0.95)
+	) !important;
+	box-shadow: 0 2px 8px rgba(226, 54, 112, 0.25) !important;
+	border: 1px solid rgba(226, 54, 112, 0.45) !important;
 }
 
+/* Rose-ghost Cancel button */
 .payment-cancel-btn {
-	background-color: rgb(var(--v-theme-error)) !important;
+	background: linear-gradient(
+		135deg,
+		rgba(244, 63, 94, 0.92),
+		rgba(225, 29, 72, 0.95)
+	) !important;
+	box-shadow: 0 2px 8px rgba(244, 63, 94, 0.25) !important;
+	border: 1px solid rgba(244, 63, 94, 0.45) !important;
 }
 
-.payment-footer-btn:hover,
-.payment-footer-btn:focus,
-.payment-footer-btn:focus-visible,
-.payment-footer-btn:active {
-	box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18) !important;
+.payment-footer-btn:not(:disabled):hover,
+.payment-footer-btn:not(:disabled):focus,
+.payment-footer-btn:not(:disabled):focus-visible,
+.payment-footer-btn:not(:disabled):active {
+	box-shadow: 0 6px 18px rgba(15, 23, 42, 0.22) !important;
 	transform: translateY(-1px);
+	filter: brightness(1.06);
 }
 
-.payment-submit-btn:hover,
-.payment-submit-btn:focus,
-.payment-submit-btn:focus-visible,
-.payment-submit-btn:active {
-	background-color: rgba(var(--v-theme-primary), 0.9) !important;
+.payment-submit-btn:not(:disabled):hover {
+	box-shadow: 0 6px 22px rgba(139, 92, 246, 0.35) !important;
 }
 
-.payment-submit-print-btn:hover,
-.payment-submit-print-btn:focus,
-.payment-submit-print-btn:focus-visible,
-.payment-submit-print-btn:active {
-	background-color: rgba(var(--v-theme-success), 0.9) !important;
+.payment-submit-print-btn:not(:disabled):hover {
+	box-shadow: 0 6px 22px rgba(226, 54, 112, 0.35) !important;
 }
 
-.payment-cancel-btn:hover,
-.payment-cancel-btn:focus,
-.payment-cancel-btn:focus-visible,
-.payment-cancel-btn:active {
-	background-color: rgba(var(--v-theme-error), 0.9) !important;
+.payment-cancel-btn:not(:disabled):hover {
+	box-shadow: 0 6px 22px rgba(244, 63, 94, 0.35) !important;
 }
 
 .payment-action-col {
