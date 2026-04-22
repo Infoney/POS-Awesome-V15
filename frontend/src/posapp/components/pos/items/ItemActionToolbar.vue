@@ -20,6 +20,7 @@
 					prepend-inner-icon="mdi-shape-outline"
 					menu-icon="mdi-chevron-down"
 					class="cc-group-picker"
+					:menu-props="{ contentClass: 'cc-group-picker-menu' }"
 					:model-value="selectedGroupsArray"
 					@update:model-value="onGroupsChange"
 				>
@@ -202,10 +203,18 @@ const onGroupsChange = (next) => {
 	padding-top: 2px !important;
 	padding-bottom: 2px !important;
 	color: var(--pos-text-primary, #e7ebf3) !important;
+	font-family: var(--posa-font-family) !important;
+	font-size: 0.875rem !important;
+	font-weight: 500 !important;
+	letter-spacing: 0.01em !important;
 }
 
 .cc-group-picker :deep(.v-label) {
 	color: var(--pos-text-secondary, #8595ab) !important;
+	font-family: var(--posa-font-family) !important;
+	font-size: 0.875rem !important;
+	font-weight: 500 !important;
+	letter-spacing: 0.01em !important;
 }
 
 .cc-group-picker :deep(.v-field__prepend-inner .v-icon) {
@@ -221,8 +230,10 @@ const onGroupsChange = (next) => {
 	) !important;
 	color: var(--pos-text-primary, #e7ebf3) !important;
 	border: 1px solid rgba(139, 92, 246, 0.45) !important;
+	font-family: var(--posa-font-family) !important;
 	font-weight: 600 !important;
 	font-size: 0.75rem !important;
+	letter-spacing: 0.02em !important;
 	height: 26px !important;
 }
 
@@ -309,5 +320,103 @@ const onGroupsChange = (next) => {
 		padding: var(--dynamic-xs) !important;
 		position: static;
 	}
+}
+</style>
+
+<!--
+  Unscoped block — Vuetify teleports the autocomplete menu to <body>,
+  so the scoped block above can't reach the popup. We tagged the menu
+  with `cc-group-picker-menu` via `:menu-props.contentClass` and style
+  it here so the dropdown matches the CC violet/pink card aesthetic.
+-->
+<style>
+.cc-group-picker-menu.v-overlay__content {
+	border-radius: 14px !important;
+	overflow: hidden;
+	background: linear-gradient(
+		180deg,
+		rgba(22, 28, 39, 0.98),
+		rgba(17, 21, 30, 0.98)
+	) !important;
+	border: 1px solid rgba(139, 92, 246, 0.35) !important;
+	box-shadow:
+		0 18px 40px rgba(0, 0, 0, 0.55),
+		0 0 0 1px rgba(226, 54, 112, 0.12) inset !important;
+	font-family: var(--posa-font-family) !important;
+}
+
+.cc-group-picker-menu .v-list {
+	background: transparent !important;
+	padding: 6px !important;
+}
+
+.cc-group-picker-menu .v-list-item {
+	border-radius: 10px !important;
+	margin-bottom: 2px;
+	min-height: 40px !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	font-family: var(--posa-font-family) !important;
+	transition:
+		background 0.15s ease,
+		box-shadow 0.15s ease;
+}
+
+.cc-group-picker-menu .v-list-item-title {
+	font-family: var(--posa-font-family) !important;
+	font-size: 0.875rem !important;
+	font-weight: 500 !important;
+	letter-spacing: 0.01em !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+}
+
+.cc-group-picker-menu .v-list-item:hover {
+	background: linear-gradient(
+		90deg,
+		rgba(139, 92, 246, 0.16),
+		rgba(226, 54, 112, 0.08)
+	) !important;
+	box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.35);
+}
+
+.cc-group-picker-menu .v-list-item--active,
+.cc-group-picker-menu .v-list-item[aria-selected="true"] {
+	background: linear-gradient(
+		90deg,
+		rgba(139, 92, 246, 0.28),
+		rgba(226, 54, 112, 0.14)
+	) !important;
+	box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.55);
+}
+
+.cc-group-picker-menu .v-list-item--active .v-list-item-title {
+	font-weight: 600 !important;
+	color: #ffffff !important;
+}
+
+.cc-group-picker-menu .v-list-item .v-icon {
+	color: rgba(139, 92, 246, 0.95) !important;
+}
+
+/* Custom scrollbar so the popup doesn't feel like a default browser dropdown. */
+.cc-group-picker-menu ::-webkit-scrollbar {
+	width: 8px;
+}
+.cc-group-picker-menu ::-webkit-scrollbar-track {
+	background: transparent;
+}
+.cc-group-picker-menu ::-webkit-scrollbar-thumb {
+	background: linear-gradient(
+		180deg,
+		rgba(139, 92, 246, 0.45),
+		rgba(226, 54, 112, 0.35)
+	);
+	border-radius: 8px;
+}
+.cc-group-picker-menu ::-webkit-scrollbar-thumb:hover {
+	background: linear-gradient(
+		180deg,
+		rgba(139, 92, 246, 0.7),
+		rgba(226, 54, 112, 0.55)
+	);
 }
 </style>
