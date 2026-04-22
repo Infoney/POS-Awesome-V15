@@ -24,6 +24,10 @@
 					<span class="pr-confirm-row__label">{{ __("Warehouse") }}</span>
 					<span class="pr-confirm-row__value">{{ warehouse || "—" }}</span>
 				</div>
+				<div v-if="costCenter" class="pr-confirm-row">
+					<span class="pr-confirm-row__label">{{ __("Cost Center") }}</span>
+					<span class="pr-confirm-row__value">{{ costCenter }}</span>
+				</div>
 				<div class="pr-confirm-row">
 					<span class="pr-confirm-row__label">{{ __("Posting Date") }}</span>
 					<span class="pr-confirm-row__value">{{ postingDate || "—" }}</span>
@@ -93,6 +97,7 @@ export default {
 		modelValue: Boolean,
 		supplierLabel: String,
 		warehouse: String,
+		costCenter: String,
 		postingDate: String,
 		lineCount: { type: Number, default: 0 },
 		totalQty: { type: Number, default: 0 },

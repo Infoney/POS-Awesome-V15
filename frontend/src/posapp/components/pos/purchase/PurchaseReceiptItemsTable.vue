@@ -64,65 +64,71 @@
 
 		<template v-slot:item.batch="{ item }">
 			<div v-if="item.has_batch_no" class="pr-batch-cell">
-				<v-combobox
-					:model-value="item.batch_no"
-					@update:model-value="(val) => $emit('set-batch', { item, value: val })"
-					:items="batchOptionLabels(item)"
-					:placeholder="__('Pick or type new batch')"
-					density="compact"
-					variant="outlined"
-					hide-details
-					clearable
-					class="pos-themed-input pr-batch-cell__field"
-					@click.stop
-					@focus="ensureBatches(item)"
-				>
-					<template #append-inner>
-						<v-progress-circular
-							v-if="item.batch_options_loading"
-							indeterminate
-							size="14"
-							width="2"
+				<div class="pr-batch-cell__row">
+					<v-combobox
+						:model-value="item.batch_no"
+						@update:model-value="(val) => $emit('set-batch', { item, value: val })"
+						:items="batchOptionLabels(item)"
+						:placeholder="__('Pick or type new batch')"
+						density="compact"
+						variant="outlined"
+						hide-details
+						clearable
+						class="pos-themed-input pr-batch-cell__field"
+						menu-icon=""
+						@click.stop
+						@focus="ensureBatches(item)"
+					>
+						<template #append-inner>
+							<v-progress-circular
+								v-if="item.batch_options_loading"
+								indeterminate
+								size="14"
+								width="2"
+							/>
+						</template>
+						<template #item="{ props, item: opt }">
+							<v-list-item
+								v-bind="props"
+								:title="opt.title"
+								:subtitle="opt.subtitle"
+							>
+								<template #append>
+									<v-chip
+										v-if="opt.raw.is_expired"
+										size="x-small"
+										color="error"
+										variant="tonal"
+									>
+										{{ __("Expired") }}
+									</v-chip>
+								</template>
+							</v-list-item>
+						</template>
+					</v-combobox>
+					<div class="pr-batch-cell__expiry" @click.stop>
+						<VueDatePicker
+							:model-value="item.batch_expiry_date || null"
+							@update:model-value="(val) => onExpiryChange(item, val)"
+							format="dd/MM/yyyy"
+							model-type="yyyy-MM-dd"
+							:enable-time-picker="false"
+							auto-apply
+							text-input
+							:text-input-options="{ format: ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy'], enterSubmit: true, tabSubmit: true }"
+							:teleport="true"
+							:placeholder="__('DD/MM/YYYY')"
+							input-class-name="pr-mini-date pr-mini-date--picker"
+							:title="__('Batch expiry date (required for new batches)')"
 						/>
-					</template>
-					<template #item="{ props, item: opt }">
-						<v-list-item
-							v-bind="props"
-							:title="opt.title"
-							:subtitle="opt.subtitle"
-						>
-							<template #append>
-								<v-chip
-									v-if="opt.raw.is_expired"
-									size="x-small"
-									color="error"
-									variant="tonal"
-								>
-									{{ __("Expired") }}
-								</v-chip>
-							</template>
-						</v-list-item>
-					</template>
-				</v-combobox>
-				<div class="pr-batch-cell__dates" @click.stop>
-					<VueDatePicker
-						:model-value="item.batch_expiry_date || null"
-						@update:model-value="(val) => onExpiryChange(item, val)"
-						format="dd-MM-yyyy"
-						model-type="yyyy-MM-dd"
-						:enable-time-picker="false"
-						auto-apply
-						:teleport="true"
-						:placeholder="__('Expiry')"
-						input-class-name="pr-mini-date pr-mini-date--picker"
-						:title="__('Batch expiry date (required for new batches)')"
-					/>
+					</div>
 				</div>
 				<div
 					v-if="item.batch_is_new && item.batch_no"
 					class="pr-batch-cell__hint"
 				>
-					{{ __("New batch will be created on submit.") }}
+					<v-icon size="x-small" class="pr-batch-cell__hint-icon">mdi-tag-plus-outline</v-icon>
+					{{ __("New batch — will be created on submit") }}
 				</div>
 			</div>
 			<div v-else class="text-caption text-medium-emphasis text-center">—</div>
@@ -392,8 +398,19 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	min-width: 180px;
+	min-width: 240px;
 	padding: 4px 0;
+}
+
+.pr-batch-cell__row {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.pr-batch-cell__field {
+	flex: 1 1 60%;
+	min-width: 0;
 }
 
 .pr-batch-cell__field :deep(.v-field__input) {
@@ -402,27 +419,46 @@ export default {
 	padding-bottom: 4px;
 }
 
-.pr-batch-cell__dates {
-	display: flex;
-	gap: 4px;
+.pr-batch-cell__expiry {
+	flex: 0 0 130px;
+	min-width: 0;
 }
 
 .pr-mini-date {
-	flex: 1;
+	width: 100%;
 	min-width: 0;
-	font-size: 0.7rem;
-	padding: 2px 4px;
+	font-size: 0.72rem;
+	padding: 4px 8px;
 	border-radius: 6px;
-	border: 1px solid var(--pos-border-light, rgba(139, 92, 246, 0.18));
-	background: var(--pos-surface-variant, rgba(255, 255, 255, 0.04));
+	border: 1px solid rgba(139, 92, 246, 0.28);
+	background: rgba(139, 92, 246, 0.06);
 	color: var(--pos-text-primary, #e7ebf3);
 	color-scheme: dark;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.pr-mini-date:hover,
+.pr-mini-date:focus {
+	border-color: rgba(226, 54, 112, 0.55);
+	background: rgba(139, 92, 246, 0.1);
+	box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.18);
+	outline: none;
 }
 
 .pr-batch-cell__hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
 	font-size: 0.65rem;
-	color: #fb7185;
+	color: #fcd34d;
 	letter-spacing: 0.04em;
+	background: rgba(252, 211, 77, 0.08);
+	border: 1px solid rgba(252, 211, 77, 0.25);
+	padding: 2px 8px;
+	border-radius: 999px;
+	width: fit-content;
+}
+.pr-batch-cell__hint-icon {
+	color: #fcd34d !important;
 }
 
 .pr-serial-input {
@@ -494,6 +530,19 @@ export default {
 .pos-table__qty-input :deep(input) {
 	text-align: center;
 	font-weight: 600;
+}
+/* Strip native browser number spinners (qty / rate / discount editors). */
+.pos-table__qty-input :deep(input[type="number"]),
+.pos-table__editor-input :deep(input[type="number"]) {
+	-moz-appearance: textfield;
+	appearance: textfield;
+}
+.pos-table__qty-input :deep(input[type="number"]::-webkit-outer-spin-button),
+.pos-table__qty-input :deep(input[type="number"]::-webkit-inner-spin-button),
+.pos-table__editor-input :deep(input[type="number"]::-webkit-outer-spin-button),
+.pos-table__editor-input :deep(input[type="number"]::-webkit-inner-spin-button) {
+	-webkit-appearance: none;
+	margin: 0;
 }
 
 .pos-table__editor-box {
@@ -573,5 +622,59 @@ export default {
 	opacity: 0.7;
 	margin-right: 2px;
 	font-size: 0.85em;
+}
+</style>
+
+<!-- Unscoped: VueDatePicker teleports to body, so calendar styles must be global. -->
+<style>
+.dp__theme_dark,
+.dp__theme_light {
+	--dp-background-color: #161c27;
+	--dp-text-color: #e7ebf3;
+	--dp-hover-color: rgba(139, 92, 246, 0.28);
+	--dp-hover-text-color: #ffffff;
+	--dp-hover-icon-color: #ffffff;
+	--dp-primary-color: #8b5cf6;
+	--dp-primary-text-color: #ffffff;
+	--dp-secondary-color: rgba(231, 235, 243, 0.6);
+	--dp-border-color: rgba(139, 92, 246, 0.28);
+	--dp-menu-border-color: rgba(139, 92, 246, 0.32);
+	--dp-border-color-hover: rgba(226, 54, 112, 0.55);
+	--dp-disabled-color: rgba(231, 235, 243, 0.18);
+	--dp-scroll-bar-background: transparent;
+	--dp-scroll-bar-color: rgba(139, 92, 246, 0.4);
+	--dp-success-color: #34d399;
+	--dp-success-color-disabled: rgba(52, 211, 153, 0.4);
+	--dp-icon-color: #c4b5fd;
+	--dp-danger-color: #fb7185;
+	--dp-highlight-color: rgba(226, 54, 112, 0.32);
+}
+.dp__menu {
+	background: linear-gradient(180deg, #1a2030 0%, #131826 100%) !important;
+	border: 1px solid rgba(139, 92, 246, 0.32) !important;
+	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45),
+		0 0 0 1px rgba(244, 114, 182, 0.18) inset !important;
+	border-radius: 12px !important;
+}
+.dp__cell_inner.dp__active_date {
+	background: linear-gradient(135deg, #8b5cf6 0%, #e23670 100%) !important;
+	color: #ffffff !important;
+	border: none !important;
+}
+.dp__cell_inner:hover {
+	background: rgba(139, 92, 246, 0.28) !important;
+	color: #ffffff !important;
+}
+.dp__today {
+	border: 1px solid rgba(226, 54, 112, 0.55) !important;
+}
+.dp__action_button.dp__action_select {
+	background: linear-gradient(135deg, #8b5cf6 0%, #e23670 100%) !important;
+	color: #ffffff !important;
+	border: none !important;
+}
+.dp__action_button.dp__action_cancel {
+	background: transparent !important;
+	color: rgba(231, 235, 243, 0.7) !important;
 }
 </style>

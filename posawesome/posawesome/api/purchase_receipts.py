@@ -233,6 +233,10 @@ def create_purchase_receipt(data):
 
     posting_date = payload.get("posting_date") or nowdate()
 
+    cost_center = payload.get("cost_center") or None
+    if cost_center and not frappe.db.exists("Cost Center", cost_center):
+        frappe.throw(_("Cost Center {0} was not found.").format(cost_center))
+
     supplier_doc = frappe.get_doc("Supplier", supplier)
     supplier_currency = (
         supplier_doc.default_currency
@@ -307,6 +311,9 @@ def create_purchase_receipt(data):
             "discount_percentage": discount_percentage,
             "warehouse": row.get("warehouse") or warehouse,
         }
+        line_cost_center = row.get("cost_center") or cost_center
+        if line_cost_center:
+            line["cost_center"] = line_cost_center
         if batch_no:
             line["batch_no"] = batch_no
         if serial_no:

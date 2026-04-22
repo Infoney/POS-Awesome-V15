@@ -55,6 +55,7 @@ export function usePurchaseReceipt(options: {
 	const receiptItems = ref<PurchaseReceiptItem[]>([]);
 	const supplier = ref<string | null>(null);
 	const warehouse = ref<string | null>(null);
+	const costCenter = ref<string | null>(null);
 	const postingDate = ref<string | null>(null);
 	const supplierCurrency = ref<string | null>(null);
 	const supplierPriceList = ref<string | null>(null);
@@ -314,6 +315,10 @@ export function usePurchaseReceipt(options: {
 			posProfile.value?.posa_purchase_warehouse ||
 			posProfile.value?.warehouse ||
 			null;
+		costCenter.value =
+			posProfile.value?.cost_center ||
+			posProfile.value?.posa_cost_center ||
+			null;
 		postingDate.value = formatUtils.toArabicNumerals(
 			frappe.datetime.nowdate(),
 		);
@@ -365,6 +370,7 @@ export function usePurchaseReceipt(options: {
 				supplier: supplier.value,
 				company: posProfile.value?.company,
 				warehouse: warehouse.value,
+				cost_center: costCenter.value || undefined,
 				posting_date: postingDate.value,
 				buying_price_list: supplierPriceList.value || undefined,
 				update_price_list: updatePriceList.value ? 1 : 0,
@@ -401,6 +407,7 @@ export function usePurchaseReceipt(options: {
 		receiptItems,
 		supplier,
 		warehouse,
+		costCenter,
 		postingDate,
 		supplierCurrency,
 		supplierPriceList,
