@@ -4,7 +4,7 @@
 		:class="{ 'cards--with-mobile-offset': reserveBottomDockSpace }"
 	>
 		<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
-			<v-col cols="12" class="mb-2">
+			<v-col cols="12" sm="6" class="mb-2 pr-sm-1">
 				<v-autocomplete
 					:items="itemsGroupOptions"
 					:label="frappe._('Items Groups')"
@@ -30,6 +30,54 @@
 							size="small"
 							class="cc-group-picker__chip"
 							:prepend-icon="item.value === 'ALL' ? 'mdi-asterisk' : 'mdi-tag-outline'"
+						>
+							{{ item.title }}
+						</v-chip>
+					</template>
+					<template #item="{ props: itemProps, item }">
+						<v-list-item
+							v-bind="itemProps"
+							class="cc-group-picker__option"
+							:title="item.title"
+						>
+							<template #prepend="{ isActive }">
+								<v-icon
+									:color="isActive ? 'primary' : 'medium-emphasis'"
+									size="20"
+								>
+									{{ isActive ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline' }}
+								</v-icon>
+							</template>
+						</v-list-item>
+					</template>
+				</v-autocomplete>
+			</v-col>
+			<v-col cols="12" sm="6" class="mb-2 pl-sm-1">
+				<v-autocomplete
+					:items="brandOptions"
+					:label="frappe._('Brand')"
+					:placeholder="selectedBrandsArray.length ? '' : frappe._('All brands')"
+					density="compact"
+					variant="outlined"
+					hide-details
+					hide-no-data
+					multiple
+					chips
+					closable-chips
+					clearable
+					prepend-inner-icon="mdi-tag-multiple-outline"
+					menu-icon="mdi-chevron-down"
+					class="cc-group-picker cc-brand-picker"
+					:menu-props="{ contentClass: 'cc-group-picker-menu' }"
+					:model-value="selectedBrandsArray"
+					@update:model-value="onBrandsChange"
+				>
+					<template #chip="{ props: chipProps, item }">
+						<v-chip
+							v-bind="chipProps"
+							size="small"
+							class="cc-group-picker__chip cc-brand-picker__chip"
+							:prepend-icon="item.value === 'ALL' ? 'mdi-asterisk' : 'mdi-tag-text-outline'"
 						>
 							{{ item.title }}
 						</v-chip>
@@ -116,6 +164,10 @@ const props = defineProps({
 	// or several groups joined with "||" (e.g. "Cosmetics||Device").
 	modelValue: { type: String, default: "ALL" },
 	itemsGroup: { type: Array, default: () => [] },
+	// Brand filter — same string contract as modelValue. "ALL" or a single
+	// brand name, or several brands joined with "||".
+	brandModel: { type: String, default: "ALL" },
+	itemsBrand: { type: Array, default: () => [] },
 	itemsView: { type: String, default: "card" },
 	posProfile: { type: Object, required: true },
 	activePriceList: { type: String, default: "" },
@@ -126,6 +178,7 @@ const props = defineProps({
 
 const emit = defineEmits([
 	"update:modelValue",
+	"update:brandModel",
 	"update:itemsView",
 	"open-offers",
 	"open-coupons",
@@ -166,6 +219,39 @@ const onGroupsChange = (next) => {
 		return;
 	}
 	emit("update:modelValue", arr.join("||"));
+};
+
+// ── Brand picker (same string-contract / multi-select pattern) ─────
+const brandOptions = computed(() => {
+	const list = Array.isArray(props.itemsBrand) ? props.itemsBrand : [];
+	const seen = new Set();
+	const out = [];
+	const add = (value) => {
+		if (!value || seen.has(value)) return;
+		seen.add(value);
+		out.push(value);
+	};
+	add("ALL");
+	list.forEach((b) => add(b));
+	return out;
+});
+
+const selectedBrandsArray = computed(() => {
+	const raw = props.brandModel || "";
+	if (!raw || raw === "ALL") return [];
+	return raw
+		.split("||")
+		.map((s) => String(s).trim())
+		.filter(Boolean);
+});
+
+const onBrandsChange = (next) => {
+	const arr = Array.isArray(next) ? next.filter(Boolean) : [];
+	if (!arr.length || arr.includes("ALL")) {
+		emit("update:brandModel", "ALL");
+		return;
+	}
+	emit("update:brandModel", arr.join("||"));
 };
 </script>
 
@@ -240,6 +326,41 @@ const onGroupsChange = (next) => {
 .cc-group-picker__chip :deep(.v-icon) {
 	color: rgba(139, 92, 246, 0.95) !important;
 	font-size: 14px !important;
+}
+
+/* Brand picker — same shell, but the pink end of the gradient leads so
+   the two filters read as siblings rather than identical pills. */
+.cc-brand-picker :deep(.v-field) {
+	background: linear-gradient(
+		135deg,
+		rgba(226, 54, 112, 0.1),
+		rgba(139, 92, 246, 0.05)
+	), var(--pos-surface-muted, #161c27) !important;
+	box-shadow: inset 0 0 0 1px rgba(226, 54, 112, 0.4) !important;
+}
+
+.cc-brand-picker :deep(.v-field--focused) {
+	box-shadow:
+		inset 0 0 0 1.5px rgba(226, 54, 112, 0.85),
+		0 0 0 3px rgba(226, 54, 112, 0.18) !important;
+}
+
+.cc-brand-picker :deep(.v-field__prepend-inner .v-icon) {
+	color: rgba(226, 54, 112, 0.95);
+	opacity: 1;
+}
+
+.cc-brand-picker__chip {
+	background: linear-gradient(
+		135deg,
+		rgba(226, 54, 112, 0.22),
+		rgba(139, 92, 246, 0.14)
+	) !important;
+	border: 1px solid rgba(226, 54, 112, 0.5) !important;
+}
+
+.cc-brand-picker__chip :deep(.v-icon) {
+	color: rgba(244, 114, 182, 0.95) !important;
 }
 
 .action-btn-consistent {

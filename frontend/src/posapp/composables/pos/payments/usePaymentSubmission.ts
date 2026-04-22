@@ -112,10 +112,11 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			/Batch\s+No\s+([^\s]+)\s+of\s+an?\s+Item\s+([^\s]+)\s+has\s+negative\s+stock\s+of\s+(-?[0-9]+(?:\.[0-9]+)?)\s+in\s+(?:the\s+)?warehouse\s+(.+?)(?:\.|$)/i;
 		const match = stripped.match(re);
 		if (!match) return null;
-		const batch_no = match[1];
-		const item_code = match[2];
-		const negativeQty = Math.abs(parseFloat(match[3]) || 0);
-		const warehouse = match[4].trim();
+		const batch_no = String(match[1] ?? "");
+		const item_code = String(match[2] ?? "");
+		const negativeQty = Math.abs(parseFloat(String(match[3] ?? "0")) || 0);
+		const warehouse = String(match[4] ?? "").trim();
+		if (!batch_no || !item_code || !warehouse) return null;
 
 		// Try to read the cart line so we can label the item nicely + show
 		// the actual requested quantity from this invoice rather than just

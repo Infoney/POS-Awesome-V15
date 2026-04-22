@@ -477,10 +477,21 @@ defineExpose({
 	gap: 10px;
 	padding: 6px 12px;
 	border-radius: 14px;
+	/* Match the deep-navy empty-cart panel: a soft radial vignette of the
+	   brand pink anchored at the top, layered on the same vertical
+	   surface-raised → surface-muted gradient used by the empty cart. */
 	background:
-		linear-gradient(135deg, rgba(var(--v-theme-primary), 0.1), rgba(var(--v-theme-success), 0.06)),
-		var(--pos-surface-muted);
-	border: 1px solid rgba(var(--v-theme-primary), 0.1);
+		radial-gradient(
+			circle at top,
+			color-mix(in srgb, var(--pos-primary) 8%, transparent),
+			transparent 55%
+		),
+		linear-gradient(
+			180deg,
+			var(--pos-surface-raised) 0%,
+			var(--pos-surface-muted) 100%
+		);
+	border: 1px solid var(--pos-border, rgba(255, 255, 255, 0.06));
 	position: relative;
 	transition:
 		border-color 0.3s ease,

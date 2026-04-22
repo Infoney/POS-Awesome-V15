@@ -8,21 +8,28 @@
 
 			<!-- Right Column: Purchase Order Form (Cart) -->
 			<v-col cols="12" md="7" class="h-100 pa-0">
-				<v-card class="h-100 d-flex flex-column pos-themed-card" flat>
-					<v-card-title class="py-2 px-4 bg-primary text-white d-flex align-center">
-						<span class="text-h6">{{ __("Create Purchase Order") }}</span>
+				<v-card class="h-100 d-flex flex-column purchase-order-card" flat>
+					<div class="purchase-order-header">
+						<div class="purchase-order-header__icon-wrap">
+							<v-icon class="purchase-order-header__icon">mdi-truck-delivery-outline</v-icon>
+						</div>
+						<div class="purchase-order-header__copy">
+							<span class="purchase-order-header__eyebrow">{{ __("New order") }}</span>
+							<h3 class="purchase-order-header__title">{{ __("Create Purchase Order") }}</h3>
+						</div>
 						<v-spacer></v-spacer>
-						<v-btn
-							icon="mdi-delete"
-							variant="text"
-							color="white"
+						<button
+							type="button"
+							class="purchase-order-header__clear"
 							@click="resetForm"
 							:title="__('Clear All')"
 							:aria-label="__('Clear all purchase order items')"
-						></v-btn>
-					</v-card-title>
+						>
+							<v-icon size="20">mdi-trash-can-outline</v-icon>
+						</button>
+					</div>
 
-					<v-card-text class="flex-grow-1 overflow-y-auto pa-4">
+					<v-card-text class="flex-grow-1 overflow-y-auto pa-4 purchase-order-card__body">
 						<!-- Header Section -->
 						<PurchaseHeader
 							v-model:supplier="supplier"
@@ -41,7 +48,7 @@
 							@create-supplier="supplierDialog = true"
 						/>
 
-						<v-divider class="mb-4"></v-divider>
+						<v-divider class="mb-4 purchase-order-divider"></v-divider>
 
 						<!-- Items Table Section -->
 						<PurchaseItemsTable
@@ -64,14 +71,17 @@
 						</v-alert>
 					</v-card-text>
 
-					<v-card-actions class="pa-4 border-t">
+					<v-card-actions class="pa-4 purchase-order-actions">
 						<v-spacer></v-spacer>
 						<v-btn
 							:loading="submitLoading"
 							:disabled="submitLoading || !purchaseItems.length"
 							@click="openPaymentDialog"
+							class="purchase-order-pay-btn"
+							size="large"
 							block
 						>
+							<v-icon start>mdi-cash-register</v-icon>
 							{{ __("Pay") }}
 						</v-btn>
 					</v-card-actions>
@@ -472,5 +482,154 @@ export default {
 <style scoped>
 .cursor-pointer {
 	cursor: pointer;
+}
+
+/* ── Purchase Order panel (CC violet/pink card) ─────────────────── */
+.purchase-order-card {
+	background: var(--pos-card-bg, #0e131e) !important;
+	border-left: 1px solid rgba(139, 92, 246, 0.18);
+	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
+	color: var(--pos-text-primary, #e7ebf3);
+}
+
+.purchase-order-card,
+.purchase-order-card :deep(*) {
+	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
+}
+
+.purchase-order-card__body {
+	background: var(--pos-card-bg, #0e131e);
+}
+
+/* Replace the old bright cyan title bar with a CC-themed gradient
+   header that mirrors the StockConflictDialog / OpeningDialog look. */
+.purchase-order-header {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 14px 18px;
+	background:
+		linear-gradient(
+			135deg,
+			rgba(139, 92, 246, 0.18),
+			rgba(226, 54, 112, 0.10)
+		),
+		var(--pos-surface-muted, #161c27);
+	border-bottom: 1px solid rgba(139, 92, 246, 0.28);
+}
+
+.purchase-order-header__icon-wrap {
+	width: 44px;
+	height: 44px;
+	display: grid;
+	place-items: center;
+	border-radius: 12px;
+	flex-shrink: 0;
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.32),
+		rgba(226, 54, 112, 0.22)
+	);
+	border: 1px solid rgba(139, 92, 246, 0.5);
+	box-shadow: 0 6px 18px rgba(139, 92, 246, 0.22);
+}
+
+.purchase-order-header__icon {
+	font-size: 24px !important;
+	color: #c4b5fd !important;
+}
+
+.purchase-order-header__copy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.purchase-order-header__eyebrow {
+	font-size: 0.66rem;
+	font-weight: 700;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: rgba(231, 235, 243, 0.65);
+}
+
+.purchase-order-header__title {
+	margin: 0;
+	font-size: 1.1rem;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	background: linear-gradient(135deg, #f5d0fe 0%, #fb7185 100%);
+	background-clip: text;
+	-webkit-background-clip: text;
+	color: transparent;
+	-webkit-text-fill-color: transparent;
+}
+
+.purchase-order-header__clear {
+	all: unset;
+	width: 36px;
+	height: 36px;
+	display: grid;
+	place-items: center;
+	border-radius: 10px;
+	cursor: pointer;
+	color: rgba(231, 235, 243, 0.7);
+	border: 1px solid rgba(244, 63, 94, 0.28);
+	background: rgba(244, 63, 94, 0.08);
+	transition:
+		background-color 0.18s ease,
+		color 0.18s ease,
+		box-shadow 0.18s ease;
+}
+
+.purchase-order-header__clear:hover {
+	background: rgba(244, 63, 94, 0.18);
+	color: #fb7185;
+	box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.14);
+}
+
+.purchase-order-divider {
+	border-color: rgba(139, 92, 246, 0.18) !important;
+	opacity: 1 !important;
+}
+
+.purchase-order-actions {
+	background: var(--pos-surface-muted, #161c27);
+	border-top: 1px solid rgba(139, 92, 246, 0.18);
+}
+
+/* Pay button picks up the same violet→pink gradient used by the
+   OpeningDialog submit button so the CTA reads as the primary action. */
+.purchase-order-pay-btn {
+	background: linear-gradient(135deg, #8b5cf6 0%, #e23670 100%) !important;
+	color: #ffffff !important;
+	font-weight: 700 !important;
+	letter-spacing: 0.04em !important;
+	border-radius: 12px !important;
+	min-height: 48px !important;
+	box-shadow:
+		0 12px 28px rgba(139, 92, 246, 0.28),
+		0 0 0 1px rgba(244, 114, 182, 0.32) inset !important;
+	text-transform: none !important;
+	transition:
+		filter 0.18s ease,
+		box-shadow 0.18s ease,
+		transform 0.18s ease !important;
+}
+
+.purchase-order-pay-btn:hover:not(:disabled) {
+	filter: brightness(1.08);
+	box-shadow:
+		0 14px 32px rgba(226, 54, 112, 0.34),
+		0 0 0 1px rgba(244, 114, 182, 0.42) inset !important;
+	transform: translateY(-1px);
+}
+
+.purchase-order-pay-btn:disabled,
+.purchase-order-pay-btn.v-btn--disabled {
+	opacity: 0.55 !important;
+	background: linear-gradient(135deg, #4c4561 0%, #5b3149 100%) !important;
+	box-shadow: none !important;
 }
 </style>

@@ -139,6 +139,8 @@
 		<ItemActionToolbar
 			v-model="item_group"
 			:items-group="items_group"
+			v-model:brand-model="brand_filter"
+			:items-brand="available_brands"
 			v-model:items-view="items_view"
 			:pos-profile="pos_profile"
 			:active-price-list="active_price_list"
@@ -341,6 +343,11 @@ const item_group = computed({
 		itemsIntegration.item_group.value = normalized;
 	},
 });
+// Brand filter — same string contract as item_group ("ALL", a single brand
+// name, or several joined by "||"). Applied client-side at the
+// `displayedItems` stage so we don't have to round-trip through the items
+// store cache (groups already do that).
+const brand_filter = ref<string>("ALL");
 const virtualScrollBuffer = ref(200);
 const localStorageAvailable = ref(true);
 
@@ -381,6 +388,32 @@ const usesLimitSearch = computed(() =>
 const { stockSettings: stock_settings_ref } = storeToRefs(uiStore);
 const stock_settings = computed(() => stock_settings_ref.value || {});
 const items_group = computed(() => itemsIntegration.items_group.value || []);
+// Distinct brand list scanned out of the loaded items catalog. Sorted
+// alphabetically so the dropdown reads predictably even when fresh items
+// stream in mid-session. Empty/falsy brand values are dropped.
+const available_brands = computed<string[]>(() => {
+	const list = Array.isArray(items.value) ? items.value : [];
+	const seen = new Set<string>();
+	for (const it of list) {
+		const brand = (it as any)?.brand;
+		if (typeof brand === "string") {
+			const trimmed = brand.trim();
+			if (trimmed) seen.add(trimmed);
+		}
+	}
+	return Array.from(seen).sort((a, b) => a.localeCompare(b));
+});
+// Parsed brand-filter array, mirrors the multi-select string contract.
+const selectedBrandSet = computed<Set<string> | null>(() => {
+	const raw = brand_filter.value;
+	if (!raw || raw === "ALL") return null;
+	const parts = raw
+		.split("||")
+		.map((s) => String(s).trim())
+		.filter(Boolean);
+	if (!parts.length || parts.includes("ALL")) return null;
+	return new Set(parts);
+});
 const offersCount = computed(() => uiStore.offersCount || 0);
 const couponsCount = computed(() => uiStore.couponsCount || 0);
 // selected_currency is now a local ref synced via eventBus
@@ -414,7 +447,17 @@ const forceCustomerPriceList = computed(() =>
 const { items, filteredItems, customer_price_list, loading, isBackgroundLoading } = itemsIntegration;
 
 const displayedItems = computed(() => {
-	const baseItems = Array.isArray(filteredItems.value) ? filteredItems.value : [];
+	let baseItems = Array.isArray(filteredItems.value) ? filteredItems.value : [];
+	// Apply brand filter at the display layer so we don't have to plumb
+	// brand awareness through the items store / cache (item_group already
+	// pays that cost). When no brands are selected we pass through.
+	const brands = selectedBrandSet.value;
+	if (brands && brands.size) {
+		baseItems = baseItems.filter((it: any) => {
+			const b = typeof it?.brand === "string" ? it.brand.trim() : "";
+			return b && brands.has(b);
+		});
+	}
 	const rawTerm = first_search.value;
 	const term = (typeof rawTerm === "string" ? rawTerm : "").trim().toLowerCase();
 	return filterAndPaginate(baseItems, {
