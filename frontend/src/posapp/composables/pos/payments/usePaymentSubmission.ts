@@ -464,200 +464,97 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 	};
 
 	/**
-	 * Refresh batch availability against the live `Bin` numbers right before
-	 * we ship the invoice to the backend. The backend's per-batch SLE
-	 * running-balance validator is the LAST check in the chain; if our
-	 * cart-cached `actual_batch_qty` has drifted (item sat in cart while
-	 * another terminal sold the same batch, IndexedDB went stale, etc.),
-	 * the user otherwise sees the cryptic
-	 * "Batch X of Item Y has negative stock of -1.0 in warehouse Z"
-	 * error. By calling `get_bulk_stock_availability` here and comparing
-	 * against the requested `stock_qty`, we surface a clear, actionable
-	 * message ("Insufficient stock for batch <X>: 0 available, 1 requested")
-	 * before the document ever hits the negative-stock validator.
+	 * Single source-of-truth pre-flight: ask the server, using the EXACT same
+	 * validator it will run at submit time, whether this cart can be saved.
 	 *
-	 * Skipped entirely when there are no batched items in the cart, or
-	 * when running offline.
+	 * Replaces the old layered preflight that issued an N-way `Promise.all`
+	 * over per-batch Stock Ledger Entry lookups (which was both slow and the
+	 * most likely cause of the "Page Unresponsive" freeze on carts with many
+	 * batched lines). One round-trip → either `{ ok: true }` and we proceed,
+	 * or `{ ok: false, lines: [...] }` and we hand the offending rows to
+	 * StockConflictDialog so the cashier can fix things.
+	 *
+	 * Skipped for offline saves and for invoice types that don't move stock
+	 * (Order, Quotation) — handled by the surrounding caller.
 	 */
-	const verifyBatchAvailabilityBeforeSubmit = async (doc: any) => {
+	const checkAvailabilityBeforeSubmit = async (doc: any) => {
 		if (!doc || !Array.isArray(doc.items) || !doc.items.length) {
 			return;
 		}
-		// Only batched lines can trigger the per-batch SLE validator. Bulk
-		// item-level shortage is already covered by the existing server-side
-		// `_collect_stock_errors` pass.
-		const batchedLines = doc.items.filter(
-			(line: any) =>
-				line && line.item_code && line.batch_no && line.warehouse,
-		);
-		if (!batchedLines.length) {
-			return;
-		}
-		// Aggregate requested stock_qty per (item_code, warehouse, batch_no)
-		// because a cart can legally split one batch across multiple lines
-		// (e.g. with different pricing rules applied).
-		const requestedByKey = new Map<
-			string,
-			{
-				item_code: string;
-				warehouse: string;
-				batch_no: string;
-				label: string;
-				total: number;
-			}
-		>();
-		batchedLines.forEach((line: any) => {
-			const key = `${line.item_code}||${line.warehouse}||${line.batch_no}`;
-			const requested = Number(
-				line.stock_qty !== undefined && line.stock_qty !== null
-					? line.stock_qty
-					: Number(line.qty || 0) *
-							Number(line.conversion_factor || 1),
-			);
-			if (!Number.isFinite(requested) || requested <= 0) return;
-			const existing = requestedByKey.get(key);
-			if (existing) {
-				existing.total += requested;
-			} else {
-				requestedByKey.set(key, {
+
+		// Build a compact payload that mirrors what the server-side
+		// `_collect_stock_errors` pipeline expects. The endpoint will fall
+		// back to defaults / lookups for anything we omit, but sending
+		// `stock_qty` and `conversion_factor` saves a round of Item reads.
+		const profile = unref(posProfile) || {};
+		const payload = doc.items
+			.filter((line: any) => line && line.item_code && line.warehouse)
+			.map((line: any) => {
+				const conversion = Number(line.conversion_factor || 1) || 1;
+				const stockQty = Number(
+					line.stock_qty !== undefined && line.stock_qty !== null
+						? line.stock_qty
+						: Number(line.qty || 0) * conversion,
+				);
+				return {
 					item_code: line.item_code,
+					item_name: line.item_name || line.item_code,
 					warehouse: line.warehouse,
-					batch_no: line.batch_no,
-					label: line.item_name || line.item_code,
-					total: requested,
-				});
-			}
-		});
+					batch_no: line.batch_no || "",
+					qty: Number(line.qty || 0),
+					stock_qty: stockQty,
+					conversion_factor: conversion,
+				};
+			});
 
-		if (!requestedByKey.size) {
+		if (!payload.length) {
 			return;
 		}
 
-		// Use `get_available_qty` (returns list[dict] — JSON-safe) instead
-		// of `get_bulk_stock_availability` (Python tuple-keyed dict) so the
-		// transport doesn't mangle keys.
-		const requestPayload = Array.from(requestedByKey.values()).map((r) => ({
-			item_code: r.item_code,
-			warehouse: r.warehouse,
-			batch_no: r.batch_no,
-		}));
-		let availabilityList: any[] = [];
+		let response: any = null;
 		try {
 			const resp = await frappe.call({
 				method:
-					"posawesome.posawesome.api.item_processing.stock.get_available_qty",
-				args: { items: requestPayload },
+					"posawesome.posawesome.api.invoice_processing.stock.check_invoice_availability",
+				args: { items: payload, pos_profile: profile?.name || null },
 			});
-			availabilityList = Array.isArray(resp?.message) ? resp.message : [];
+			response = resp?.message;
 		} catch (err) {
-			// Don't block submission on a transient lookup failure — the
-			// backend will still validate. Just log and continue.
+			// Transport / network failure → don't block; the backend will
+			// run the same validator at submit time and we'll catch its
+			// error in the surrounding catch block.
 			console.warn(
-				"[verifyBatchAvailabilityBeforeSubmit] availability lookup failed; falling back to backend validation",
+				"[checkAvailabilityBeforeSubmit] dry-run failed; falling back to submit-time validation",
 				err,
 			);
 			return;
 		}
 
-		const availabilityByKey = new Map<string, number>();
-		availabilityList.forEach((row: any) => {
-			if (!row || !row.item_code || !row.warehouse) return;
-			const k = `${row.item_code}||${row.warehouse}||${row.batch_no || ""}`;
-			availabilityByKey.set(k, Number(row.available_qty || 0));
-		});
-
-		// Cross-check against live `Bin.actual_qty`. `get_available_qty` reads
-		// a derived view that can disagree with the bin number ERPNext's own
-		// per-batch SLE running-balance validator uses at submit time. When
-		// the two disagree we trust the lower value — that's the one the
-		// backend will use to decide whether the resulting balance goes
-		// negative. This catches the common "drawer says 1 / bin says 0"
-		// scenario that otherwise produces the cryptic "negative stock of -1"
-		// at submit. We deliberately skip batch-less item-only rows because
-		// the bulk item-level check above already handles those.
-		try {
-			const binChecks = await Promise.all(
-				requestPayload
-					.filter((r) => !!r.batch_no)
-					.map(async (r) => {
-						try {
-							const { message } = await frappe.call({
-								method: "frappe.client.get_value",
-								args: {
-									doctype: "Stock Ledger Entry",
-									filters: {
-										item_code: r.item_code,
-										warehouse: r.warehouse,
-										batch_no: r.batch_no,
-										is_cancelled: 0,
-									},
-									fieldname: ["qty_after_transaction"],
-									order_by: "posting_date desc, posting_time desc, creation desc",
-								},
-							});
-							const liveQty = Number(message?.qty_after_transaction);
-							if (!Number.isFinite(liveQty)) return null;
-							return {
-								key: `${r.item_code}||${r.warehouse}||${r.batch_no}`,
-								liveQty,
-							};
-						} catch {
-							return null;
-						}
-					}),
-			);
-			binChecks.forEach((row) => {
-				if (!row) return;
-				const existing = availabilityByKey.get(row.key);
-				if (existing === undefined || row.liveQty < existing) {
-					availabilityByKey.set(row.key, Math.max(row.liveQty, 0));
-				}
-			});
-		} catch (err) {
-			console.warn(
-				"[verifyBatchAvailabilityBeforeSubmit] live SLE cross-check failed; using get_available_qty result only",
-				err,
-			);
-		}
-
-		const shortages: {
-			item_code: string;
-			batch_no: string;
-			warehouse: string;
-			available: number;
-			requested: number;
-			label: string;
-		}[] = [];
-		requestedByKey.forEach((req, key) => {
-			const available = availabilityByKey.get(key);
-			if (available === undefined) {
-				return; // Couldn't match — let backend validate.
-			}
-			if (req.total > available + 0.0001) {
-				shortages.push({
-					item_code: req.item_code,
-					batch_no: req.batch_no,
-					warehouse: req.warehouse,
-					available,
-					requested: req.total,
-					label: req.label,
-				});
-			}
-		});
-
-		if (!shortages.length) {
+		if (!response || response.ok !== false) {
 			return;
 		}
+
+		const lines: any[] = Array.isArray(response.lines) ? response.lines : [];
+		if (!lines.length) {
+			return;
+		}
+
+		const shortages = lines.map((row) => ({
+			item_code: row.item_code,
+			batch_no: row.batch_no || "",
+			warehouse: row.warehouse,
+			available: Number(row.available_qty || 0),
+			requested: Number(row.requested_qty || 0),
+			label: row.item_name || row.item_code,
+		}));
 
 		// Surface the structured conflict resolver dialog if we have an
-		// event bus to talk to. The dialog will offer the cashier explicit
+		// event bus to talk to. The dialog offers the cashier explicit
 		// recovery options (delete blocking drafts, save current sale as
-		// draft, cancel sale) and re-trigger the submit on success.
+		// draft, cancel sale) and re-triggers submit on success.
 		const dialogShown = emitStockConflictDialog(shortages);
 
 		if (dialogShown) {
-			// Build a sentinel error so the surrounding submit flow can
-			// abort silently — the dialog has already taken over the UI.
 			const err: any = new Error(
 				__(
 					"Sale paused — please use the conflict resolver to free up batch stock.",
@@ -669,16 +566,15 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		}
 
 		// Fallback: no event bus wired in (tests / SSR / legacy callers).
-		// Keep the original cleartext error so the user still sees something.
 		const detail = shortages
 			.map(
 				(s) =>
-					`${s.label} — ${__("Batch")} ${s.batch_no} @ ${s.warehouse}: ${__("available {0}, requested {1}", [s.available, s.requested])}`,
+					`${s.label} — ${s.batch_no ? __("Batch") + " " + s.batch_no + " @ " : ""}${s.warehouse}: ${__("available {0}, requested {1}", [s.available, s.requested])}`,
 			)
 			.join("\n");
 		throw new Error(
 			__(
-				"Cannot submit invoice — batch stock has changed. Please reload availability:\n{0}",
+				"Cannot submit invoice — stock has changed. Please reload availability:\n{0}",
 				[detail],
 			),
 		);
@@ -1140,9 +1036,10 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 
 		// Online Submission
 		try {
-			// Pre-flight: refresh per-batch availability against `Bin` so we
-			// surface the real "negative stock" failure with a clear message
-			// before the server's SLE running-balance validator throws.
+			// Pre-flight: ask the server (via the same validator it'll run at
+			// submit time) whether the cart can ship as-is. Single round-trip
+			// — replaces the old layered preflight that fan-fanned out N
+			// parallel SLE queries and froze the page on large carts.
 			// Skipped for returns (which legally restock batches) and for
 			// Order/Quotation flows (no stock movement).
 			if (
@@ -1150,7 +1047,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 				!["Order", "Quotation"].includes(type) &&
 				!isOffline()
 			) {
-				await verifyBatchAvailabilityBeforeSubmit(doc);
+				await checkAvailabilityBeforeSubmit(doc);
 			}
 
 			const submissionDoc = buildSubmissionInvoiceDoc(doc);
@@ -1361,44 +1258,6 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			// actual submit. Detect that here and re-route to the dialog.
 			const serverShortage = detectNegativeStockShortage(exc);
 			if (serverShortage) {
-				// Diagnostic: when this fires despite preflight passing,
-				// dump the offending cart line + any serial/batch bundle
-				// rows so we can see whether the cart actually sent the
-				// quantity we think it did. Helps catch SBB double-row bugs
-				// and hidden duplicates that bypass the UI's per-line view.
-				try {
-					const offendingLines = (doc?.items || []).filter(
-						(line: any) =>
-							line &&
-							line.item_code === serverShortage.item_code &&
-							line.batch_no === serverShortage.batch_no,
-					);
-					console.warn(
-						"[negative-stock] preflight passed but backend rejected — payload dump for batch",
-						serverShortage.batch_no,
-						"/",
-						serverShortage.warehouse,
-						{
-							expected: serverShortage,
-							offendingLines: offendingLines.map((l: any) => ({
-								item_code: l.item_code,
-								batch_no: l.batch_no,
-								warehouse: l.warehouse,
-								qty: l.qty,
-								stock_qty: l.stock_qty,
-								conversion_factor: l.conversion_factor,
-								serial_and_batch_bundle: l.serial_and_batch_bundle,
-								serial_no: l.serial_no,
-							})),
-							totalItems: doc?.items?.length ?? 0,
-						},
-					);
-				} catch (dumpErr) {
-					console.warn(
-						"[negative-stock] failed to assemble diagnostic dump",
-						dumpErr,
-					);
-				}
 				const dialogShown = emitStockConflictDialog([serverShortage]);
 				if (dialogShown) {
 					if (onFinishNavigation) onFinishNavigation(false);

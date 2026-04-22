@@ -1,3 +1,5 @@
+import json
+
 import frappe
 from frappe.utils import cint, flt, cstr, getdate, nowdate
 from frappe import _
@@ -201,6 +203,137 @@ def _is_batch_specific_error(error):
     if error.get("batch_no"):
         return True
     return error.get("reason") == "no_batch_with_enough_qty"
+
+
+@frappe.whitelist()
+def check_invoice_availability(items, pos_profile=None):
+    """Dry-run stock-availability check for an outgoing POS invoice payload.
+
+    Single source of truth for "can this cart be submitted right now?".
+    Runs the **exact** same `_collect_stock_errors` pipeline that
+    `_validate_stock_on_invoice` runs at submit time, then applies the same
+    `_should_block` policy — but returns a structured response instead of
+    throwing. The frontend calls this once, just before submit; if it comes
+    back `ok: true` we proceed, otherwise we hand the offending lines to
+    StockConflictDialog so the cashier can fix things without waiting on
+    ERPNext's cryptic stock-ledger error.
+
+    Why this exists: caching stock balances client-side is a losing race
+    against concurrent terminals. Asking the server right before submit,
+    using the same code path the server will use to actually validate, is
+    the only way to guarantee preflight ↔ submit parity.
+
+    Args:
+        items: JSON string or list of dicts. Required per row:
+            `item_code`, `warehouse`, and either `qty` (with optional
+            `conversion_factor`) or pre-computed `stock_qty`. Optional hint
+            fields honoured if present, else looked up:
+            `batch_no`, `is_stock_item`, `has_batch_no`, `allow_negative_stock`,
+            `item_name`.
+        pos_profile: POS Profile name. Used to honour the per-profile
+            `posa_block_sale_beyond_available_qty` for plain non-batched
+            overdraws. Batch-specific shortages are always returned (ERPNext's
+            stock ledger rejects them at submit regardless of the profile).
+
+    Returns:
+        {
+            "ok": bool,
+            "lines": [
+                {
+                    "item_code": str,
+                    "item_name": str,
+                    "warehouse": str,
+                    "batch_no": str,        # "" for non-batched rows
+                    "requested_qty": float,
+                    "available_qty": float,
+                    "reason": str,          # see below
+                },
+                ...
+            ],
+        }
+
+    `reason` values:
+        "insufficient_batch_stock"  — specific batch picked, not enough qty
+        "no_batch_with_enough_qty"  — batched item, no single batch can fulfil
+        "insufficient_stock"        — non-batched item, Bin total too low
+    """
+    if isinstance(items, str):
+        try:
+            items = json.loads(items)
+        except (TypeError, ValueError):
+            return {"ok": True, "lines": []}
+    if not isinstance(items, list) or not items:
+        return {"ok": True, "lines": []}
+
+    # Normalise rows so `_collect_stock_errors` has what it needs without
+    # forcing the caller to compute `stock_qty`.
+    normalized = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        if not raw.get("item_code") or not raw.get("warehouse"):
+            continue
+        row = dict(raw)
+        if not row.get("conversion_factor"):
+            row["conversion_factor"] = 1
+        if not row.get("stock_qty"):
+            row["stock_qty"] = flt(row.get("qty")) * flt(row["conversion_factor"])
+        if row.get("batch_no") is None:
+            row["batch_no"] = ""
+        normalized.append(row)
+
+    if not normalized:
+        return {"ok": True, "lines": []}
+
+    errors = _collect_stock_errors(normalized)
+    if not errors:
+        return {"ok": True, "lines": []}
+
+    # Apply the same submit-time policy: batch errors always block (ERPNext's
+    # SLE running-balance validator will reject them anyway), plain Bin
+    # overdraws only block if the POS profile says so.
+    block_overdraw = _should_block(pos_profile)
+    filtered = [
+        err for err in errors
+        if _is_batch_specific_error(err) or block_overdraw
+    ]
+    if not filtered:
+        return {"ok": True, "lines": []}
+
+    # Decorate with item names so the dialog can show friendly labels.
+    item_codes = {err.get("item_code") for err in filtered if err.get("item_code")}
+    name_lookup = {
+        code: (frappe.get_cached_value("Item", code, "item_name") or code)
+        for code in item_codes
+    }
+    # Prefer the caller-supplied item_name when present (offline drafts may
+    # have a customised name override).
+    for raw in normalized:
+        code = raw.get("item_code")
+        if code and raw.get("item_name") and code not in name_lookup:
+            name_lookup[code] = raw["item_name"]
+
+    lines = []
+    for err in filtered:
+        code = err.get("item_code")
+        batch_no = err.get("batch_no") or ""
+        if err.get("reason") == "no_batch_with_enough_qty":
+            reason = "no_batch_with_enough_qty"
+        elif batch_no:
+            reason = "insufficient_batch_stock"
+        else:
+            reason = "insufficient_stock"
+        lines.append({
+            "item_code": code,
+            "item_name": name_lookup.get(code, code),
+            "warehouse": err.get("warehouse"),
+            "batch_no": batch_no,
+            "requested_qty": flt(err.get("requested_qty")),
+            "available_qty": flt(err.get("available_qty")),
+            "reason": reason,
+        })
+
+    return {"ok": False, "lines": lines}
 
 
 def _validate_stock_on_invoice(invoice_doc):
