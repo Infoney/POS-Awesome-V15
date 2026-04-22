@@ -183,6 +183,95 @@ def _resolve_write_off_limit(pos_profile_doc):
     return None
 
 
+def _row_field(row, fieldname, default=None):
+    """Read a field from a payment row that may be a dict or a child doc."""
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(fieldname, default)
+    if hasattr(row, "get"):
+        try:
+            value = row.get(fieldname)
+            if value is not None:
+                return value
+        except Exception:
+            pass
+    return getattr(row, fieldname, default)
+
+
+def _ensure_invoice_payments_linkage(invoice_doc, submitted_payments):
+    """Ensure the saved invoice's payments table mirrors the cashier's selection.
+
+    Defensive guard against any path (ERPNext set_pos_fields validation, third
+    party hooks, stale drafts) where the rows the cashier filled out in the POS
+    UI get stripped before save. Without this the SI ``Payments`` grid can end
+    up empty even though ``paid_amount`` is populated, which breaks the link
+    between the invoice and the mode of payment that was actually used.
+
+    For non-return invoices we drop zero-amount rows so the Payments grid only
+    surfaces the modes the cashier actually used. Returns are left untouched
+    to preserve their existing handling (negative amounts, refund flow).
+    """
+
+    if not submitted_payments:
+        return
+
+    is_return = bool(getattr(invoice_doc, "is_return", 0))
+
+    desired_rows = []
+    for raw_row in submitted_payments:
+        if raw_row is None:
+            continue
+        mode = str(_row_field(raw_row, "mode_of_payment") or "").strip()
+        if not mode:
+            continue
+        amount = flt(_row_field(raw_row, "amount") or 0)
+        if not is_return and amount == 0:
+            # Skip placeholder rows for unused MOPs on regular sales — these
+            # are the ones ERPNext is most likely to silently drop and they
+            # add no value to the saved invoice.
+            continue
+
+        base_amount_raw = _row_field(raw_row, "base_amount")
+        base_amount = flt(base_amount_raw) if base_amount_raw not in (None, "") else amount
+
+        desired_rows.append(
+            {
+                "mode_of_payment": mode,
+                "amount": amount,
+                "base_amount": base_amount,
+                "account": _row_field(raw_row, "account"),
+                "type": _row_field(raw_row, "type"),
+                "default": cint(_row_field(raw_row, "default") or 0),
+            }
+        )
+
+    if not desired_rows:
+        return
+
+    existing_rows = list(invoice_doc.get("payments") or [])
+    existing_signature = [
+        (
+            str(_row_field(r, "mode_of_payment") or "").strip(),
+            flt(_row_field(r, "amount") or 0),
+        )
+        for r in existing_rows
+    ]
+    desired_signature = [(row["mode_of_payment"], flt(row["amount"])) for row in desired_rows]
+
+    if existing_signature == desired_signature:
+        return
+
+    invoice_doc.set("payments", [])
+    for row in desired_rows:
+        invoice_doc.append("payments", row)
+
+    child_doctype = (
+        "POS Invoice Payment" if invoice_doc.doctype == "POS Invoice" else "Sales Invoice Payment"
+    )
+    ensure_child_doctype(invoice_doc, "payments", child_doctype)
+
+
 def _apply_write_off_settings(invoice_doc, data):
     enable_write_off = cint(data.get("is_write_off_change"))
 
@@ -742,6 +831,11 @@ def submit_invoice(invoice, data, submit_in_background=False):
             invoice = _build_fresh_invoice_payload(invoice, doctype)
             invoice_name = None
 
+    # Capture the cashier-selected payment rows from the raw payload before
+    # any downstream processing (set_missing_values, gift card settlement,
+    # ERPNext's set_pos_fields) gets a chance to mutate or drop them.
+    submitted_payments_payload = list(invoice.get("payments") or [])
+
     if not invoice_name or not frappe.db.exists(doctype, invoice_name):
         if client_request_id:
             invoice["posa_client_request_id"] = client_request_id
@@ -756,6 +850,11 @@ def submit_invoice(invoice, data, submit_in_background=False):
         invoice_doc.update(invoice)
 
     set_invoice_client_request_id(invoice_doc, client_request_id)
+
+    # Re-attach the cashier-selected payment rows in case ERPNext or any
+    # upstream processing dropped them. Keeps the SI Payments grid linked to
+    # the actual modes used at the till.
+    _ensure_invoice_payments_linkage(invoice_doc, submitted_payments_payload)
 
     _deduplicate_free_items(invoice_doc)
 
