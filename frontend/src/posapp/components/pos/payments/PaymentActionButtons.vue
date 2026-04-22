@@ -1,53 +1,47 @@
 <template>
-	<v-card flat :class="['cards mb-0 mt-3 pa-0', { compact }]">
-		<v-row align="start" no-gutters>
-			<v-col cols="12" sm="6">
-				<v-btn
-					ref="submitButton"
-					block
-					size="large"
-					color="primary"
-					variant="flat"
-					class="payment-submit-btn payment-footer-btn"
-					@click="$emit('submit')"
-					:loading="loading"
-					:disabled="loading || validatePayment"
-					:class="{ 'submit-highlight': highlightSubmit }"
-					:title="__('Submit (Alt+X)')"
-				>
-					<span class="payment-btn__label">{{ __("Submit") }}</span>
-					<ShortcutHint combo="Alt+X" tone="light" />
-				</v-btn>
-			</v-col>
-			<v-col cols="12" sm="6" class="payment-action-col">
-				<v-btn
-					block
-					size="large"
-					color="success"
-					variant="flat"
-					class="payment-submit-print-btn payment-footer-btn"
-					@click="$emit('submit-and-print')"
-					:loading="loading"
-					:disabled="loading || validatePayment"
-					:title="__('Submit & Print (Alt+P)')"
-				>
-					<span class="payment-btn__label">{{ __("Submit & Print") }}</span>
-					<ShortcutHint combo="Alt+P" tone="light" />
-				</v-btn>
-			</v-col>
-			<v-col cols="12">
-				<v-btn
-					block
-					size="large"
-					color="error"
-					variant="flat"
-					class="mt-2 pa-1 payment-cancel-btn payment-footer-btn"
-					@click="$emit('cancel')"
-				>
-					{{ __("Cancel Payment") }}
-				</v-btn>
-			</v-col>
-		</v-row>
+	<v-card flat :class="['payment-actions', 'cards', { compact }]">
+		<v-btn
+			class="payment-cancel-btn payment-footer-btn"
+			variant="flat"
+			size="large"
+			@click="$emit('cancel')"
+			:title="__('Cancel Payment')"
+		>
+			<v-icon start size="18">mdi-close-circle-outline</v-icon>
+			<span class="payment-btn__label">{{ __("Cancel") }}</span>
+		</v-btn>
+
+		<v-btn
+			ref="submitButton"
+			class="payment-submit-btn payment-footer-btn"
+			variant="flat"
+			size="large"
+			color="primary"
+			@click="$emit('submit')"
+			:loading="loading"
+			:disabled="loading || validatePayment"
+			:class="{ 'submit-highlight': highlightSubmit }"
+			:title="__('Submit (Alt+X)')"
+		>
+			<v-icon start size="18">mdi-check-circle-outline</v-icon>
+			<span class="payment-btn__label">{{ __("Submit") }}</span>
+			<ShortcutHint combo="Alt+X" tone="light" class="payment-btn__hint" />
+		</v-btn>
+
+		<v-btn
+			class="payment-submit-print-btn payment-footer-btn"
+			variant="flat"
+			size="large"
+			color="success"
+			@click="$emit('submit-and-print')"
+			:loading="loading"
+			:disabled="loading || validatePayment"
+			:title="__('Submit & Print (Alt+P)')"
+		>
+			<v-icon start size="18">mdi-printer-check</v-icon>
+			<span class="payment-btn__label">{{ __("Submit & Print") }}</span>
+			<ShortcutHint combo="Alt+P" tone="light" class="payment-btn__hint" />
+		</v-btn>
 	</v-card>
 </template>
 
@@ -71,9 +65,29 @@ const __ = window.__;
 	background: transparent !important;
 }
 
+.payment-actions {
+	display: flex;
+	align-items: stretch;
+	gap: 12px;
+	padding: 0;
+	margin: 0;
+}
+
+/* Cancel takes a smaller share of the row, the two submits get the rest. */
+.payment-actions .payment-cancel-btn {
+	flex: 0 0 auto;
+	min-width: 140px;
+}
+
+.payment-actions .payment-submit-btn,
+.payment-actions .payment-submit-print-btn {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
 .compact :deep(.v-btn),
 :deep(.compact .v-btn) {
-	min-height: 40px;
+	min-height: 42px;
 }
 
 .payment-footer-btn {
@@ -84,22 +98,28 @@ const __ = window.__;
 		transform 0.18s ease,
 		filter 0.18s ease !important;
 	color: #ffffff !important;
-	min-height: 44px !important;
-	border-radius: 10px !important;
+	min-height: 46px !important;
+	border-radius: 12px !important;
 	font-weight: 700;
 	letter-spacing: 0.02em;
+	text-transform: none !important;
 }
 
 :deep(.payment-footer-btn .v-btn__content) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
+	gap: 6px;
 }
 
 .payment-btn__label {
 	display: inline-flex;
 	align-items: center;
+}
+
+.payment-btn__hint {
+	margin-inline-start: 4px;
+	opacity: 0.85;
 }
 
 /* CC violet → pink Submit button */
@@ -109,8 +129,10 @@ const __ = window.__;
 		rgba(139, 92, 246, 0.95),
 		rgba(167, 122, 250, 0.95)
 	) !important;
-	box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25) !important;
-	border: 1px solid rgba(139, 92, 246, 0.45) !important;
+	box-shadow:
+		0 6px 18px rgba(139, 92, 246, 0.28),
+		0 0 0 1px rgba(167, 122, 250, 0.4) inset !important;
+	border: 1px solid rgba(139, 92, 246, 0.5) !important;
 }
 
 /* CC pink → peach Submit & Print button */
@@ -120,44 +142,49 @@ const __ = window.__;
 		rgba(226, 54, 112, 0.95),
 		rgba(244, 114, 182, 0.95)
 	) !important;
-	box-shadow: 0 2px 8px rgba(226, 54, 112, 0.25) !important;
-	border: 1px solid rgba(226, 54, 112, 0.45) !important;
+	box-shadow:
+		0 6px 18px rgba(226, 54, 112, 0.28),
+		0 0 0 1px rgba(244, 114, 182, 0.4) inset !important;
+	border: 1px solid rgba(226, 54, 112, 0.5) !important;
 }
 
-/* Rose-ghost Cancel button */
+/* Cancel demoted to a quiet ghost button — destructive but not loud. */
 .payment-cancel-btn {
-	background: linear-gradient(
-		135deg,
-		rgba(244, 63, 94, 0.92),
-		rgba(225, 29, 72, 0.95)
-	) !important;
-	box-shadow: 0 2px 8px rgba(244, 63, 94, 0.25) !important;
-	border: 1px solid rgba(244, 63, 94, 0.45) !important;
+	background: transparent !important;
+	color: #fda4af !important;
+	box-shadow: none !important;
+	border: 1px solid rgba(244, 63, 94, 0.4) !important;
+}
+
+.payment-cancel-btn :deep(.v-btn__content) {
+	color: #fda4af;
+}
+
+.payment-cancel-btn:not(:disabled):hover {
+	background: rgba(244, 63, 94, 0.12) !important;
+	border-color: rgba(244, 63, 94, 0.6) !important;
+	box-shadow: 0 4px 14px rgba(244, 63, 94, 0.18) !important;
+	color: #fb7185 !important;
 }
 
 .payment-footer-btn:not(:disabled):hover,
 .payment-footer-btn:not(:disabled):focus,
 .payment-footer-btn:not(:disabled):focus-visible,
 .payment-footer-btn:not(:disabled):active {
-	box-shadow: 0 6px 18px rgba(15, 23, 42, 0.22) !important;
 	transform: translateY(-1px);
 	filter: brightness(1.06);
 }
 
 .payment-submit-btn:not(:disabled):hover {
-	box-shadow: 0 6px 22px rgba(139, 92, 246, 0.35) !important;
+	box-shadow:
+		0 10px 26px rgba(139, 92, 246, 0.4),
+		0 0 0 1px rgba(167, 122, 250, 0.5) inset !important;
 }
 
 .payment-submit-print-btn:not(:disabled):hover {
-	box-shadow: 0 6px 22px rgba(226, 54, 112, 0.35) !important;
-}
-
-.payment-cancel-btn:not(:disabled):hover {
-	box-shadow: 0 6px 22px rgba(244, 63, 94, 0.35) !important;
-}
-
-.payment-action-col {
-	padding-left: 4px;
+	box-shadow:
+		0 10px 26px rgba(226, 54, 112, 0.4),
+		0 0 0 1px rgba(244, 114, 182, 0.5) inset !important;
 }
 
 .payment-footer-btn:active {
@@ -171,40 +198,60 @@ const __ = window.__;
 }
 
 @media (max-width: 768px) {
-	.cards {
-		margin-top: 0 !important;
+	.payment-actions {
+		flex-wrap: wrap;
+		gap: 8px;
 	}
 
-	.payment-action-col {
-		padding-left: 0;
-		padding-top: 6px;
+	.payment-actions .payment-cancel-btn {
+		flex: 1 1 100%;
+		min-width: 0;
+		order: 3;
+	}
+
+	.payment-actions .payment-submit-btn,
+	.payment-actions .payment-submit-print-btn {
+		flex: 1 1 calc(50% - 4px);
 	}
 
 	.payment-footer-btn {
-		font-size: 0.82rem !important;
+		font-size: 0.84rem !important;
+		min-height: 42px !important;
 	}
 
 	:deep(.payment-footer-btn.v-btn) {
-		min-height: 38px !important;
+		min-height: 42px !important;
 	}
 
 	:deep(.payment-footer-btn .v-btn__content) {
-		font-size: 0.82rem !important;
+		font-size: 0.84rem !important;
 		line-height: 1.15;
 	}
 }
 
 @media (max-width: 480px) {
+	.payment-actions {
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.payment-actions .payment-cancel-btn,
+	.payment-actions .payment-submit-btn,
+	.payment-actions .payment-submit-print-btn {
+		flex: 1 1 100%;
+		min-width: 0;
+	}
+
 	.payment-footer-btn {
-		font-size: 0.76rem !important;
+		font-size: 0.78rem !important;
 	}
 
 	:deep(.payment-footer-btn.v-btn) {
-		min-height: 34px !important;
+		min-height: 40px !important;
 	}
 
 	:deep(.payment-footer-btn .v-btn__content) {
-		font-size: 0.76rem !important;
+		font-size: 0.78rem !important;
 	}
 }
 </style>

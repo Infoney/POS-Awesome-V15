@@ -146,17 +146,6 @@
 							"
 							@new-address="new_address"
 						/>
-						<PaymentPurchaseOrder
-							:invoice-doc="invoice_doc"
-							:pos-profile="pos_profile"
-							:new-po-date="new_po_date"
-							@update:new-po-date="
-								(val) => {
-									new_po_date = val;
-									update_po_date();
-								}
-							"
-						/>
 					</section>
 
 					<section class="payment-section payment-section--settlement">
@@ -319,7 +308,6 @@ import PaymentMethods from "./payments/PaymentMethods.vue";
 import PaymentGiftCardSection from "./payments/PaymentGiftCardSection.vue";
 import PaymentRedemption from "./payments/PaymentRedemption.vue";
 import PaymentAdditionalInfo from "./payments/PaymentAdditionalInfo.vue";
-import PaymentPurchaseOrder from "./payments/PaymentPurchaseOrder.vue";
 import PaymentCustomerCreditDetails from "./payments/PaymentCustomerCreditDetails.vue";
 import PaymentOptions from "./payments/PaymentOptions.vue";
 import PaymentSelectionFields from "./payments/PaymentSelectionFields.vue";
@@ -2032,7 +2020,7 @@ onBeforeUnmount(() => {
 		"summary adjustments"
 		"methods adjustments"
 		"settlement adjustments"
-		"settlement meta";
+		"meta adjustments";
 }
 
 .payment-section {
@@ -2078,10 +2066,31 @@ onBeforeUnmount(() => {
 	);
 }
 
+.payment-sections--dialog .payment-section--meta {
+	background: linear-gradient(
+		180deg,
+		rgba(139, 92, 246, 0.08) 0%,
+		var(--pos-surface-muted) 100%
+	);
+	border-color: rgba(139, 92, 246, 0.22);
+}
+
+.payment-sections--dialog .payment-section--meta .payment-section__title {
+	background: linear-gradient(135deg, #c4b5fd 0%, #fb7185 100%);
+	background-clip: text;
+	-webkit-background-clip: text;
+	color: transparent;
+	-webkit-text-fill-color: transparent;
+	letter-spacing: 0.02em;
+}
+
 .payment-section__header {
 	display: flex;
 	flex-direction: column;
 	gap: 0;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--pos-border-light);
+	margin-bottom: 2px;
 }
 
 .payment-section__subsection {
@@ -2098,6 +2107,24 @@ onBeforeUnmount(() => {
 	font-weight: 700;
 	line-height: 1.2;
 	color: var(--pos-text-primary);
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.payment-section__title::before {
+	content: "";
+	display: inline-block;
+	width: 4px;
+	height: 14px;
+	border-radius: 2px;
+	background: linear-gradient(180deg, #8b5cf6, #e23670);
+	box-shadow: 0 0 6px rgba(139, 92, 246, 0.45);
+}
+
+.payment-section__title--subsection::before {
+	height: 10px;
+	width: 3px;
 }
 
 .payment-section__title--subsection {
