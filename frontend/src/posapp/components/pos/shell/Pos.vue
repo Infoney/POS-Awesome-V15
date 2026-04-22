@@ -550,6 +550,12 @@ export default {
 				eventBus.on("submit_closing_pos", (data) => {
 					shift.submit_closing_pos(data);
 				});
+				// "Back to opening shift" CTA in the closing dialog. The
+				// dialog now drives the post-submit decision (no longer
+				// auto-opening), so we re-check entry on demand here.
+				eventBus.on("request_check_opening_entry", () => {
+					shift.check_opening_entry();
+				});
 				eventBus.on("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.on("set_compact_panel", setCompactPanel);
 			}
@@ -568,6 +574,7 @@ export default {
 			}
 			if (eventBus) {
 				eventBus.off("submit_closing_pos");
+				eventBus.off("request_check_opening_entry");
 				eventBus.off("focus_additional_discount", focusAdditionalDiscountField);
 				eventBus.off("set_compact_panel", setCompactPanel);
 			}

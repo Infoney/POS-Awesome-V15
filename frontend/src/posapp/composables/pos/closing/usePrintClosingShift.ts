@@ -62,10 +62,53 @@ export interface PrintClosingShiftPayload {
 	creditInvoicesByCurrency: CurrencyRow[];
 	returnsByCurrency: CurrencyRow[];
 	cashMovementCompanyTotal: number;
+	/**
+	 * Whether the shift had already been submitted (closed) when the
+	 * user triggered the print. Drives the status banner: an OPEN-shift
+	 * print warns that the figures may still change, while a CLOSED-shift
+	 * print confirms the document is final.
+	 */
+	shiftClosed?: boolean;
 	formatCurrencyWithSymbol: (_value: number, _currency: string) => string;
 	formatCurrency: (_value: number, _precision?: number) => string;
 	formatFloat: (_value: number, _precision?: number) => string;
 }
+
+/**
+ * Build the status banner that goes at the very top of every printed
+ * closing-shift report. Two variants:
+ *   - OPEN SHIFT  → orange tone, warns that totals may change
+ *   - CLOSED SHIFT → green tone, confirms the document is final
+ *
+ * The mode parameter selects styling: `receipt` keeps the banner narrow
+ * and monochrome (works on 80mm thermal paper); `a4` uses a coloured
+ * pill so it reads strongly on a printed page.
+ */
+const buildStatusBanner = (
+	shiftClosed: boolean,
+	mode: "receipt" | "a4",
+): string => {
+	const status = shiftClosed
+		? tt("CLOSED SHIFT — printed after closing")
+		: tt("OPEN SHIFT — printed before closing (totals may still change)");
+	const stamp = `${tt("Printed")}: ${new Date().toLocaleString()}`;
+
+	if (mode === "receipt") {
+		const border = shiftClosed ? "1px solid #111" : "1px dashed #555";
+		return `<div class="status-banner" style="border:${border};padding:4px 6px;margin-bottom:6px;text-align:center;font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:0.04em;">
+			${escapeHtml(status)}
+			<div style="font-weight:400;text-transform:none;letter-spacing:0;font-size:9px;color:#444;margin-top:2px;">${escapeHtml(stamp)}</div>
+		</div>`;
+	}
+
+	const palette = shiftClosed
+		? { bg: "#dcfce7", border: "#16a34a", text: "#166534" }
+		: { bg: "#fef3c7", border: "#d97706", text: "#92400e" };
+	return `<div class="status-banner" style="background:${palette.bg};border:1.5px solid ${palette.border};color:${palette.text};border-radius:8px;padding:8px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:11px;">
+		<span>${escapeHtml(status)}</span>
+		<span style="font-weight:500;text-transform:none;letter-spacing:0;font-size:10px;color:${palette.text};">${escapeHtml(stamp)}</span>
+	</div>`;
+};
 
 const escapeHtml = (value: unknown): string => {
 	if (value === null || value === undefined) return "";
@@ -188,7 +231,9 @@ export function printReceiptClosingShift(payload: PrintClosingShiftPayload) {
 		reconciliation,
 		formatCurrency,
 		formatCurrencyWithSymbol,
+		shiftClosed = false,
 	} = payload;
+	const statusBanner = buildStatusBanner(Boolean(shiftClosed), "receipt");
 
 	const insightRows = [...primaryInsights, ...secondaryInsights]
 		.map((card) => formatRow(card.label, card.value))
@@ -277,6 +322,8 @@ export function printReceiptClosingShift(payload: PrintClosingShiftPayload) {
 			}
 		</style>
 
+		${statusBanner}
+
 		<div class="center">
 			<h1>${escapeHtml(tt("Shift Closing"))}</h1>
 			<div class="bold">${escapeHtml(companyName)}</div>
@@ -335,7 +382,9 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 		cashMovementCompanyTotal,
 		formatCurrency,
 		formatCurrencyWithSymbol,
+		shiftClosed = false,
 	} = payload;
+	const statusBanner = buildStatusBanner(Boolean(shiftClosed), "a4");
 
 	const renderInsightCards = (cards: InsightCard[]) =>
 		cards
@@ -574,6 +623,8 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 				justify-content: space-between;
 			}
 		</style>
+
+		${statusBanner}
 
 		<div class="header">
 			<div>

@@ -1,100 +1,179 @@
 <template>
 	<v-dialog v-model="closingDialog" max-width="900px" persistent>
 		<v-card elevation="8" class="closing-dialog-card">
-			<ClosingHeader @close="closeDialog" />
+			<ClosingHeader @close="onHeaderClose" />
 
-			<v-card-text class="pa-0 white-background">
-				<v-container class="pa-6">
-					<v-row class="mb-6">
-						<v-col cols="12" class="pa-1">
-							<ShiftOverview
-								:loading="overviewLoading"
-								:primary-insights="primaryInsights"
-								:secondary-insights="secondaryInsights"
-								:multi-currency-totals="multiCurrencyTotals"
-								:credit-invoices-by-currency="creditInvoicesByCurrency"
-								:returns-by-currency="returnsByCurrency"
-								:change-returned-rows="changeReturnedRows"
-								:cash-expected-by-currency="cashExpectedByCurrency"
-								:cash-movement-summary="cashMovementSummary"
-								:payments-by-mode="paymentsByMode"
-								:overview-company-currency="overviewCompanyCurrency"
-								:format-currency-with-symbol="formatCurrencyWithSymbol"
-								:should-show-company-equivalent="shouldShowCompanyEquivalent"
-								:show-exchange-rates="showExchangeRates"
-								:format-exchange-rates="formatExchangeRates"
-								:is-cash-mode="isCashMode"
-								:overpayment-deduction-for-currency="overpaymentDeductionForCurrency"
-							/>
-						</v-col>
-					</v-row>
-					<v-row>
-						<v-col cols="12" class="pa-1">
-							<PaymentReconciliation
-								:payments="dialog_data.payment_reconciliation"
-								:headers="headers"
-								:items-per-page="itemsPerPage"
-								:company-currency-symbol="companyCurrencySymbol"
-								:format-currency="formatCurrency"
-								:format-float="formatFloat"
-							/>
-						</v-col>
-					</v-row>
-				</v-container>
-			</v-card-text>
+			<!-- ─────────────── Pre-submit / form view ─────────────── -->
+			<template v-if="!shiftSubmitted">
+				<v-card-text class="pa-0 white-background">
+					<v-container class="pa-6">
+						<v-row class="mb-6">
+							<v-col cols="12" class="pa-1">
+								<ShiftOverview
+									:loading="overviewLoading"
+									:primary-insights="primaryInsights"
+									:secondary-insights="secondaryInsights"
+									:multi-currency-totals="multiCurrencyTotals"
+									:credit-invoices-by-currency="creditInvoicesByCurrency"
+									:returns-by-currency="returnsByCurrency"
+									:change-returned-rows="changeReturnedRows"
+									:cash-expected-by-currency="cashExpectedByCurrency"
+									:cash-movement-summary="cashMovementSummary"
+									:payments-by-mode="paymentsByMode"
+									:overview-company-currency="overviewCompanyCurrency"
+									:format-currency-with-symbol="formatCurrencyWithSymbol"
+									:should-show-company-equivalent="shouldShowCompanyEquivalent"
+									:show-exchange-rates="showExchangeRates"
+									:format-exchange-rates="formatExchangeRates"
+									:is-cash-mode="isCashMode"
+									:overpayment-deduction-for-currency="overpaymentDeductionForCurrency"
+								/>
+							</v-col>
+						</v-row>
+						<v-row>
+							<v-col cols="12" class="pa-1">
+								<PaymentReconciliation
+									:payments="dialog_data.payment_reconciliation"
+									:headers="headers"
+									:items-per-page="itemsPerPage"
+									:company-currency-symbol="companyCurrencySymbol"
+									:format-currency="formatCurrency"
+									:format-float="formatFloat"
+								/>
+							</v-col>
+						</v-row>
+					</v-container>
+				</v-card-text>
 
-			<v-divider></v-divider>
-			<v-card-actions class="dialog-actions-container">
-				<v-btn
-					theme="dark"
-					@click="printReceipt"
-					class="pos-action-btn print-action-btn print-receipt-btn"
-					size="large"
-					elevation="2"
-					:disabled="overviewLoading"
-				>
-					<v-icon start>mdi-printer-pos</v-icon>
-					<span>{{ __("Print Receipt") }}</span>
-				</v-btn>
-				<v-btn
-					theme="dark"
-					@click="printA4"
-					class="pos-action-btn print-action-btn print-a4-btn"
-					size="large"
-					elevation="2"
-					:disabled="overviewLoading"
-				>
-					<v-icon start>mdi-file-pdf-box</v-icon>
-					<span>{{ __("Print A4") }}</span>
-				</v-btn>
-				<v-spacer></v-spacer>
-				<v-btn
-					theme="dark"
-					@click="closeDialog"
-					class="pos-action-btn cancel-action-btn"
-					size="large"
-					elevation="2"
-				>
-					<v-icon start>mdi-close-circle-outline</v-icon>
-					<span>{{ __("Close") }}</span>
-				</v-btn>
-				<v-btn
-					theme="dark"
-					@click="submitDialog"
-					class="pos-action-btn submit-action-btn"
-					size="large"
-					elevation="2"
-				>
-					<v-icon start>mdi-check-circle-outline</v-icon>
-					<span>{{ __("Submit") }}</span>
-				</v-btn>
-			</v-card-actions>
+				<v-divider></v-divider>
+				<v-card-actions class="dialog-actions-container">
+					<v-btn
+						theme="dark"
+						@click="printReceipt"
+						class="pos-action-btn print-action-btn print-receipt-btn"
+						size="large"
+						elevation="2"
+						:disabled="overviewLoading"
+					>
+						<v-icon start>mdi-printer-pos</v-icon>
+						<span>{{ __("Print Receipt") }}</span>
+					</v-btn>
+					<v-btn
+						theme="dark"
+						@click="printA4"
+						class="pos-action-btn print-action-btn print-a4-btn"
+						size="large"
+						elevation="2"
+						:disabled="overviewLoading"
+					>
+						<v-icon start>mdi-file-pdf-box</v-icon>
+						<span>{{ __("Print A4") }}</span>
+					</v-btn>
+					<v-spacer></v-spacer>
+					<v-btn
+						theme="dark"
+						@click="closeDialog"
+						class="pos-action-btn cancel-action-btn"
+						size="large"
+						elevation="2"
+					>
+						<v-icon start>mdi-close-circle-outline</v-icon>
+						<span>{{ __("Close") }}</span>
+					</v-btn>
+					<v-btn
+						theme="dark"
+						@click="onSubmit"
+						class="pos-action-btn submit-action-btn"
+						size="large"
+						elevation="2"
+						:disabled="submitInFlight"
+						:loading="submitInFlight"
+					>
+						<v-icon start>mdi-check-circle-outline</v-icon>
+						<span>{{ __("Submit") }}</span>
+					</v-btn>
+				</v-card-actions>
+			</template>
+
+			<!-- ────────────── Post-submit prompt view ────────────── -->
+			<template v-else>
+				<v-card-text class="pa-0 post-submit-card">
+					<div class="post-submit">
+						<div class="post-submit__icon-wrap">
+							<v-icon class="post-submit__icon">
+								mdi-check-circle
+							</v-icon>
+						</div>
+						<h3 class="post-submit__title">
+							{{ __("Shift Closed Successfully") }}
+						</h3>
+						<p class="post-submit__subtitle">
+							{{
+								__(
+									"Choose what to do next. You can print a final summary, log out, or go back to open a new shift.",
+								)
+							}}
+						</p>
+
+						<div class="post-submit__actions">
+							<v-btn
+								theme="dark"
+								@click="printReceipt"
+								class="pos-action-btn print-action-btn print-receipt-btn"
+								size="large"
+								elevation="2"
+							>
+								<v-icon start>mdi-printer-pos</v-icon>
+								<span>{{ __("Print Receipt") }}</span>
+							</v-btn>
+							<v-btn
+								theme="dark"
+								@click="printA4"
+								class="pos-action-btn print-action-btn print-a4-btn"
+								size="large"
+								elevation="2"
+							>
+								<v-icon start>mdi-file-pdf-box</v-icon>
+								<span>{{ __("Print A4") }}</span>
+							</v-btn>
+						</div>
+
+						<div class="post-submit__divider">
+							<span>{{ __("or") }}</span>
+						</div>
+
+						<div class="post-submit__nav">
+							<v-btn
+								theme="dark"
+								@click="onBackToOpening"
+								class="pos-action-btn post-nav-btn post-nav-btn--primary"
+								size="large"
+								elevation="2"
+							>
+								<v-icon start>mdi-arrow-left-circle</v-icon>
+								<span>{{ __("Back to Opening Shift") }}</span>
+							</v-btn>
+							<v-btn
+								theme="dark"
+								@click="onLogout"
+								class="pos-action-btn post-nav-btn post-nav-btn--logout"
+								size="large"
+								elevation="2"
+							>
+								<v-icon start>mdi-logout</v-icon>
+								<span>{{ __("Logout") }}</span>
+							</v-btn>
+						</div>
+					</div>
+				</v-card-text>
+			</template>
 		</v-card>
 	</v-dialog>
 </template>
 
 <script>
 import { useUIStore } from "../../../stores/uiStore.js";
+import { useToastStore } from "../../../stores/toastStore.js";
 import { ref, inject, onMounted, onBeforeUnmount, watch } from "vue";
 import { useClosingShift } from "../../../composables/pos/closing/useClosingShift";
 import { useClosingSummary } from "../../../composables/pos/closing/useClosingSummary";
@@ -116,8 +195,16 @@ export default {
 	},
 	setup() {
 		const uiStore = useUIStore();
+		const toastStore = useToastStore();
 		const eventBus = inject("eventBus");
 		const __ = window.__ || ((t) => t);
+
+		// ── Post-submit state ──────────────────────────────────────────
+		// `submitInFlight`  → true while the close API is executing
+		// `shiftSubmitted`  → true once the API confirmed success; the
+		//                     dialog flips to the post-submit prompt
+		const shiftSubmitted = ref(false);
+		const submitInFlight = ref(false);
 
 		// Initialize composables
 		const {
@@ -184,6 +271,10 @@ export default {
 				new Date().toLocaleString();
 
 			return {
+				// `shiftClosed` flips the print banner from
+				// "OPEN SHIFT — printed before closing" (still draft)
+				// to "CLOSED SHIFT — printed after closing"
+				shiftClosed: shiftSubmitted.value,
 				shiftName:
 					data.name ||
 					data.pos_opening_shift ||
@@ -280,9 +371,97 @@ export default {
 			},
 		];
 
+		// ── Submit / post-submit lifecycle ────────────────────────────
+		// `onSubmit` is the click handler on the Submit button. It
+		// flips `submitInFlight` immediately for instant UI feedback,
+		// then defers to `submitDialog()` (which emits the bus event
+		// usePosShift listens to). The actual flip to `shiftSubmitted`
+		// happens via the eventBus listeners below.
+		const onSubmit = () => {
+			if (submitInFlight.value) return;
+			submitInFlight.value = true;
+			const ok = submitDialog();
+			if (!ok) {
+				// Validation failure (NaN closing amount). Reset and
+				// surface a toast so the user knows why nothing happened.
+				submitInFlight.value = false;
+				toastStore.show({
+					title: __("Please fill in all closing amounts."),
+					color: "warning",
+				});
+			}
+		};
+
+		// Header close button — refuse while a submit is mid-flight,
+		// otherwise behave like the cancel button.
+		const onHeaderClose = () => {
+			if (submitInFlight.value) return;
+			closeDialog();
+			// Reset post-submit state so a re-open starts fresh.
+			shiftSubmitted.value = false;
+		};
+
+		// "Back to Opening Shift" — close the dialog and ask Pos.vue
+		// to re-run check_opening_entry, which pops the OpeningDialog.
+		const onBackToOpening = () => {
+			shiftSubmitted.value = false;
+			closeDialog();
+			if (eventBus) {
+				eventBus.emit("request_check_opening_entry");
+			}
+		};
+
+		// "Logout" — uses Frappe's logout helper. Falls back to a
+		// hard navigation if the helper isn't present.
+		const onLogout = () => {
+			try {
+				const fr = window.frappe;
+				if (fr?.app?.logout) {
+					fr.app.logout();
+					return;
+				}
+				if (fr?.call) {
+					fr.call({
+						method: "logout",
+						callback: () => {
+							window.location.href = "/login";
+						},
+					});
+					return;
+				}
+			} catch (err) {
+				console.error("[POSA] Logout failed", err);
+			}
+			window.location.href = "/login";
+		};
+
 		const handleKeydown = (event) => {
 			if (event.key === "Escape" && closingDialog.value) {
+				if (submitInFlight.value) return;
+				if (shiftSubmitted.value) {
+					// Treat Escape on the post-submit prompt as
+					// "Back to Opening Shift" rather than a silent close.
+					onBackToOpening();
+					return;
+				}
 				closeDialog();
+			}
+		};
+
+		// ── Submit lifecycle event listeners ──────────────────────────
+		const onSubmitStarted = () => {
+			submitInFlight.value = true;
+		};
+
+		const onSubmitFinished = (payload) => {
+			submitInFlight.value = false;
+			if (payload?.success) {
+				shiftSubmitted.value = true;
+			} else {
+				toastStore.show({
+					title: __("Failed to close shift. Please try again."),
+					color: "error",
+				});
 			}
 		};
 
@@ -292,10 +471,17 @@ export default {
 
 			if (eventBus) {
 				eventBus.on("open_ClosingDialog", (data) => {
+					// Reset state every time the dialog re-opens so a
+					// fresh shift starts from the form view, not the
+					// stale post-submit prompt.
+					shiftSubmitted.value = false;
+					submitInFlight.value = false;
 					closingDialog.value = true;
 					dialog_data.value = data;
 					fetchOverview(data.pos_opening_shift, pos_profile.value?.currency);
 				});
+				eventBus.on("closing_pos_submit_started", onSubmitStarted);
+				eventBus.on("closing_pos_submitted", onSubmitFinished);
 			} else {
 				console.error("ClosingDialog: eventBus not provided");
 			}
@@ -305,6 +491,8 @@ export default {
 			window.removeEventListener("keydown", handleKeydown);
 			if (eventBus) {
 				eventBus.off("open_ClosingDialog");
+				eventBus.off("closing_pos_submit_started", onSubmitStarted);
+				eventBus.off("closing_pos_submitted", onSubmitFinished);
 			}
 		});
 
@@ -336,6 +524,13 @@ export default {
 			submitDialog,
 			printReceipt,
 			printA4,
+			// Post-submit state + handlers exposed to the template
+			shiftSubmitted,
+			submitInFlight,
+			onSubmit,
+			onHeaderClose,
+			onBackToOpening,
+			onLogout,
 			...summary,
 			// Expose formatters used in template
 			formatCurrency,
@@ -427,6 +622,178 @@ export default {
 	.submit-action-btn {
 		flex: 1 1 calc(50% - 8px);
 		margin: 0 !important;
+	}
+}
+
+/* ────────────────── Post-submit prompt panel ────────────────── */
+/* Shown after the closing API confirms success. Replaces the form
+   view entirely. Styling pulls from the CC violet/pink palette so
+   the success state feels celebratory but on-brand. */
+
+.post-submit-card {
+	background:
+		radial-gradient(
+			ellipse at top,
+			rgba(139, 92, 246, 0.12),
+			transparent 60%
+		),
+		rgb(var(--v-theme-surface));
+	padding: 56px 48px 48px;
+}
+
+.post-submit {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
+}
+
+.post-submit__icon-wrap {
+	width: 92px;
+	height: 92px;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	margin-bottom: 20px;
+	background: linear-gradient(
+		135deg,
+		rgba(34, 197, 94, 0.18),
+		rgba(139, 92, 246, 0.18)
+	);
+	border: 1px solid rgba(34, 197, 94, 0.45);
+	box-shadow: 0 8px 28px rgba(34, 197, 94, 0.18);
+}
+
+.post-submit__icon {
+	font-size: 56px !important;
+	color: #22c55e !important;
+}
+
+.post-submit__title {
+	margin: 0 0 8px;
+	font-size: 1.5rem;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	background: linear-gradient(135deg, #e23670, #f59e0b);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+.post-submit__subtitle {
+	margin: 0 0 28px;
+	max-width: 460px;
+	color: rgba(var(--v-theme-on-surface), 0.7);
+	font-size: 0.95rem;
+	line-height: 1.5;
+}
+
+.post-submit__actions {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	justify-content: center;
+	width: 100%;
+	max-width: 520px;
+}
+
+.post-submit__actions .pos-action-btn {
+	flex: 1 1 200px;
+	min-width: 180px;
+}
+
+.post-submit__divider {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	max-width: 360px;
+	margin: 26px 0;
+	color: rgba(var(--v-theme-on-surface), 0.5);
+	font-size: 0.8rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.post-submit__divider::before,
+.post-submit__divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		rgba(139, 92, 246, 0.35),
+		transparent
+	);
+}
+
+.post-submit__nav {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+	justify-content: center;
+	width: 100%;
+	max-width: 520px;
+}
+
+.post-nav-btn {
+	flex: 1 1 200px;
+	min-width: 180px;
+	color: #fff !important;
+	border-radius: 10px !important;
+	border: 1px solid transparent !important;
+	transition: transform 0.15s ease, box-shadow 0.15s ease,
+		filter 0.15s ease;
+}
+
+.post-nav-btn:not(:disabled):hover {
+	transform: translateY(-1px);
+	filter: brightness(1.05);
+}
+
+.post-nav-btn--primary {
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.95),
+		rgba(226, 54, 112, 0.95)
+	) !important;
+	box-shadow: 0 4px 14px rgba(139, 92, 246, 0.3) !important;
+	border-color: rgba(167, 122, 250, 0.5) !important;
+}
+
+.post-nav-btn--primary:not(:disabled):hover {
+	box-shadow: 0 6px 22px rgba(226, 54, 112, 0.4) !important;
+}
+
+.post-nav-btn--logout {
+	background: linear-gradient(
+		135deg,
+		rgba(30, 41, 59, 0.95),
+		rgba(51, 65, 85, 0.95)
+	) !important;
+	border-color: rgba(148, 163, 184, 0.35) !important;
+	box-shadow: 0 2px 8px rgba(15, 23, 42, 0.3) !important;
+}
+
+.post-nav-btn--logout:not(:disabled):hover {
+	box-shadow: 0 4px 16px rgba(15, 23, 42, 0.45) !important;
+	border-color: rgba(244, 63, 94, 0.45) !important;
+}
+
+@media (max-width: 600px) {
+	.post-submit-card {
+		padding: 40px 24px 32px;
+	}
+
+	.post-submit__title {
+		font-size: 1.25rem;
+	}
+
+	.post-submit__actions .pos-action-btn,
+	.post-nav-btn {
+		flex: 1 1 100%;
 	}
 }
 </style>

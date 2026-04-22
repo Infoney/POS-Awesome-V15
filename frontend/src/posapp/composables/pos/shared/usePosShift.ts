@@ -217,6 +217,9 @@ export function usePosShift(openDialog?: () => void) {
 
 	function submit_closing_pos(data: any) {
 		console.log("Submitting closing shift", data);
+		// Broadcast a "started" event so the dialog can flip into a
+		// "submitting…" state before the API call completes.
+		eventBus?.emit("closing_pos_submit_started");
 		frappe
 			.call(
 				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.submit_closing_shift",
@@ -234,11 +237,28 @@ export function usePosShift(openDialog?: () => void) {
 						title: "POS Shift Closed",
 						color: "success",
 					});
-					check_opening_entry();
+					// Notify ClosingDialog so it can switch to the
+					// post-submit prompt (Print / Logout / Back to opening).
+					// We do NOT call `check_opening_entry()` immediately
+					// anymore — the dialog now drives that decision via
+					// the user's choice in the prompt.
+					eventBus?.emit("closing_pos_submitted", {
+						success: true,
+						result: r.message,
+					});
+				} else {
+					eventBus?.emit("closing_pos_submitted", {
+						success: false,
+						error: "no-result",
+					});
 				}
 			})
 			.catch((err: unknown) => {
 				console.error("Failed to submit closing shift", err);
+				eventBus?.emit("closing_pos_submitted", {
+					success: false,
+					error: err,
+				});
 			});
 	}
 

@@ -262,7 +262,10 @@ export function useClosingShift(eventBus: any) {
 		if (eventBus) {
 			eventBus.emit("submit_closing_pos", dialog_data.value);
 		}
-		closingDialog.value = false;
+		// NOTE: We intentionally do NOT close the dialog here anymore.
+		// The dialog now shows a post-submit prompt (Print / Logout /
+		// Back to opening) once `closing_pos_submitted` fires. The
+		// dialog component manages its own lifecycle from there.
 		return true;
 	};
 

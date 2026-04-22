@@ -36,10 +36,17 @@
 						/>
 					</div>
 
-					<!-- POS Profile picker — list-style card with typeahead search,
-					     mirroring the "SELECT WAREHOUSES TO START PICKING" pattern
-					     from the order-pick flow. -->
-					<div class="pos-profile-picker" :class="{ 'pos-profile-picker--selected': pos_profile }">
+					<!-- POS Profile picker — collapsible list-style card with typeahead
+					     search. Closed by default so a tenant with 20–50 profiles
+					     doesn't blow out the dialog. The trigger button shows the
+					     currently-selected profile (or a prompt) and toggles open. -->
+					<div
+						class="pos-profile-picker"
+						:class="{
+							'pos-profile-picker--selected': pos_profile,
+							'pos-profile-picker--expanded': pickerExpanded,
+						}"
+					>
 						<div class="pos-profile-picker__header">
 							<v-icon size="18" class="pos-profile-picker__header-icon">mdi-point-of-sale</v-icon>
 							<span class="pos-profile-picker__title">
@@ -51,45 +58,80 @@
 							{{ __("POS Profile") }} <span class="pos-profile-picker__required">*</span>
 						</label>
 
-						<v-text-field
-							v-model="posProfileSearch"
-							:placeholder="frappe._('Type to search POS profile...')"
-							variant="outlined"
-							density="compact"
-							hide-details
-							prepend-inner-icon="mdi-magnify"
-							clearable
-							class="pos-profile-picker__search"
-						/>
-
-						<div
-							class="pos-profile-picker__list"
-							role="listbox"
-							:aria-label="__('POS profiles')"
+						<button
+							type="button"
+							class="pos-profile-picker__trigger"
+							:class="{ 'pos-profile-picker__trigger--placeholder': !pos_profile }"
+							:aria-expanded="pickerExpanded"
+							aria-haspopup="listbox"
+							@click="togglePicker"
 						>
-							<button
-								v-for="item in filteredPosProfiles"
-								:key="item"
-								type="button"
-								class="pos-profile-picker__option"
-								:class="{ 'pos-profile-picker__option--active': pos_profile === item }"
-								role="option"
-								:aria-selected="pos_profile === item"
-								@click="pos_profile = item"
+							<v-icon size="18" class="pos-profile-picker__trigger-icon">
+								mdi-point-of-sale
+							</v-icon>
+							<span class="pos-profile-picker__trigger-label">
+								{{
+									pos_profile
+										? pos_profile
+										: pos_profiles.length
+											? __("Choose a POS profile…")
+											: __("No POS profiles available")
+								}}
+							</span>
+							<v-icon
+								size="20"
+								class="pos-profile-picker__trigger-caret"
+								:class="{ 'pos-profile-picker__trigger-caret--open': pickerExpanded }"
 							>
-								<v-icon size="16" class="pos-profile-picker__option-icon">
-									mdi-point-of-sale
-								</v-icon>
-								<span class="pos-profile-picker__option-label">{{ item }}</span>
-								<v-icon v-if="pos_profile === item" size="16" class="pos-profile-picker__option-check">
-									mdi-check-circle
-								</v-icon>
-							</button>
-							<div v-if="!filteredPosProfiles.length" class="pos-profile-picker__empty">
-								<v-icon size="20" class="pos-profile-picker__empty-icon">mdi-store-search-outline</v-icon>
-								<span>{{ pos_profiles.length
-									? __("No POS profiles match your search")
-									: __("No POS profiles available for this company") }}</span>
+								mdi-chevron-down
+							</v-icon>
+						</button>
+
+						<!-- Expandable panel: search + scrollable list. Hidden when
+						     collapsed so tall lists never push the action bar
+						     off-screen. -->
+						<div v-show="pickerExpanded" class="pos-profile-picker__panel">
+							<v-text-field
+								v-model="posProfileSearch"
+								:placeholder="frappe._('Type to search POS profile...')"
+								variant="outlined"
+								density="compact"
+								hide-details
+								prepend-inner-icon="mdi-magnify"
+								clearable
+								class="pos-profile-picker__search"
+								ref="profileSearchField"
+							/>
+
+							<div
+								class="pos-profile-picker__list"
+								role="listbox"
+								:aria-label="__('POS profiles')"
+							>
+								<button
+									v-for="item in filteredPosProfiles"
+									:key="item"
+									type="button"
+									class="pos-profile-picker__option"
+									:class="{ 'pos-profile-picker__option--active': pos_profile === item }"
+									role="option"
+									:aria-selected="pos_profile === item"
+									@click="selectProfile(item)"
+								>
+									<v-icon size="16" class="pos-profile-picker__option-icon">
+										mdi-point-of-sale
+									</v-icon>
+									<span class="pos-profile-picker__option-label">{{ item }}</span>
+									<v-icon v-if="pos_profile === item" size="16" class="pos-profile-picker__option-check">
+										mdi-check-circle
+									</v-icon>
+								</button>
+								<div v-if="!filteredPosProfiles.length" class="pos-profile-picker__empty">
+									<v-icon size="20" class="pos-profile-picker__empty-icon">mdi-store-search-outline</v-icon>
+									<span>{{ pos_profiles.length
+										? __("No POS profiles match your search")
+										: __("No POS profiles available for this company") }}</span>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -171,7 +213,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
 	getOpeningDialogStorage,
 	setOpeningDialogStorage,
@@ -205,6 +247,11 @@ const pos_profiles_data = ref([]);
 const pos_profiles = ref([]);
 const pos_profile = ref("");
 const posProfileSearch = ref("");
+// Picker visibility — closed by default. With 20–50 profiles in some
+// tenants an always-open list pushed the action bar off-screen and
+// hijacked scroll, so we now require an explicit click to expand.
+const pickerExpanded = ref(false);
+const profileSearchField = ref(null);
 const payments_method_data = ref([]);
 const payments_methods = ref([]);
 const payments_methods_headers = [
@@ -274,6 +321,36 @@ watch(pos_profile, (val) => {
 		}
 	});
 });
+
+// ── Picker open/close + selection helpers ──────────────────────────
+// `togglePicker` is the trigger button's click handler. Opening the
+// picker focuses the search field on next tick so the cashier can
+// just type — no extra click required.
+function togglePicker() {
+	pickerExpanded.value = !pickerExpanded.value;
+	if (pickerExpanded.value) {
+		nextTick(() => {
+			try {
+				profileSearchField.value?.focus?.();
+			} catch (_e) {
+				// Field ref might not be a Vuetify component (test stubs etc.)
+			}
+		});
+	} else {
+		// Reset the search filter when collapsing so the next open
+		// shows the full list, not the filtered remnant.
+		posProfileSearch.value = "";
+	}
+}
+
+// `selectProfile` collapses the picker on choice — once a profile is
+// picked the cashier's next action is the Submit button at the bottom,
+// not more list browsing.
+function selectProfile(name) {
+	pos_profile.value = name;
+	pickerExpanded.value = false;
+	posProfileSearch.value = "";
+}
 
 async function get_opening_dialog_data() {
 	await initPromise;
@@ -384,6 +461,14 @@ onMounted(() => {
 	display: flex;
 	flex-direction: column;
 	animation: opening-dialog-slide 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
+}
+
+/* Inherit the CC font through every interior label, button, table cell,
+   and field input so nothing falls back to the default Vuetify Roboto. */
+.opening-dialog-card,
+.opening-dialog-card :deep(*) {
+	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
 }
 
 @keyframes opening-dialog-slide {
@@ -577,6 +662,94 @@ onMounted(() => {
 .pos-profile-picker__required {
 	color: #f43f5e;
 	margin-inline-start: 2px;
+}
+
+/* ── Collapsible trigger ─────────────────────────────────────────
+   This is the always-visible button that summarises the current
+   selection and toggles the searchable panel below. We style it
+   like a CC field (rounded, subtle violet halo) so it reads as
+   part of the form, not a separate dropdown widget. */
+.pos-profile-picker__trigger {
+	all: unset;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 44px;
+	padding: 10px 14px;
+	border-radius: 10px;
+	cursor: pointer;
+	background: var(--pos-surface-muted, #161c27);
+	color: var(--pos-text-primary, #e7ebf3);
+	font-size: 0.95rem;
+	font-weight: 600;
+	box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.4);
+	transition:
+		box-shadow 0.18s ease,
+		background-color 0.18s ease;
+}
+
+.pos-profile-picker__trigger:hover {
+	background: rgba(139, 92, 246, 0.08);
+	box-shadow: inset 0 0 0 1.5px rgba(167, 139, 250, 0.6);
+}
+
+.pos-profile-picker__trigger:focus-visible {
+	box-shadow:
+		inset 0 0 0 1.5px #a78bfa,
+		0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+
+.pos-profile-picker__trigger--placeholder {
+	color: var(--pos-text-secondary, #8595ab);
+	font-weight: 500;
+	font-style: italic;
+}
+
+.pos-profile-picker__trigger-icon {
+	color: #a78bfa;
+	flex-shrink: 0;
+}
+
+.pos-profile-picker__trigger-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: start;
+}
+
+.pos-profile-picker__trigger-caret {
+	color: #a78bfa;
+	flex-shrink: 0;
+	transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pos-profile-picker__trigger-caret--open {
+	transform: rotate(180deg);
+}
+
+/* Expanded panel — the search field + list. Slides in with a quick
+   fade so the open/close gesture feels intentional. */
+.pos-profile-picker__panel {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 4px;
+	animation: pos-profile-picker__panel-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes pos-profile-picker__panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 .pos-profile-picker__search :deep(.v-field) {
@@ -792,44 +965,68 @@ onMounted(() => {
 	background: transparent !important;
 }
 
+/* ── Action buttons (CC violet/pink palette) ──────────────────────
+   The original blue / red / green trio pulled the eye away from the
+   primary submit action and clashed with the rest of the CC theme.
+   Logout is now a muted slate (it's destructive but not the primary
+   ask), Close is a hairline ghost, and Submit owns the violet→pink
+   gradient that signals the most important action on the page. */
 .pos-action-btn--logout {
-	background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-	box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3) !important;
+	background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(51, 65, 85, 0.95)) !important;
+	border: 1px solid rgba(148, 163, 184, 0.25) !important;
+	box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35) !important;
 }
 
 .pos-action-btn--logout:hover {
-	background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-	box-shadow: 0 10px 22px rgba(59, 130, 246, 0.4) !important;
+	background: linear-gradient(135deg, rgba(51, 65, 85, 0.95), rgba(71, 85, 105, 0.95)) !important;
+	box-shadow: 0 6px 18px rgba(15, 23, 42, 0.45) !important;
+	border-color: rgba(244, 63, 94, 0.4) !important;
 	transform: translateY(-2px);
 }
 
 .pos-action-btn--close {
-	background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
-	box-shadow: 0 6px 16px rgba(244, 63, 94, 0.3) !important;
+	background: transparent !important;
+	border: 1px solid rgba(139, 92, 246, 0.4) !important;
+	box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.08) !important;
+	color: #c7c2f0 !important;
 }
 
 .pos-action-btn--close:hover {
-	background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
-	box-shadow: 0 10px 22px rgba(244, 63, 94, 0.4) !important;
+	background: rgba(139, 92, 246, 0.1) !important;
+	border-color: rgba(167, 139, 250, 0.6) !important;
+	box-shadow: 0 6px 18px rgba(139, 92, 246, 0.18) !important;
 	transform: translateY(-2px);
 }
 
 .pos-action-btn--submit {
-	background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
-	box-shadow: 0 6px 16px rgba(34, 197, 94, 0.3) !important;
+	background: linear-gradient(
+		135deg,
+		#8b5cf6 0%,
+		#a78bfa 45%,
+		#e23670 100%
+	) !important;
+	border: 1px solid rgba(167, 139, 250, 0.5) !important;
+	box-shadow: 0 6px 18px rgba(139, 92, 246, 0.35) !important;
 }
 
 .pos-action-btn--submit:hover {
-	background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
-	box-shadow: 0 10px 22px rgba(34, 197, 94, 0.4) !important;
+	filter: brightness(1.07);
+	box-shadow:
+		0 10px 26px rgba(226, 54, 112, 0.4),
+		0 0 0 1px rgba(167, 139, 250, 0.6) inset !important;
 	transform: translateY(-2px);
 }
 
 .pos-action-btn--submit:disabled {
-	opacity: 0.55;
+	opacity: 0.5;
 	transform: none !important;
 	box-shadow: none !important;
-	filter: grayscale(0.2);
+	filter: grayscale(0.3);
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.6),
+		rgba(226, 54, 112, 0.6)
+	) !important;
 }
 
 /* ── Responsive ──────────────────────────────────────────────────── */
