@@ -119,6 +119,7 @@
 								text-input
 								:text-input-options="{ format: ['dd-MM-yyyy', 'dd/MM/yyyy', 'd/M/yyyy'], enterSubmit: true, tabSubmit: true }"
 								:placeholder="__('Posting Date')"
+								hide-input-icon
 								class="pos-themed-input pr-date-picker"
 							/>
 						</div>
@@ -891,7 +892,15 @@ export default {
 	color: var(--pos-text-primary, #e7ebf3) !important;
 	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
 	font-size: 0.875rem;
-	padding-left: 4px;
+	/* Wrapper already shows a calendar icon via .pr-date-icon, so the internal
+	   icon is suppressed with the `hide-input-icon` prop and the input no
+	   longer needs left padding to clear it. */
+	padding-left: 4px !important;
+}
+.pr-date-picker :deep(.dp__input_icon),
+.pr-date-picker :deep(.dp__input_icon_pad) {
+	display: none !important;
+	padding-left: 0 !important;
 }
 .pr-date-picker :deep(.dp__input:focus) {
 	box-shadow: none !important;

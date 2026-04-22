@@ -171,18 +171,22 @@ const handlePrimaryAction = (payment) => {
 }
 
 .payment-method-card__label {
-	margin: 0 0 var(--pos-space-1);
-	font-size: 0.72rem;
-	font-weight: 700;
-	letter-spacing: 0.08em;
+	/* Eyebrow label sits tight above the MOP name. Smaller, lighter,
+	   and snug so the title reads as the primary content. */
+	margin: 0 0 2px;
+	font-size: 0.62rem;
+	font-weight: 600;
+	line-height: 1;
+	letter-spacing: 0.12em;
 	text-transform: uppercase;
 	color: var(--pos-text-secondary);
+	opacity: 0.75;
 }
 
 .payment-method-card__title {
 	margin: 0;
 	font-size: 1rem;
-	line-height: 1.2;
+	line-height: 1.15;
 	font-weight: 700;
 	color: var(--pos-text-primary);
 }

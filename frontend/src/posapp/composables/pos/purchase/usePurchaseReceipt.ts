@@ -279,9 +279,34 @@ export function usePurchaseReceipt(options: {
 
 	const setBatch = (
 		row: PurchaseReceiptItem,
-		value: string | null | undefined,
+		value:
+			| string
+			| null
+			| undefined
+			| {
+					value?: string;
+					title?: string;
+					batch_id?: string;
+					name?: string;
+					raw?: any;
+			  },
 	) => {
-		const batchId = (value || "").trim();
+		// Vuetify's v-combobox can emit either a raw string (free text typed by
+		// the user) or the entire item object when selected from the dropdown.
+		// Coerce both shapes down to a clean string before normalizing.
+		let raw: unknown = value;
+		if (raw && typeof raw === "object") {
+			const obj = raw as Record<string, any>;
+			raw =
+				obj.value ??
+				obj.batch_id ??
+				obj.name ??
+				obj.title ??
+				obj.raw?.batch_id ??
+				obj.raw?.name ??
+				"";
+		}
+		const batchId = String(raw ?? "").trim();
 		row.batch_no = batchId;
 		const match = row.batch_options.find(
 			(opt) => opt.batch_id === batchId || opt.name === batchId,

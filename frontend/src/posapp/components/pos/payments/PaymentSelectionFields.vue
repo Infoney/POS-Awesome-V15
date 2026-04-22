@@ -7,7 +7,7 @@
 					{{ salesPersons.length }} sales persons found
 				</p>
 				<p v-else class="mt-1 mb-1 text-subtitle-2 text-red">No sales persons found</p>
-				<v-select
+				<v-autocomplete
 					density="compact"
 					clearable
 					variant="solo"
@@ -20,9 +20,11 @@
 					class="sleek-field pos-themed-input"
 					:no-data-text="$__('Sales Person not found')"
 					hide-details
+					auto-select-first
+					:menu-props="{ maxHeight: 320 }"
 					:disabled="readonly"
 					@update:model-value="$emit('update:sales-person', $event)"
-				></v-select>
+				></v-autocomplete>
 			</v-col>
 		</v-row>
 		<!-- Print Format Selection -->
