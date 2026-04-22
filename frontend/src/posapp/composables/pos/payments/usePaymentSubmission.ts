@@ -28,6 +28,12 @@ export interface PaymentSubmissionOptions {
 	diff_payment?: ComputedRef<number>;
 	is_credit_sale?: Ref<boolean>;
 	loyaltyAmount?: Ref<number>;
+	/**
+	 * Optional shared event bus. When provided, the submission flow can
+	 * surface user-actionable dialogs (e.g. StockConflictDialog) instead of
+	 * raising opaque toasts when it detects a known recoverable failure.
+	 */
+	eventBus?: any;
 	stores?: {
 		toastStore?: any;
 		syncStore?: any;
@@ -58,6 +64,12 @@ export interface SubmissionCallbacks {
 	}) => void;
 }
 
+// Sentinel marker on errors that have already been surfaced to the user via
+// a custom dialog (e.g. StockConflictDialog). When the submit catch block
+// sees this flag it skips the generic "Error submitting invoice…" toast so
+// we don't double-notify.
+const STOCK_CONFLICT_HANDLED = Symbol("stock-conflict-handled");
+
 export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 	const {
 		invoiceDoc,
@@ -66,7 +78,112 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		invoiceType,
 		formatFloat,
 		stores,
+		eventBus,
 	} = options;
+
+	/**
+	 * Try to parse a server-side "negative stock" error message into the
+	 * structured shortage payload that StockConflictDialog expects. Returns
+	 * `null` when the message doesn't match the expected pattern.
+	 *
+	 * The backend normally yields something like:
+	 *   "Batch No <strong>2114011</strong> of an Item <strong>30879</strong>
+	 *    has negative stock of <strong>-1.0</strong> in the warehouse
+	 *    AL-KHANSA PHARMACY - PPC"
+	 * — but the `<strong>` wrappers, decimals, and warehouse spelling all
+	 * vary, so we use a tolerant regex against the stripped text.
+	 */
+	const parseNegativeStockMessage = (rawMessage: string): {
+		item_code: string;
+		batch_no: string;
+		warehouse: string;
+		available: number;
+		requested: number;
+		label: string;
+	} | null => {
+		if (!rawMessage) return null;
+		const stripped = String(rawMessage)
+			.replace(/<[^>]+>/g, "")
+			.replace(/\s+/g, " ")
+			.trim();
+		// Match both "negative stock" and "Negative Stock" with optional
+		// "the warehouse" / "warehouse" wording, and a trailing period.
+		const re =
+			/Batch\s+No\s+([^\s]+)\s+of\s+an?\s+Item\s+([^\s]+)\s+has\s+negative\s+stock\s+of\s+(-?[0-9]+(?:\.[0-9]+)?)\s+in\s+(?:the\s+)?warehouse\s+(.+?)(?:\.|$)/i;
+		const match = stripped.match(re);
+		if (!match) return null;
+		const batch_no = match[1];
+		const item_code = match[2];
+		const negativeQty = Math.abs(parseFloat(match[3]) || 0);
+		const warehouse = match[4].trim();
+
+		// Try to read the cart line so we can label the item nicely + show
+		// the actual requested quantity from this invoice rather than just
+		// the negative balance the server reports.
+		const doc = unref(invoiceDoc);
+		let label = item_code;
+		let requested = negativeQty;
+		if (doc && Array.isArray(doc.items)) {
+			const line = doc.items.find(
+				(l: any) =>
+					l && l.item_code === item_code && l.batch_no === batch_no,
+			);
+			if (line) {
+				label = line.item_name || item_code;
+				const qty = Number(
+					line.stock_qty !== undefined && line.stock_qty !== null
+						? line.stock_qty
+						: Number(line.qty || 0) *
+								Number(line.conversion_factor || 1),
+				);
+				if (Number.isFinite(qty) && qty > 0) {
+					requested = qty;
+				}
+			}
+		}
+
+		// Available is whatever was on hand BEFORE this invoice tried to
+		// consume it. The server's negative balance equals
+		// (available - requested), so available = requested - |negative|.
+		const available = Math.max(requested - negativeQty, 0);
+
+		return {
+			item_code,
+			batch_no,
+			warehouse,
+			available,
+			requested,
+			label,
+		};
+	};
+
+	const emitStockConflictDialog = (
+		shortages: Array<{
+			item_code: string;
+			batch_no: string;
+			warehouse: string;
+			available: number;
+			requested: number;
+			label: string;
+		}>,
+		extra: { onResolved?: () => void | Promise<void> } = {},
+	): boolean => {
+		if (!eventBus || typeof eventBus.emit !== "function") return false;
+		if (!shortages.length) return false;
+		const doc = unref(invoiceDoc);
+		const profile = unref(posProfile);
+		eventBus.emit("open_stock_conflict_dialog", {
+			shortages,
+			invoiceName: doc?.name || null,
+			invoiceDoctype:
+				doc?.doctype ||
+				(profile?.create_pos_invoice_instead_of_sales_invoice
+					? "POS Invoice"
+					: "Sales Invoice"),
+			onResolved: extra.onResolved,
+		});
+		return true;
+	};
 
 	const formatStockErrors = (errors: any[]) => {
 		const settings = unref(stockSettings) || {};
@@ -100,6 +217,15 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			: __("Stock is lower than requested:\n{0}", [msg]);
 	};
 
+	const humanizeNegativeStockMessage = (raw: string): string => {
+		const parsed = parseNegativeStockMessage(raw);
+		if (!parsed) return raw;
+		return __(
+			"Cannot complete sale: batch {0} of {1} is fully consumed by other pending invoices in {2}. Use the conflict resolver to free up stock and retry.",
+			[parsed.batch_no, parsed.label || parsed.item_code, parsed.warehouse],
+		);
+	};
+
 	const extractSubmissionErrorMessage = (exc: any): string => {
 		if (!exc) {
 			return __("Unknown error");
@@ -115,14 +241,26 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 						if (msgObj.errors && Array.isArray(msgObj.errors)) {
 							return formatStockErrors(msgObj.errors);
 						}
+						// `frappe.throw` wraps the visible string in a
+						// `{message: "..."}` envelope when the server side
+						// uses `frappe.throw(_("..."))` — unwrap it before
+						// pattern-matching for the negative-stock case.
+						if (typeof msgObj?.message === "string") {
+							return humanizeNegativeStockMessage(
+								frappe?.utils?.strip_html
+									? frappe.utils.strip_html(msgObj.message)
+									: msgObj.message,
+							);
+						}
 					} catch {
 						/* Not a JSON string */
 					}
 
 					if (typeof first === "string") {
-						return frappe?.utils?.strip_html
+						const cleaned = frappe?.utils?.strip_html
 							? frappe.utils.strip_html(first)
 							: first;
+						return humanizeNegativeStockMessage(cleaned);
 					}
 				}
 			} catch {
@@ -138,9 +276,57 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			} catch {
 				/* Not a JSON string */
 			}
-			return exc.message;
+			return humanizeNegativeStockMessage(exc.message);
 		}
 		return exc.toString ? exc.toString() : __("Unknown error");
+	};
+
+	/**
+	 * Look at every layer of an error envelope (server_messages, message,
+	 * exc, exception) for the negative-stock pattern and return a parsed
+	 * shortage record on the first hit. Returns `null` when no layer
+	 * matches.
+	 */
+	const detectNegativeStockShortage = (exc: any) => {
+		const candidates: string[] = [];
+		const pushIfString = (val: any) => {
+			if (typeof val === "string" && val.trim()) candidates.push(val);
+		};
+		if (!exc) return null;
+		pushIfString(exc.message);
+		pushIfString(exc.exc);
+		pushIfString(exc.exception);
+		pushIfString(exc.responseText);
+		if (exc._server_messages) {
+			try {
+				const parsed = JSON.parse(exc._server_messages);
+				if (Array.isArray(parsed)) {
+					parsed.forEach((entry) => {
+						if (typeof entry === "string") {
+							candidates.push(entry);
+							try {
+								const inner = JSON.parse(entry);
+								if (typeof inner?.message === "string") {
+									candidates.push(inner.message);
+								}
+							} catch {
+								/* not nested JSON */
+							}
+						}
+					});
+				}
+			} catch {
+				/* not JSON */
+			}
+		}
+		for (const cand of candidates) {
+			const cleaned = frappe?.utils?.strip_html
+				? frappe.utils.strip_html(cand)
+				: cand;
+			const parsed = parseNegativeStockMessage(cleaned);
+			if (parsed) return parsed;
+		}
+		return null;
 	};
 
 	const isTimestampMismatchError = (message: string): boolean => {
@@ -387,6 +573,27 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			return;
 		}
 
+		// Surface the structured conflict resolver dialog if we have an
+		// event bus to talk to. The dialog will offer the cashier explicit
+		// recovery options (delete blocking drafts, save current sale as
+		// draft, cancel sale) and re-trigger the submit on success.
+		const dialogShown = emitStockConflictDialog(shortages);
+
+		if (dialogShown) {
+			// Build a sentinel error so the surrounding submit flow can
+			// abort silently — the dialog has already taken over the UI.
+			const err: any = new Error(
+				__(
+					"Sale paused — please use the conflict resolver to free up batch stock.",
+				),
+			);
+			err[STOCK_CONFLICT_HANDLED] = true;
+			err.shortages = shortages;
+			throw err;
+		}
+
+		// Fallback: no event bus wired in (tests / SSR / legacy callers).
+		// Keep the original cleartext error so the user still sees something.
 		const detail = shortages
 			.map(
 				(s) =>
@@ -1062,7 +1269,31 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			return { success: true, message: r.message };
 		} catch (exc: any) {
 			console.error("Error submitting invoice:", exc);
+
+			// Pre-flight already opened the conflict resolver dialog and
+			// flagged the error — don't double-toast or noisy-log.
+			if (exc && exc[STOCK_CONFLICT_HANDLED]) {
+				if (onFinishNavigation) onFinishNavigation(false);
+				throw exc;
+			}
+
 			const errorMsg = extractSubmissionErrorMessage(exc);
+
+			// The pre-flight catches most cases, but the server can still
+			// raise the per-batch SLE running-balance error if another
+			// terminal commits between our availability check and the
+			// actual submit. Detect that here and re-route to the dialog.
+			const serverShortage = detectNegativeStockShortage(exc);
+			if (serverShortage) {
+				const dialogShown = emitStockConflictDialog([serverShortage]);
+				if (dialogShown) {
+					if (onFinishNavigation) onFinishNavigation(false);
+					const handled: any = new Error(errorMsg);
+					handled[STOCK_CONFLICT_HANDLED] = true;
+					handled.shortages = [serverShortage];
+					throw handled;
+				}
+			}
 
 			if (isTimestampMismatchError(errorMsg)) {
 				const submittedStatus = await fetchSubmittedDocstatus(doc);

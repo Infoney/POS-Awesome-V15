@@ -11,6 +11,7 @@
 		<NewAddress></NewAddress>
 		<MpesaPayments></MpesaPayments>
 		<Variants></Variants>
+		<StockConflictDialog></StockConflictDialog>
 		<OpeningDialog
 			v-if="dialog"
 			:dialog="dialog"
@@ -217,6 +218,7 @@
 import ItemsSelector from "../items/ItemsSelector.vue";
 import Invoice from "../Invoice.vue";
 import OpeningDialog from "../shift/OpeningDialog.vue";
+import StockConflictDialog from "./StockConflictDialog.vue";
 import Payments from "../Payments.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
@@ -707,6 +709,7 @@ export default {
 		Variants,
 		MpesaPayments,
 		SalesOrders,
+		StockConflictDialog,
 	},
 
 	methods: {

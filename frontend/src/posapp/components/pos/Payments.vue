@@ -647,6 +647,7 @@ const { ensureReturnPaymentsAreNegative, restoreReturnPayments, validateSubmissi
 	is_credit_sale: is_credit_sale,
 	loyaltyAmount: loyalty_amount,
 	formatFloat: (val, prec) => flt(val, prec),
+	eventBus: eventBus,
 	stores: {
 		toastStore,
 		syncStore,
@@ -1559,7 +1560,18 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 		console.error("Submission failed propagate:", error);
 		restorePaymentLinesAfterFailedSubmit();
 
-		if (error?.message) {
+		// Stock-conflict errors are already surfaced via the
+		// StockConflictDialog; skip the generic toast + error sound so
+		// we don't double-notify the cashier.
+		const handledByConflictDialog = Boolean(
+			error &&
+				(error.shortages ||
+					Object.getOwnPropertySymbols(error).some(
+						(s) => s.description === "stock-conflict-handled",
+					)),
+		);
+
+		if (error?.message && !handledByConflictDialog) {
 			toastStore.show({
 				title: error.message,
 				color: "error",

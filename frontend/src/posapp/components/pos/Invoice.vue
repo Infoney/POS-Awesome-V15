@@ -1054,6 +1054,19 @@ export default {
 					this.show_currency_dialog = true;
 				}
 			},
+			// StockConflictDialog secondary actions — let the cashier
+			// either drop the current cart or stash it as a draft so they
+			// can come back to it after freeing up the blocking stock.
+			cancel_current_sale: () => {
+				if (typeof this.cancel_invoice === "function") {
+					this.cancel_invoice();
+				}
+			},
+			save_current_invoice_as_draft: () => {
+				if (typeof this.save_and_clear_invoice === "function") {
+					this.save_and_clear_invoice();
+				}
+			},
 		};
 
 		Object.entries(this._busHandlers).forEach(([eventName, handler]) => {
