@@ -221,9 +221,30 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 	const humanizeNegativeStockMessage = (raw: string): string => {
 		const parsed = parseNegativeStockMessage(raw);
 		if (!parsed) return raw;
+		const requested = Number.isFinite(parsed.requested) ? parsed.requested : 0;
+		const available = Number.isFinite(parsed.available) ? parsed.available : 0;
+		// Two distinct human stories for the two distinct root causes:
+		//   1. available === 0  → batch ran dry between drawer fetch and submit
+		//      (another terminal sold it, or a draft is holding it).
+		//   2. available  >  0 → cart asked for more than the bin can supply
+		//      (UI cached an older qty, or a duplicate / promo line crept in).
+		// Both messages stay short, name the batch + warehouse, and suggest a
+		// concrete next step the cashier can take without leaving the screen.
+		if (available <= 0) {
+			return __(
+				"Out of stock — batch {0} of {1} has 0 units left in {2}. Another terminal or a pending draft already consumed it. Pick a different batch, or open the stock-conflict resolver to free this one up.",
+				[parsed.batch_no, parsed.label || parsed.item_code, parsed.warehouse],
+			);
+		}
 		return __(
-			"Cannot complete sale: batch {0} of {1} is fully consumed by other pending invoices in {2}. Use the conflict resolver to free up stock and retry.",
-			[parsed.batch_no, parsed.label || parsed.item_code, parsed.warehouse],
+			"Not enough stock — batch {0} of {1} has only {2} unit(s) in {3}, but the cart wants {4}. Reduce the line quantity or split across another batch.",
+			[
+				parsed.batch_no,
+				parsed.label || parsed.item_code,
+				String(available),
+				parsed.warehouse,
+				String(requested),
+			],
 		);
 	};
 
@@ -544,6 +565,60 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			const k = `${row.item_code}||${row.warehouse}||${row.batch_no || ""}`;
 			availabilityByKey.set(k, Number(row.available_qty || 0));
 		});
+
+		// Cross-check against live `Bin.actual_qty`. `get_available_qty` reads
+		// a derived view that can disagree with the bin number ERPNext's own
+		// per-batch SLE running-balance validator uses at submit time. When
+		// the two disagree we trust the lower value — that's the one the
+		// backend will use to decide whether the resulting balance goes
+		// negative. This catches the common "drawer says 1 / bin says 0"
+		// scenario that otherwise produces the cryptic "negative stock of -1"
+		// at submit. We deliberately skip batch-less item-only rows because
+		// the bulk item-level check above already handles those.
+		try {
+			const binChecks = await Promise.all(
+				requestPayload
+					.filter((r) => !!r.batch_no)
+					.map(async (r) => {
+						try {
+							const { message } = await frappe.call({
+								method: "frappe.client.get_value",
+								args: {
+									doctype: "Stock Ledger Entry",
+									filters: {
+										item_code: r.item_code,
+										warehouse: r.warehouse,
+										batch_no: r.batch_no,
+										is_cancelled: 0,
+									},
+									fieldname: ["qty_after_transaction"],
+									order_by: "posting_date desc, posting_time desc, creation desc",
+								},
+							});
+							const liveQty = Number(message?.qty_after_transaction);
+							if (!Number.isFinite(liveQty)) return null;
+							return {
+								key: `${r.item_code}||${r.warehouse}||${r.batch_no}`,
+								liveQty,
+							};
+						} catch {
+							return null;
+						}
+					}),
+			);
+			binChecks.forEach((row) => {
+				if (!row) return;
+				const existing = availabilityByKey.get(row.key);
+				if (existing === undefined || row.liveQty < existing) {
+					availabilityByKey.set(row.key, Math.max(row.liveQty, 0));
+				}
+			});
+		} catch (err) {
+			console.warn(
+				"[verifyBatchAvailabilityBeforeSubmit] live SLE cross-check failed; using get_available_qty result only",
+				err,
+			);
+		}
 
 		const shortages: {
 			item_code: string;
@@ -1286,6 +1361,44 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			// actual submit. Detect that here and re-route to the dialog.
 			const serverShortage = detectNegativeStockShortage(exc);
 			if (serverShortage) {
+				// Diagnostic: when this fires despite preflight passing,
+				// dump the offending cart line + any serial/batch bundle
+				// rows so we can see whether the cart actually sent the
+				// quantity we think it did. Helps catch SBB double-row bugs
+				// and hidden duplicates that bypass the UI's per-line view.
+				try {
+					const offendingLines = (doc?.items || []).filter(
+						(line: any) =>
+							line &&
+							line.item_code === serverShortage.item_code &&
+							line.batch_no === serverShortage.batch_no,
+					);
+					console.warn(
+						"[negative-stock] preflight passed but backend rejected — payload dump for batch",
+						serverShortage.batch_no,
+						"/",
+						serverShortage.warehouse,
+						{
+							expected: serverShortage,
+							offendingLines: offendingLines.map((l: any) => ({
+								item_code: l.item_code,
+								batch_no: l.batch_no,
+								warehouse: l.warehouse,
+								qty: l.qty,
+								stock_qty: l.stock_qty,
+								conversion_factor: l.conversion_factor,
+								serial_and_batch_bundle: l.serial_and_batch_bundle,
+								serial_no: l.serial_no,
+							})),
+							totalItems: doc?.items?.length ?? 0,
+						},
+					);
+				} catch (dumpErr) {
+					console.warn(
+						"[negative-stock] failed to assemble diagnostic dump",
+						dumpErr,
+					);
+				}
 				const dialogShown = emitStockConflictDialog([serverShortage]);
 				if (dialogShown) {
 					if (onFinishNavigation) onFinishNavigation(false);
