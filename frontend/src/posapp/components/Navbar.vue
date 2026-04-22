@@ -559,6 +559,15 @@ export default {
 		},
 		updateNavigationItems() {
 			const items = [...this.baseItems];
+			if (this.posProfile?.posa_allow_purchase_receipt) {
+				const poIdx = items.findIndex((entry) => entry.to === "/orders");
+				const insertAt = poIdx >= 0 ? poIdx + 1 : items.length;
+				items.splice(insertAt, 0, {
+					text: "Purchase Receipt",
+					icon: "mdi-package-variant-closed-plus",
+					to: "/purchase-receipt",
+				});
+			}
 			if (this.posProfile?.posa_use_gift_cards) {
 				items.splice(2, 0, {
 					text: "Gift Cards",

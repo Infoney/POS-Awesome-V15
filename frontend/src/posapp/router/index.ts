@@ -26,6 +26,16 @@ const routes = [
 		meta: { title: "Orders", layout: "default", loadingMessage: "Loading orders..." },
 	},
 	{
+		path: "/purchase-receipt",
+		component: () =>
+			import("../components/pos/purchase/PurchaseReceipts.vue"),
+		meta: {
+			title: "Purchase Receipt",
+			layout: "default",
+			loadingMessage: "Loading purchase receipt...",
+		},
+	},
+	{
 		path: "/payments",
 		component: () => import("../components/pos/shell/PayView.vue"),
 		meta: { title: "Payments", layout: "default", loadingMessage: "Loading payments..." },
