@@ -292,6 +292,26 @@ const props = withDefaults(defineProps<Props>(), {
 	hideQtyDecimals: false,
 });
 
+// Emitted whenever the server-side dashboard payload arrives. The drawer
+// host listens to this so it can reconcile the cart-line's cached stock
+// fields (which can drift between sessions / offline runs) with the
+// freshly fetched bin + batch numbers — preventing the "panel says 0
+// in-stock but Available Batches says 1" mismatch that ends up surfacing
+// later as a backend "negative stock" error at submit time.
+const emit = defineEmits<{
+	"dashboard-loaded": [
+		_payload: {
+			itemCode: string;
+			profileWarehouse: string;
+			profileStock: number;
+			totalStock: number;
+			stockByWarehouse: WarehouseRow[];
+			batches: BatchRow[];
+			hasBatchNo: boolean;
+		},
+	];
+}>();
+
 const __ = (window as any).__ || ((s: string, args: any[] = []) => {
 	if (!Array.isArray(args) || !args.length) return s;
 	return s.replace(/\{(\d+)\}/g, (_match, idx) => String(args[Number(idx)] ?? ""));
@@ -475,6 +495,39 @@ const fetchDashboard = async () => {
 		const payload = resp?.message;
 		if (payload && typeof payload === "object") {
 			dashboard.value = payload as DashboardPayload;
+
+			// Notify the drawer host so it can patch the cart line's stale
+			// availability snapshot with the fresh server numbers.
+			try {
+				const profileWarehouse =
+					props.posProfile?.warehouse ||
+					props.posProfile?.posa_default_warehouse ||
+					"";
+				const totalsPayload = (dashboard.value?.totals || {
+					total_stock: 0,
+					profile_stock: 0,
+				}) as Totals;
+				emit("dashboard-loaded", {
+					itemCode: props.itemCode,
+					profileWarehouse: String(profileWarehouse || ""),
+					profileStock: Number(totalsPayload.profile_stock || 0),
+					totalStock: Number(totalsPayload.total_stock || 0),
+					stockByWarehouse: Array.isArray(
+						dashboard.value?.stock_by_warehouse,
+					)
+						? dashboard.value!.stock_by_warehouse
+						: [],
+					batches: Array.isArray(dashboard.value?.batches)
+						? dashboard.value!.batches
+						: [],
+					hasBatchNo: Boolean(dashboard.value?.hero?.has_batch_no),
+				});
+			} catch (emitErr) {
+				console.warn(
+					"[ItemDetailsPanel] dashboard-loaded emit failed",
+					emitErr,
+				);
+			}
 		} else {
 			error.value = __("No data returned for this item.");
 		}

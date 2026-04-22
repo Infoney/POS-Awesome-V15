@@ -255,6 +255,152 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		}
 	};
 
+	/**
+	 * Refresh batch availability against the live `Bin` numbers right before
+	 * we ship the invoice to the backend. The backend's per-batch SLE
+	 * running-balance validator is the LAST check in the chain; if our
+	 * cart-cached `actual_batch_qty` has drifted (item sat in cart while
+	 * another terminal sold the same batch, IndexedDB went stale, etc.),
+	 * the user otherwise sees the cryptic
+	 * "Batch X of Item Y has negative stock of -1.0 in warehouse Z"
+	 * error. By calling `get_bulk_stock_availability` here and comparing
+	 * against the requested `stock_qty`, we surface a clear, actionable
+	 * message ("Insufficient stock for batch <X>: 0 available, 1 requested")
+	 * before the document ever hits the negative-stock validator.
+	 *
+	 * Skipped entirely when there are no batched items in the cart, or
+	 * when running offline.
+	 */
+	const verifyBatchAvailabilityBeforeSubmit = async (doc: any) => {
+		if (!doc || !Array.isArray(doc.items) || !doc.items.length) {
+			return;
+		}
+		// Only batched lines can trigger the per-batch SLE validator. Bulk
+		// item-level shortage is already covered by the existing server-side
+		// `_collect_stock_errors` pass.
+		const batchedLines = doc.items.filter(
+			(line: any) =>
+				line && line.item_code && line.batch_no && line.warehouse,
+		);
+		if (!batchedLines.length) {
+			return;
+		}
+		// Aggregate requested stock_qty per (item_code, warehouse, batch_no)
+		// because a cart can legally split one batch across multiple lines
+		// (e.g. with different pricing rules applied).
+		const requestedByKey = new Map<
+			string,
+			{
+				item_code: string;
+				warehouse: string;
+				batch_no: string;
+				label: string;
+				total: number;
+			}
+		>();
+		batchedLines.forEach((line: any) => {
+			const key = `${line.item_code}||${line.warehouse}||${line.batch_no}`;
+			const requested = Number(
+				line.stock_qty !== undefined && line.stock_qty !== null
+					? line.stock_qty
+					: Number(line.qty || 0) *
+							Number(line.conversion_factor || 1),
+			);
+			if (!Number.isFinite(requested) || requested <= 0) return;
+			const existing = requestedByKey.get(key);
+			if (existing) {
+				existing.total += requested;
+			} else {
+				requestedByKey.set(key, {
+					item_code: line.item_code,
+					warehouse: line.warehouse,
+					batch_no: line.batch_no,
+					label: line.item_name || line.item_code,
+					total: requested,
+				});
+			}
+		});
+
+		if (!requestedByKey.size) {
+			return;
+		}
+
+		// Use `get_available_qty` (returns list[dict] — JSON-safe) instead
+		// of `get_bulk_stock_availability` (Python tuple-keyed dict) so the
+		// transport doesn't mangle keys.
+		const requestPayload = Array.from(requestedByKey.values()).map((r) => ({
+			item_code: r.item_code,
+			warehouse: r.warehouse,
+			batch_no: r.batch_no,
+		}));
+		let availabilityList: any[] = [];
+		try {
+			const resp = await frappe.call({
+				method:
+					"posawesome.posawesome.api.item_processing.stock.get_available_qty",
+				args: { items: requestPayload },
+			});
+			availabilityList = Array.isArray(resp?.message) ? resp.message : [];
+		} catch (err) {
+			// Don't block submission on a transient lookup failure — the
+			// backend will still validate. Just log and continue.
+			console.warn(
+				"[verifyBatchAvailabilityBeforeSubmit] availability lookup failed; falling back to backend validation",
+				err,
+			);
+			return;
+		}
+
+		const availabilityByKey = new Map<string, number>();
+		availabilityList.forEach((row: any) => {
+			if (!row || !row.item_code || !row.warehouse) return;
+			const k = `${row.item_code}||${row.warehouse}||${row.batch_no || ""}`;
+			availabilityByKey.set(k, Number(row.available_qty || 0));
+		});
+
+		const shortages: {
+			item_code: string;
+			batch_no: string;
+			warehouse: string;
+			available: number;
+			requested: number;
+			label: string;
+		}[] = [];
+		requestedByKey.forEach((req, key) => {
+			const available = availabilityByKey.get(key);
+			if (available === undefined) {
+				return; // Couldn't match — let backend validate.
+			}
+			if (req.total > available + 0.0001) {
+				shortages.push({
+					item_code: req.item_code,
+					batch_no: req.batch_no,
+					warehouse: req.warehouse,
+					available,
+					requested: req.total,
+					label: req.label,
+				});
+			}
+		});
+
+		if (!shortages.length) {
+			return;
+		}
+
+		const detail = shortages
+			.map(
+				(s) =>
+					`${s.label} — ${__("Batch")} ${s.batch_no} @ ${s.warehouse}: ${__("available {0}, requested {1}", [s.available, s.requested])}`,
+			)
+			.join("\n");
+		throw new Error(
+			__(
+				"Cannot submit invoice — batch stock has changed. Please reload availability:\n{0}",
+				[detail],
+			),
+		);
+	};
+
 	const validateSubmission = async (payment_received = false) => {
 		const doc = unref(invoiceDoc);
 		const profile = unref(posProfile);
@@ -711,6 +857,19 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 
 		// Online Submission
 		try {
+			// Pre-flight: refresh per-batch availability against `Bin` so we
+			// surface the real "negative stock" failure with a clear message
+			// before the server's SLE running-balance validator throws.
+			// Skipped for returns (which legally restock batches) and for
+			// Order/Quotation flows (no stock movement).
+			if (
+				!doc.is_return &&
+				!["Order", "Quotation"].includes(type) &&
+				!isOffline()
+			) {
+				await verifyBatchAvailabilityBeforeSubmit(doc);
+			}
+
 			const submissionDoc = buildSubmissionInvoiceDoc(doc);
 			const message = await invoiceService.submitInvoice(
 				data,

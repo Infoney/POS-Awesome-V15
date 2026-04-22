@@ -114,6 +114,7 @@
 							:item-code="drawerItem.item_code"
 							:pos-profile="pos_profile"
 							:hide-qty-decimals="hide_qty_decimals"
+							@dashboard-loaded="handleDashboardLoaded"
 						>
 							<template #after-stats>
 								<details class="posa-details-drawer__edit" open>
@@ -387,6 +388,82 @@ watch(items, (next) => {
 		drawerItem.value = refreshed;
 	}
 });
+
+/**
+ * Reconcile the cart line's cached stock snapshot with the freshly fetched
+ * dashboard payload. Without this, `_base_actual_qty` / `actual_batch_qty`
+ * stick to whatever the items selector primed them with at add-to-cart
+ * time — which is often 0 for items the cashier rebuilt the cart against
+ * after a bin replenishment. The drawer then ends up showing
+ * "IN STOCK 0 / Out of Stock" while "Available Batches" simultaneously
+ * shows 1 unit, and the customer's invoice eventually fails at submit
+ * with the "negative stock of -X" backend validator.
+ */
+const handleDashboardLoaded = (payload: {
+	itemCode: string;
+	profileWarehouse: string;
+	profileStock: number;
+	totalStock: number;
+	stockByWarehouse: { warehouse: string; actual_qty: number }[];
+	batches: {
+		batch_no: string;
+		warehouse: string;
+		qty: number;
+		expiry_date: string;
+		is_expired: boolean;
+	}[];
+	hasBatchNo: boolean;
+}) => {
+	if (!payload || !payload.itemCode) return;
+
+	// Patch every cart row that points at this item — multiple lines can
+	// reference the same item_code (different batches, splits, etc.).
+	const matchingRows = items.value.filter(
+		(row: any) => row?.item_code === payload.itemCode,
+	);
+	if (!matchingRows.length) return;
+
+	// Build a quick lookup of freshly-known batch availability so we can
+	// patch each line's `batch_no_data` rows in O(1).
+	const freshBatchQty = new Map<string, number>();
+	(payload.batches || []).forEach((b) => {
+		if (!b?.batch_no) return;
+		freshBatchQty.set(String(b.batch_no), Number(b.qty || 0));
+	});
+
+	matchingRows.forEach((row: any) => {
+		// Profile-warehouse stock — this drives the "In Stock" tile and the
+		// `addItem` quantity gate. Use the dashboard's `profile_stock` first
+		// because that's the same number ERPNext will validate against.
+		const fresh = Number(payload.profileStock || 0);
+		row._base_actual_qty = fresh;
+		row.actual_qty = fresh;
+
+		// Patch batch availability where we have fresh numbers; leave
+		// untouched batches alone (they may be valid in another warehouse).
+		if (Array.isArray(row.batch_no_data) && freshBatchQty.size) {
+			row.batch_no_data = row.batch_no_data.map((batch: any) => {
+				if (!batch?.batch_no) return batch;
+				const freshQty = freshBatchQty.get(String(batch.batch_no));
+				if (freshQty === undefined) return batch;
+				return {
+					...batch,
+					available_qty: freshQty,
+					batch_qty: freshQty,
+					original_batch_qty: freshQty,
+				};
+			});
+		}
+
+		// Sync the currently-selected batch's display qty too.
+		if (row.batch_no) {
+			const selectedFresh = freshBatchQty.get(String(row.batch_no));
+			if (selectedFresh !== undefined) {
+				row.actual_batch_qty = selectedFresh;
+			}
+		}
+	});
+};
 
 const handleQtyChange = (item: any, event: any) => {
 	const newQty = parseFloat(event.target.value) || 0;
