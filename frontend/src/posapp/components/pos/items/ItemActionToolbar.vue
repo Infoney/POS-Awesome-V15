@@ -382,6 +382,52 @@ const onBrandsChange = (next) => {
 	height: 36px;
 	border: 1px solid var(--pos-border-light);
 	border-radius: var(--pos-radius-sm);
+	overflow: hidden;
+}
+
+/* Default Vuetify v-btn-toggle paints hover/active as a near-black overlay
+ * which clashes with the CC theme. Replace with the soft purple→pink wash
+ * used elsewhere so the toggle reads as part of the same surface family. */
+.view-toggle-btn :deep(.v-btn) {
+	background: transparent !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	transition:
+		background 0.18s ease,
+		color 0.18s ease !important;
+}
+
+.view-toggle-btn :deep(.v-btn .v-btn__overlay),
+.view-toggle-btn :deep(.v-btn .v-btn__underlay) {
+	background: transparent !important;
+	opacity: 0 !important;
+}
+
+.view-toggle-btn :deep(.v-btn:hover) {
+	background: linear-gradient(
+		135deg,
+		rgba(var(--cc-purple-rgb, 161, 77, 203), 0.18),
+		rgba(var(--cc-pink-rgb, 226, 54, 112), 0.18)
+	) !important;
+	color: #ffffff !important;
+}
+
+.view-toggle-btn :deep(.v-btn.v-btn--active),
+.view-toggle-btn :deep(.v-btn[aria-pressed="true"]) {
+	background: linear-gradient(
+		135deg,
+		rgba(var(--cc-purple-rgb, 161, 77, 203), 0.85),
+		rgba(var(--cc-pink-rgb, 226, 54, 112), 0.85)
+	) !important;
+	color: #ffffff !important;
+}
+
+.view-toggle-btn :deep(.v-btn.v-btn--active:hover),
+.view-toggle-btn :deep(.v-btn[aria-pressed="true"]:hover) {
+	background: linear-gradient(
+		135deg,
+		rgba(var(--cc-purple-rgb, 161, 77, 203), 0.95),
+		rgba(var(--cc-pink-rgb, 226, 54, 112), 0.95)
+	) !important;
 }
 
 .dynamic-padding {
