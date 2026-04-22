@@ -436,26 +436,59 @@
 	color: var(--cc-blue);
 }
 
-/* ─── 5. CC-flavored scrollbar (dark mode only) ───────────────────────── */
-[data-theme="dark"] ::-webkit-scrollbar,
-[data-theme-mode="dark"] ::-webkit-scrollbar,
-.v-theme--dark ::-webkit-scrollbar {
-	width: 5px;
-	height: 5px;
+/* ─── 5. CC-flavored scrollbar — universal, matches Command Center ─────
+ * One slim, gradient-tipped scrollbar everywhere. Wins over any per-
+ * component overrides via `!important` so the items grid, payment dialog,
+ * parked-orders rail, and every other scroll surface look identical.
+ *
+ * Opt out per-element by setting `--cc-scrollbar-disable: 1` on a parent
+ * (e.g. for natively-skinned controls that shouldn't be retouched).
+ * --------------------------------------------------------------------- */
+* {
+	scrollbar-width: thin !important;
+	scrollbar-color: var(--cc-border-hover) transparent !important;
 }
-[data-theme="dark"] ::-webkit-scrollbar-track,
-[data-theme-mode="dark"] ::-webkit-scrollbar-track,
-.v-theme--dark ::-webkit-scrollbar-track {
-	background: var(--cc-bg-sec);
+
+::-webkit-scrollbar {
+	width: 6px !important;
+	height: 6px !important;
 }
-[data-theme="dark"] ::-webkit-scrollbar-thumb,
-[data-theme-mode="dark"] ::-webkit-scrollbar-thumb,
-.v-theme--dark ::-webkit-scrollbar-thumb {
-	background: var(--cc-border);
-	border-radius: 3px;
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+	background: transparent !important;
 }
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover,
-[data-theme-mode="dark"] ::-webkit-scrollbar-thumb:hover,
-.v-theme--dark ::-webkit-scrollbar-thumb:hover {
-	background: var(--cc-border-hover);
+
+::-webkit-scrollbar-thumb {
+	background: linear-gradient(
+		180deg,
+		rgba(var(--cc-purple-rgb), 0.55),
+		rgba(var(--cc-pink-rgb), 0.45)
+	) !important;
+	border-radius: 6px !important;
+	border: 1px solid transparent !important;
+	background-clip: padding-box !important;
+	transition: background 0.2s ease !important;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: linear-gradient(
+		180deg,
+		rgba(var(--cc-purple-rgb), 0.85),
+		rgba(var(--cc-pink-rgb), 0.7)
+	) !important;
+}
+
+/* Light theme uses softer tones so the gradient stays visible without screaming. */
+:root[data-theme="light"] *,
+[data-theme="light"] * {
+	scrollbar-color: rgba(15, 23, 42, 0.25) transparent !important;
+}
+:root[data-theme="light"] ::-webkit-scrollbar-thumb,
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+	background: linear-gradient(
+		180deg,
+		rgba(var(--cc-purple-rgb), 0.45),
+		rgba(var(--cc-pink-rgb), 0.35)
+	) !important;
 }

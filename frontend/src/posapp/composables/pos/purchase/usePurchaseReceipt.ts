@@ -9,7 +9,6 @@ export interface BatchOption {
 	name: string;
 	batch_id: string;
 	expiry_date: string | null;
-	manufacturing_date: string | null;
 	supplier: string | null;
 	is_expired: boolean;
 }
@@ -33,7 +32,6 @@ export interface PurchaseReceiptItem {
 	batch_no: string;
 	batch_is_new: boolean;
 	batch_expiry_date: string | null;
-	batch_manufacturing_date: string | null;
 	batch_options: BatchOption[];
 	batch_options_loaded: boolean;
 	batch_options_loading: boolean;
@@ -214,7 +212,6 @@ export function usePurchaseReceipt(options: {
 			batch_no: "",
 			batch_is_new: false,
 			batch_expiry_date: null,
-			batch_manufacturing_date: null,
 			batch_options: [],
 			batch_options_loaded: false,
 			batch_options_loading: false,
@@ -291,12 +288,10 @@ export function usePurchaseReceipt(options: {
 		if (match) {
 			row.batch_is_new = false;
 			row.batch_expiry_date = match.expiry_date || null;
-			row.batch_manufacturing_date = match.manufacturing_date || null;
 		} else {
 			row.batch_is_new = !!batchId;
 			if (!batchId) {
 				row.batch_expiry_date = null;
-				row.batch_manufacturing_date = null;
 			}
 		}
 	};
@@ -386,9 +381,6 @@ export function usePurchaseReceipt(options: {
 					batch_no: row.has_batch_no ? row.batch_no : undefined,
 					batch_expiry_date: row.has_batch_no
 						? row.batch_expiry_date
-						: undefined,
-					batch_manufacturing_date: row.has_batch_no
-						? row.batch_manufacturing_date
 						: undefined,
 					serial_no: row.has_serial_no ? row.serial_no : undefined,
 				})),

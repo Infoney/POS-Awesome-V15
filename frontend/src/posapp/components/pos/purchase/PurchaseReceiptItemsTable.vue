@@ -105,20 +105,17 @@
 					</template>
 				</v-combobox>
 				<div class="pr-batch-cell__dates" @click.stop>
-					<input
-						type="date"
-						class="pr-mini-date"
-						:value="item.batch_expiry_date || ''"
-						@change="(e) => $emit('set-batch-expiry', { item, value: ($event.target).value })"
+					<VueDatePicker
+						:model-value="item.batch_expiry_date || null"
+						@update:model-value="(val) => onExpiryChange(item, val)"
+						format="dd-MM-yyyy"
+						model-type="yyyy-MM-dd"
+						:enable-time-picker="false"
+						auto-apply
+						:teleport="true"
 						:placeholder="__('Expiry')"
+						input-class-name="pr-mini-date pr-mini-date--picker"
 						:title="__('Batch expiry date (required for new batches)')"
-					/>
-					<input
-						type="date"
-						class="pr-mini-date"
-						:value="item.batch_manufacturing_date || ''"
-						@change="(e) => $emit('set-batch-mfg', { item, value: ($event.target).value })"
-						:title="__('Manufacturing date (optional)')"
 					/>
 				</div>
 				<div
@@ -287,11 +284,14 @@ export default {
 		"update-serial",
 		"set-batch",
 		"set-batch-expiry",
-		"set-batch-mfg",
 		"ensure-batches",
 		"remove-item",
 	],
 	methods: {
+		onExpiryChange(item, value) {
+			// VueDatePicker emits null when cleared and a yyyy-MM-dd string when set.
+			this.$emit("set-batch-expiry", { item, value: value || null });
+		},
 		lineAmount(item) {
 			const qty = Number(item.qty) || 0;
 			const rate = Number(item.rate) || 0;

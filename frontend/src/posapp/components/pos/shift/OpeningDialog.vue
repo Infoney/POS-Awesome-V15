@@ -770,21 +770,8 @@ onMounted(() => {
 	max-height: 220px;
 	overflow-y: auto;
 	padding-right: 2px;
-	scrollbar-width: thin;
-	scrollbar-color: rgba(139, 92, 246, 0.4) transparent;
-}
-
-.pos-profile-picker__list::-webkit-scrollbar {
-	width: 8px;
-}
-
-.pos-profile-picker__list::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-.pos-profile-picker__list::-webkit-scrollbar-thumb {
-	background-color: rgba(139, 92, 246, 0.4);
-	border-radius: 4px;
+	/* Scrollbar inherits the global Command Center skin
+	 * (see styles/command-center.css). */
 }
 
 .pos-profile-picker__option {

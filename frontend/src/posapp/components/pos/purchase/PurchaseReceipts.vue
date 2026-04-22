@@ -125,7 +125,6 @@
 							@update-serial="({ item, value }) => onUpdateSerial(item, value)"
 							@set-batch="({ item, value }) => setBatch(item, value)"
 							@set-batch-expiry="({ item, value }) => onSetBatchExpiry(item, value)"
-							@set-batch-mfg="({ item, value }) => onSetBatchMfg(item, value)"
 							@ensure-batches="(item) => loadBatchOptions(item)"
 							@remove-item="removeItem"
 						/>
@@ -188,14 +187,13 @@
 import format, { formatUtils } from "../../../format";
 import { useUIStore } from "../../../stores/uiStore.js";
 import { getOpeningStorage } from "../../../../offline/index";
-import { useItemsStore } from "../../../stores/itemsStore";
 import { useToastStore } from "../../../stores/toastStore";
 import { usePurchaseReceipt } from "../../../composables/pos/purchase/usePurchaseReceipt";
 import ItemsSelector from "../items/ItemsSelector.vue";
 import SupplierDialog from "../dialogs/purchase/SupplierDialog.vue";
 import PurchaseReceiptItemsTable from "./PurchaseReceiptItemsTable.vue";
 import PurchaseReceiptConfirmDialog from "./PurchaseReceiptConfirmDialog.vue";
-import { ref, watch, onMounted, onBeforeUnmount, inject } from "vue";
+import { ref, watch, onMounted } from "vue";
 
 export default {
 	mixins: [format],
@@ -208,8 +206,6 @@ export default {
 	setup() {
 		const uiStore = useUIStore();
 		const toastStore = useToastStore();
-		const itemsStore = useItemsStore();
-		const eventBus = inject("eventBus");
 
 		const pos_profile = ref({});
 
@@ -340,10 +336,6 @@ export default {
 			row.batch_expiry_date = value || null;
 		};
 
-		const onSetBatchMfg = (row, value) => {
-			row.batch_manufacturing_date = value || null;
-		};
-
 		const openConfirmDialog = () => {
 			if (!supplier.value) {
 				errorMessage.value = __("Supplier is required.");
@@ -410,28 +402,30 @@ export default {
 				{ immediate: true },
 			);
 
+			// Items are not linked to suppliers — switching suppliers should NOT
+			// reload the items grid or repaint last-buying rates. We just pull
+			// supplier currency + buying price list so per-row rate lookups can
+			// resolve a buying price when the user adds an item.
 			watch(supplier, async (val) => {
 				if (val) {
-					const info = await fetchSupplierInfo(val);
-					if (info?.buying_price_list) {
-						await itemsStore.updatePriceList(info.buying_price_list);
-					}
-					eventBus?.emit?.("update_buying_price_list", {
-						price_list: info?.buying_price_list || null,
-						supplier: val,
-					});
+					await fetchSupplierInfo(val);
 				} else {
 					supplierCurrency.value = pos_profile.value.currency || null;
-					eventBus?.emit?.("update_buying_price_list", null);
+					supplierPriceList.value = null;
+					priceListCurrency.value = null;
 				}
 			});
 
+			// Seed a default buying price list (used as fallback when no supplier
+			// is selected yet). This is a single light call — no items reload.
 			try {
 				const { message } = await frappe.call({
 					method:
 						"posawesome.posawesome.api.purchase_orders.get_buying_price_list",
 				});
-				if (message) await itemsStore.updatePriceList(message);
+				if (message && !supplierPriceList.value) {
+					supplierPriceList.value = message;
+				}
 			} catch (e) {
 				console.error("Failed to load buying price list", e);
 			}
@@ -442,13 +436,6 @@ export default {
 				loadSupplierGroups(),
 				loadWarehouses(),
 			]);
-		});
-
-		onBeforeUnmount(() => {
-			eventBus?.emit?.("update_buying_price_list", null);
-			if (pos_profile.value?.selling_price_list) {
-				itemsStore.updatePriceList(pos_profile.value.selling_price_list);
-			}
 		});
 
 		return {
@@ -487,7 +474,6 @@ export default {
 			handleSupplierCreated,
 			onUpdateSerial,
 			onSetBatchExpiry,
-			onSetBatchMfg,
 			openConfirmDialog,
 			handleConfirmedSubmit,
 			toastStore,

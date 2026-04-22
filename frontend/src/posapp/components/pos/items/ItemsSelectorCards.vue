@@ -158,8 +158,8 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 	padding: 12px;
 	height: calc(100% - 80px);
 	overflow-y: auto;
-	scrollbar-width: thin;
-	scrollbar-color: rgba(var(--v-theme-on-surface), 0.2) transparent;
+	/* Scrollbar inherits the global Command Center skin defined in
+	 * styles/command-center.css — no per-grid override here. */
 	contain: layout style;
 	will-change: scroll-position;
 	transform: translate3d(0, 0, 0);
@@ -178,19 +178,6 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 
 .virtual-scroller .vue-recycle-scroller__item-wrapper {
 	display: contents;
-}
-
-.items-card-grid::-webkit-scrollbar {
-	width: 8px;
-}
-
-.items-card-grid::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-.items-card-grid::-webkit-scrollbar-thumb {
-	background-color: rgba(var(--v-theme-on-surface), 0.2);
-	border-radius: 4px;
 }
 
 .virtual-scroller :deep(.items-virtual-list) {

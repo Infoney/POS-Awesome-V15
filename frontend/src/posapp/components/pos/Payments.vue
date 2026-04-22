@@ -220,7 +220,6 @@
 				</section>
 			</div>
 		</div>
-		</v-card>
 
 		<div :class="['payment-footer', { 'payment-footer--dialog': dialogMode }]">
 			<PaymentActionButtons
@@ -234,6 +233,7 @@
 				@cancel="back_to_invoice"
 			/>
 		</div>
+		</v-card>
 		<!-- Dialogs Section (Custom Days, Phone Payment) -->
 		<PaymentDialogs
 			:custom-days-dialog="custom_days_dialog"
@@ -1984,6 +1984,11 @@ onBeforeUnmount(() => {
 
 .payment-card {
 	padding: var(--pos-space-2);
+	/* Footer is now a child of this card; flex-column lets the scroll area
+	 * expand and the action footer sit naturally pinned to the bottom rim. */
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 .payment-card--dialog {
@@ -2139,17 +2144,31 @@ onBeforeUnmount(() => {
 	border-radius: var(--pos-radius-sm);
 }
 
+/* Footer lives INSIDE the .payment-card now, so it reads as part of the
+ * popup chrome rather than a floating bar that escapes the card's edges.
+ * Sticks to the bottom of the card while scrolling the body, with a hairline
+ * divider + soft fade so it sits flush against the card rim. */
 .payment-footer {
 	flex: 0 0 auto;
 	position: sticky;
 	bottom: 0;
 	z-index: 8;
-	padding-top: 8px;
-	background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--pos-surface) 30%);
+	padding: 12px 18px 14px;
+	margin-top: 4px;
+	background: linear-gradient(
+		180deg,
+		rgba(15, 19, 28, 0) 0%,
+		var(--pos-card-bg, var(--pos-surface)) 35%,
+		var(--pos-card-bg, var(--pos-surface)) 100%
+	);
+	border-top: 1px solid var(--pos-border, rgba(255, 255, 255, 0.06));
+	border-bottom-left-radius: inherit;
+	border-bottom-right-radius: inherit;
 }
 
 .payment-footer--dialog {
 	margin-top: 0;
+	padding: 10px 14px 12px;
 }
 
 :deep(.payment-footer--dialog .cards) {

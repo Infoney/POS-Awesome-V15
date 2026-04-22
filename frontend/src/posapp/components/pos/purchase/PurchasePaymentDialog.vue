@@ -571,22 +571,6 @@ async function fetchPrintFormats() {
 	gap: 8px;
 }
 
-/* Dialog specific adjustments */
-.v-dialog .v-card-text {
-	scrollbar-width: thin;
-	scrollbar-color: var(--v-theme-primary) transparent;
-}
-
-.v-dialog .v-card-text::-webkit-scrollbar {
-	width: 6px;
-}
-
-.v-dialog .v-card-text::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-.v-dialog .v-card-text::-webkit-scrollbar-thumb {
-	background-color: rgb(var(--v-theme-primary));
-	border-radius: 3px;
-}
+/* Dialog scrollbars inherit the global Command Center skin
+ * (see styles/command-center.css). */
 </style>
