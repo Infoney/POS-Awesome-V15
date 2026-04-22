@@ -51,7 +51,7 @@ export async function update_items_details(context: any, items: any[]) {
 				item.serial_no_data = updated_item.serial_no_data;
 
 				if (
-					item.has_batch_no &&
+					Number(item.has_batch_no ?? 0) > 0 &&
 					context.pos_profile?.posa_auto_set_batch &&
 					!item.batch_no &&
 					Array.isArray(item.batch_no_data) &&
@@ -360,7 +360,7 @@ export function _applyItemDetailPayload(
 	}
 
 	if (
-		item.has_batch_no &&
+		Number(item.has_batch_no ?? 0) > 0 &&
 		context.pos_profile.posa_auto_set_batch &&
 		!item.batch_no &&
 		Array.isArray(data.batch_no_data) &&

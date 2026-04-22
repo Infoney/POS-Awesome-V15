@@ -110,7 +110,7 @@
 			</div>
 		</v-row>
 		<div v-if="showBottomDock" ref="mobileDock" class="mobile-pos-stack">
-			<div class="mobile-sale-dock">
+			<div class="mobile-sale-dock" :class="{ 'mobile-sale-dock--active': hasActiveSaleValue }">
 				<div class="mobile-sale-dock__copy">
 					<span class="mobile-sale-dock__eyebrow">{{ __("Active sale") }}</span>
 					<strong class="mobile-sale-dock__amount">{{ formattedCartTotal }}</strong>
@@ -129,9 +129,9 @@
 						@blur="handleAdditionalDiscountBlur"
 						:label="__('Additional Discount')"
 						prepend-inner-icon="mdi-cash-minus"
-						variant="solo"
+						variant="outlined"
 						density="compact"
-						color="warning"
+						color="primary"
 						:prefix="getCurrencySymbol(posProfile?.currency)"
 						:disabled="
 							!posProfile?.posa_allow_user_to_edit_additional_discount ||
@@ -150,9 +150,9 @@
 						:label="__('Additional Discount %')"
 						suffix="%"
 						prepend-inner-icon="mdi-percent"
-						variant="solo"
+						variant="outlined"
 						density="compact"
-						color="warning"
+						color="primary"
 						:disabled="
 							!posProfile?.posa_allow_user_to_edit_additional_discount ||
 							!!discountPercentageOfferName
@@ -308,11 +308,16 @@ export default {
 		};
 		const formattedCartTotal = computed(() => {
 			const symbol = getCurrencySymbol(activeCurrency.value);
-			return `${symbol}${formatCompactNumber(invoiceTotal.value)}`.trim();
+			return `${symbol} ${formatCompactNumber(invoiceTotal.value)}`.trim();
 		});
 		const formattedDiscountTotal = computed(() => {
 			const symbol = getCurrencySymbol(activeCurrency.value);
-			return `${symbol}${formatCompactNumber(discountTotal.value || 0)} ${__("discount")}`.trim();
+			return `${symbol} ${formatCompactNumber(discountTotal.value || 0)} ${__("discount")}`.trim();
+		});
+		// Mirrors the hero-panel glow state on the compact mobile dock.
+		const hasActiveSaleValue = computed(() => {
+			const n = Number(invoiceTotal.value);
+			return Number.isFinite(n) && Math.abs(n) > 0;
 		});
 		const cartMetaLabel = computed(() => {
 			const qty = formatCompactNumber(totalQty.value || 0);
@@ -633,6 +638,7 @@ export default {
 			formattedCartTotal,
 			formattedDiscountTotal,
 			cartMetaLabel,
+			hasActiveSaleValue,
 			posProfile,
 			additionalDiscountField,
 			additionalDiscountDisplay,
@@ -892,7 +898,48 @@ export default {
 }
 
 .mobile-sale-dock__field :deep(.v-field) {
-	background: rgba(var(--v-theme-surface), 0.92);
+	border-radius: 8px !important;
+	background: var(--pos-primary-container, rgba(226, 54, 112, 0.05)) !important;
+	min-height: 36px !important;
+	box-shadow: inset 0 0 0 1px var(--pos-primary-variant, rgba(226, 54, 112, 0.4)) !important;
+	transition: box-shadow 0.2s ease;
+}
+
+.mobile-sale-dock__field :deep(.v-field__overlay) {
+	background: transparent !important;
+	opacity: 0 !important;
+}
+
+.mobile-sale-dock__field :deep(.v-field__outline) {
+	display: none !important;
+}
+
+.mobile-sale-dock__field :deep(.v-field--focused) {
+	box-shadow:
+		inset 0 0 0 1.5px var(--pos-primary, rgba(226, 54, 112, 0.85)),
+		0 0 0 3px rgba(226, 54, 112, 0.15) !important;
+}
+
+.mobile-sale-dock--active .mobile-sale-dock__amount {
+	color: var(--pos-primary, #e23670);
+	text-shadow:
+		0 0 12px rgba(226, 54, 112, 0.45),
+		0 0 32px rgba(226, 54, 112, 0.22);
+	animation: mobile-dock-amount-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes mobile-dock-amount-pulse {
+	0%,
+	100% {
+		text-shadow:
+			0 0 10px rgba(226, 54, 112, 0.3),
+			0 0 28px rgba(226, 54, 112, 0.18);
+	}
+	50% {
+		text-shadow:
+			0 0 14px rgba(226, 54, 112, 0.55),
+			0 0 42px rgba(226, 54, 112, 0.28);
+	}
 }
 
 .mobile-pos-dock {

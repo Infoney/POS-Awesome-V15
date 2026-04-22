@@ -85,13 +85,23 @@ export function useItemSearch() {
 			});
 		}
 
-		// Filter by item group
-		if (itemGroup !== "ALL") {
-			const group = itemGroup.toLowerCase();
-			filtered = filtered.filter(
-				(item) =>
-					item.item_group && item.item_group.toLowerCase() === group,
-			);
+		// Filter by item group. Supports multi-select via "||" delimiter so
+		// the toolbar can pass several groups (e.g. "BANDAGE ALL||CANPOL")
+		// without us having to change every store/cache key contract from
+		// string to array.
+		if (itemGroup && itemGroup !== "ALL") {
+			const groups = itemGroup
+				.split("||")
+				.map((g) => g.trim().toLowerCase())
+				.filter((g) => g && g !== "all");
+			if (groups.length) {
+				const groupSet = new Set(groups);
+				filtered = filtered.filter(
+					(item) =>
+						item.item_group &&
+						groupSet.has(item.item_group.toLowerCase()),
+				);
+			}
 		}
 
 		// Filter by search term

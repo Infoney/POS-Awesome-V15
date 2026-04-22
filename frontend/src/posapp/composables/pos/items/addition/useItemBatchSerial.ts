@@ -4,15 +4,27 @@ import { getDisplayableBatchOptions } from "../../shared/useBatchSerial";
 declare const frappe: any;
 declare const __: (_text: string) => string;
 
+// Strict check — `has_batch_no` may arrive as "0" / "1" (string) from the
+// worker cache, and a bare truthy test lets non-batched items through.
+const isBatched = (item: any): boolean =>
+	Number(item?.has_batch_no ?? 0) > 0;
+const hasSerial = (item: any): boolean =>
+	Number(item?.has_serial_no ?? 0) > 0;
+
 export function useItemBatchSerial() {
 	const shouldAutoSetBatch = (context: any, item: any) => {
-		if (
-			!context?.setBatchQty ||
-			!context?.pos_profile?.posa_auto_set_batch
-		) {
+		// NOTE: we intentionally do NOT require `context.setBatchQty` to exist
+		// here. The `callSetBatchQty` helper in useItemAddition already falls
+		// back to the shared `useBatchSerial().setBatchQty` when the context
+		// doesn't inject one (e.g. ItemsSelector's add-to-cart path), so
+		// gating on `context.setBatchQty` here would silently defer the
+		// allocation to the much later `update_items_details` round-trip and
+		// the cashier would watch the cart sit without a batch pill for 5–10s
+		// even though the batch data is already cached locally.
+		if (!context?.pos_profile?.posa_auto_set_batch) {
 			return false;
 		}
-		if (!item?.has_batch_no || item.batch_no) {
+		if (!isBatched(item) || item.batch_no) {
 			return false;
 		}
 		return (
@@ -64,8 +76,8 @@ export function useItemBatchSerial() {
 		}
 
 		if (
-			(!context.pos_profile.posa_auto_set_batch && item.has_batch_no) ||
-			item.has_serial_no
+			(!context.pos_profile.posa_auto_set_batch && isBatched(item)) ||
+			hasSerial(item)
 		) {
 			nextTick(() => {
 				if (!item.posa_row_id) {

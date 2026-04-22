@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import path from "path";
+import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import { promises as fs } from "fs";
 import frappeVueStyle from "../frappe-vue-style";
@@ -12,7 +13,39 @@ import { buildVersionPayload, getEntryFileName } from "./build-manifest.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const buildVersion = process.env.POSAWESOME_BUILD_VERSION || Date.now().toString();
+/**
+ * Build version. In order of preference:
+ *   1. POSAWESOME_BUILD_VERSION env var (CI / release pipelines should set this).
+ *   2. Short git SHA (deterministic per commit — two builds of the same HEAD
+ *      collide intentionally, which is what SW cache keys want).
+ *   3. `dev-<epoch-ms>` fallback — rare, only when neither env nor git is
+ *      available. Namespaced so we don't accidentally collide with a real
+ *      release string.
+ *
+ * Previously this fell back to a bare `Date.now()` string, which produced
+ * identical values on sub-millisecond re-runs and non-deterministic SW cache
+ * keys. The new fallback order keeps the version stable across a given source
+ * state while still being unique when nothing is pinned.
+ */
+function resolveBuildVersion() {
+	if (process.env.POSAWESOME_BUILD_VERSION) {
+		return process.env.POSAWESOME_BUILD_VERSION;
+	}
+	try {
+		const sha = execSync("git rev-parse --short=12 HEAD", {
+			cwd: __dirname,
+			stdio: ["ignore", "pipe", "ignore"],
+		})
+			.toString()
+			.trim();
+		if (sha) return `git-${sha}`;
+	} catch {
+		// git not available or not a repo — fall through.
+	}
+	return `dev-${Date.now()}`;
+}
+
+const buildVersion = resolveBuildVersion();
 
 function posawesomeBuildVersionPlugin(version) {
 	return {

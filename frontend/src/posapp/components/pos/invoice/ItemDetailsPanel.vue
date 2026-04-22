@@ -95,6 +95,63 @@
 		<slot name="after-stats" />
 
 		<template v-if="!loading && !error">
+			<!-- Available Batches (flat section, below the 6 stat cards) -->
+			<section v-if="itemHasBatches" class="panel-section">
+				<header class="panel-section__header">
+					<h3 class="panel-section__title">{{ __("Available Batches") }}</h3>
+					<span v-if="batches.length" class="panel-section__hint">
+						{{ __("{0} total", [batches.length]) }}
+					</span>
+				</header>
+				<div v-if="warehousesWithBatches.length" class="batches-by-warehouse">
+					<div
+						v-for="entry in warehousesWithBatches"
+						:key="entry.warehouse || 'unassigned'"
+						class="batches-wh-group"
+					>
+						<div class="batches-wh-group__header">
+							<v-icon size="12" class="batches-wh-group__icon">mdi-warehouse</v-icon>
+							<span class="batches-wh-group__name">
+								{{ entry.warehouse || __("Unassigned") }}
+							</span>
+							<span class="batches-wh-group__count">{{ entry.rows.length }}</span>
+						</div>
+						<div class="batch-list">
+							<div
+								v-for="batch in entry.rows"
+								:key="`${entry.warehouse}-${batch.batch_no}`"
+								class="batch-row"
+								:class="{ 'batch-row--expired': batch.is_expired }"
+							>
+								<v-icon size="12" class="batch-row__icon">mdi-package-variant-closed</v-icon>
+								<span class="batch-row__name" :title="batch.batch_no">
+									{{ batch.batch_no }}
+								</span>
+								<span
+									v-if="batch.expiry_date"
+									class="batch-row__expiry"
+									:title="__('Expiry')"
+								>
+									{{ formatFullDate(batch.expiry_date) }}
+								</span>
+								<span
+									v-if="batch.is_expired"
+									class="batch-row__expired-chip"
+								>
+									{{ __("Expired") }}
+								</span>
+								<span class="batch-row__qty">
+									{{ formatNumber(batch.qty, qtyPrecision) }}
+								</span>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div v-else class="panel-section__empty">
+					{{ __("No batches available in the current warehouses") }}
+				</div>
+			</section>
+
 			<!-- Stock by warehouse -->
 			<section class="panel-section">
 				<header class="panel-section__header">
@@ -123,38 +180,6 @@
 							<div class="warehouse-row__qty">
 								<strong>{{ formatNumber(row.actual_qty, qtyPrecision) }}</strong>
 								<span>{{ __("units") }}</span>
-							</div>
-						</div>
-						<div
-							v-if="batchesByWarehouse.get(row.warehouse)?.length"
-							class="batch-list"
-						>
-							<div
-								v-for="batch in batchesByWarehouse.get(row.warehouse)"
-								:key="batch.batch_no"
-								class="batch-row"
-								:class="{ 'batch-row--expired': batch.is_expired }"
-							>
-								<v-icon size="12" class="batch-row__icon">mdi-package-variant-closed</v-icon>
-								<span class="batch-row__name" :title="batch.batch_no">
-									{{ batch.batch_no }}
-								</span>
-								<span
-									v-if="batch.expiry_date"
-									class="batch-row__expiry"
-									:title="__('Expiry')"
-								>
-									{{ formatDate(batch.expiry_date) }}
-								</span>
-								<span
-									v-if="batch.is_expired"
-									class="batch-row__expired-chip"
-								>
-									{{ __("Expired") }}
-								</span>
-								<span class="batch-row__qty">
-									{{ formatNumber(batch.qty, qtyPrecision) }}
-								</span>
 							</div>
 						</div>
 					</div>
@@ -267,6 +292,26 @@ const props = withDefaults(defineProps<Props>(), {
 	hideQtyDecimals: false,
 });
 
+// Emitted whenever the server-side dashboard payload arrives. The drawer
+// host listens to this so it can reconcile the cart-line's cached stock
+// fields (which can drift between sessions / offline runs) with the
+// freshly fetched bin + batch numbers — preventing the "panel says 0
+// in-stock but Available Batches says 1" mismatch that ends up surfacing
+// later as a backend "negative stock" error at submit time.
+const emit = defineEmits<{
+	"dashboard-loaded": [
+		_payload: {
+			itemCode: string;
+			profileWarehouse: string;
+			profileStock: number;
+			totalStock: number;
+			stockByWarehouse: WarehouseRow[];
+			batches: BatchRow[];
+			hasBatchNo: boolean;
+		},
+	];
+}>();
+
 const __ = (window as any).__ || ((s: string, args: any[] = []) => {
 	if (!Array.isArray(args) || !args.length) return s;
 	return s.replace(/\{(\d+)\}/g, (_match, idx) => String(args[Number(idx)] ?? ""));
@@ -305,6 +350,8 @@ const stockByWarehouse = computed<WarehouseRow[]>(
 
 const batches = computed<BatchRow[]>(() => dashboard.value?.batches || []);
 
+const itemHasBatches = computed(() => Number(hero.value?.has_batch_no ?? 0) > 0);
+
 const batchesByWarehouse = computed<Map<string, BatchRow[]>>(() => {
 	const map = new Map<string, BatchRow[]>();
 	for (const b of batches.value) {
@@ -314,6 +361,29 @@ const batchesByWarehouse = computed<Map<string, BatchRow[]>>(() => {
 		map.set(key, bucket);
 	}
 	return map;
+});
+
+// Flat, ordered list for the standalone "Available Batches" section.
+// Warehouses follow the stock-by-warehouse order so the drawer reads top-down.
+const warehousesWithBatches = computed<{ warehouse: string; rows: BatchRow[] }[]>(() => {
+	const map = batchesByWarehouse.value;
+	const seen = new Set<string>();
+	const result: { warehouse: string; rows: BatchRow[] }[] = [];
+	for (const row of stockByWarehouse.value) {
+		const wh = row.warehouse || "";
+		const rows = map.get(wh);
+		if (rows && rows.length) {
+			result.push({ warehouse: wh, rows });
+			seen.add(wh);
+		}
+	}
+	// Pick up any batches whose warehouse isn't in the stock-by-warehouse list
+	for (const [wh, rows] of map.entries()) {
+		if (!seen.has(wh) && rows.length) {
+			result.push({ warehouse: wh, rows });
+		}
+	}
+	return result;
 });
 
 const recentInvoices = computed<RecentInvoice[]>(
@@ -395,6 +465,21 @@ const formatDate = (value: string) => {
 	}
 };
 
+const formatFullDate = (value: string) => {
+	if (!value) return "";
+	try {
+		const d = new Date(value);
+		if (Number.isNaN(d.getTime())) return value;
+		return d.toLocaleDateString("en-GB", {
+			day: "numeric",
+			month: "long",
+			year: "numeric",
+		});
+	} catch {
+		return value;
+	}
+};
+
 const fetchDashboard = async () => {
 	if (!props.itemCode) return;
 	loading.value = true;
@@ -410,6 +495,39 @@ const fetchDashboard = async () => {
 		const payload = resp?.message;
 		if (payload && typeof payload === "object") {
 			dashboard.value = payload as DashboardPayload;
+
+			// Notify the drawer host so it can patch the cart line's stale
+			// availability snapshot with the fresh server numbers.
+			try {
+				const profileWarehouse =
+					props.posProfile?.warehouse ||
+					props.posProfile?.posa_default_warehouse ||
+					"";
+				const totalsPayload = (dashboard.value?.totals || {
+					total_stock: 0,
+					profile_stock: 0,
+				}) as Totals;
+				emit("dashboard-loaded", {
+					itemCode: props.itemCode,
+					profileWarehouse: String(profileWarehouse || ""),
+					profileStock: Number(totalsPayload.profile_stock || 0),
+					totalStock: Number(totalsPayload.total_stock || 0),
+					stockByWarehouse: Array.isArray(
+						dashboard.value?.stock_by_warehouse,
+					)
+						? dashboard.value!.stock_by_warehouse
+						: [],
+					batches: Array.isArray(dashboard.value?.batches)
+						? dashboard.value!.batches
+						: [],
+					hasBatchNo: Boolean(dashboard.value?.hero?.has_batch_no),
+				});
+			} catch (emitErr) {
+				console.warn(
+					"[ItemDetailsPanel] dashboard-loaded emit failed",
+					emitErr,
+				);
+			}
 		} else {
 			error.value = __("No data returned for this item.");
 		}
@@ -694,13 +812,66 @@ watch(
 	border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
+.batches-by-warehouse {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.batches-wh-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: rgba(148, 163, 184, 0.05);
+	border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.batches-wh-group__header {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.62rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--cc-muted, var(--pos-text-secondary));
+}
+
+.batches-wh-group__icon {
+	color: var(--cc-green, var(--pos-primary));
+	opacity: 0.9;
+}
+
+.batches-wh-group__name {
+	color: var(--pos-text-primary);
+	letter-spacing: 0.04em;
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.batches-wh-group__count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0 6px;
+	height: 15px;
+	min-width: 18px;
+	border-radius: 999px;
+	background: rgba(var(--cc-pink-rgb, 226, 54, 112), 0.12);
+	color: var(--cc-pink, var(--pos-primary));
+	font-size: 0.6rem;
+	font-weight: 700;
+	letter-spacing: 0;
+}
+
 .batch-list {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	margin-left: 28px;
-	padding: 4px 8px 6px 12px;
-	border-left: 2px dashed rgba(148, 163, 184, 0.18);
 }
 
 .batch-row {
@@ -766,7 +937,8 @@ watch(
 	width: 28px;
 	height: 28px;
 	border-radius: 8px;
-	background: rgba(148, 163, 184, 0.08);
+	background: rgba(var(--cc-green-rgb, 52, 178, 157), 0.12);
+	color: var(--cc-green, #34b29d);
 }
 
 .warehouse-row__body {
@@ -789,7 +961,7 @@ watch(
 	width: 100%;
 	height: 4px;
 	border-radius: 999px;
-	background: rgba(148, 163, 184, 0.18);
+	background: rgba(var(--cc-green-rgb, 52, 178, 157), 0.16);
 	overflow: hidden;
 }
 
@@ -816,20 +988,14 @@ watch(
 	letter-spacing: 0.04em;
 }
 
-.warehouse-row--tone-pink {
-	color: #f472b6;
-}
-.warehouse-row--tone-orange {
-	color: #fb923c;
-}
-.warehouse-row--tone-teal {
-	color: #2dd4bf;
-}
-.warehouse-row--tone-violet {
-	color: #a78bfa;
-}
+/* All warehouse rows share the green CC accent for the bar fill + qty pill;
+   tone modifier classes kept for backward compatibility but resolve to green. */
+.warehouse-row--tone-pink,
+.warehouse-row--tone-orange,
+.warehouse-row--tone-teal,
+.warehouse-row--tone-violet,
 .warehouse-row--tone-cyan {
-	color: #67e8f9;
+	color: var(--cc-green, #34b29d);
 }
 
 .invoice-list {

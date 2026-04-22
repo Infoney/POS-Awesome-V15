@@ -149,8 +149,24 @@ export function useItemsSearch() {
 	};
 
 	const filterItemsByGroup = (itemList: Item[], group: string) => {
-		if (group === "ALL") {
+		if (!group || group === "ALL") {
 			return itemList;
+		}
+		// Multi-group selection comes through as a "||"-delimited string
+		// (e.g. "Cosmetics||Device"). We split, normalize, and treat
+		// "ALL" anywhere in the list as "no filter".
+		if (group.includes("||")) {
+			const groups = group
+				.split("||")
+				.map((g) => g.trim())
+				.filter(Boolean);
+			if (!groups.length || groups.some((g) => g === "ALL")) {
+				return itemList;
+			}
+			const set = new Set(groups);
+			return itemList.filter(
+				(item) => item.item_group && set.has(item.item_group),
+			);
 		}
 		return itemList.filter((item) => item.item_group === group);
 	};

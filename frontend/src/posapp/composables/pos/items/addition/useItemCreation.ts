@@ -135,12 +135,14 @@ export function useItemCreation() {
 			new_item.serial_no_selected = [];
 			new_item.serial_no_selected_count = 0;
 		}
-		// Expand row if batch/serial required
-		if (
-			(!context?.pos_profile?.posa_auto_set_batch &&
-				new_item.has_batch_no) ||
-			new_item.has_serial_no
-		) {
+		// Expand row if batch/serial required. Strict Number() parse because
+		// `has_batch_no`/`has_serial_no` may arrive as "0"/"1" string from
+		// the worker cache, which a bare truthy check would let through.
+		const needsBatch =
+			!context?.pos_profile?.posa_auto_set_batch &&
+			Number(new_item.has_batch_no ?? 0) > 0;
+		const needsSerial = Number(new_item.has_serial_no ?? 0) > 0;
+		if (needsBatch || needsSerial) {
 			// Only store the row ID to keep expanded array consistent
 			if (Array.isArray(context.expanded)) {
 				context.expanded.push(new_item.posa_row_id);

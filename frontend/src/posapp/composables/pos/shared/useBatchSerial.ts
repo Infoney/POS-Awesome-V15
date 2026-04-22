@@ -283,10 +283,21 @@ export function useBatchSerial() {
 				update,
 			});
 
+			// `posa_batch_price` defaults to 0 on the Batch doctype, so most
+			// batches without a bespoke per-batch price arrive here as 0.
+			// Treating 0 as a valid override wipes rate → 0 the moment we
+			// auto-assign a batch (especially on merge), and the UI flashes
+			// the cart total to 0 until pricing-rule / detail refresh
+			// repopulates the row seconds later. Only apply when the batch
+			// carries a *positive* numeric price.
+			const rawBatchPrice = batch_to_use.batch_price;
+			const numericBatchPrice = Number(rawBatchPrice);
 			const hasBatchPrice =
-				batch_to_use.batch_price !== undefined &&
-				batch_to_use.batch_price !== null &&
-				batch_to_use.batch_price !== "";
+				rawBatchPrice !== undefined &&
+				rawBatchPrice !== null &&
+				rawBatchPrice !== "" &&
+				Number.isFinite(numericBatchPrice) &&
+				numericBatchPrice > 0;
 			const shouldApplyBatchPrice = hasBatchPrice;
 
 			if (shouldApplyBatchPrice) {
@@ -331,10 +342,17 @@ export function useBatchSerial() {
 					item.qty * item.base_rate,
 					context.currency_precision,
 				);
-			} else if (update && context.update_item_detail) {
+			} else {
+				// Batch has no meaningful per-batch price — scrub stale
+				// batch_price fields but keep the existing rate / price_list_rate
+				// intact so the row doesn't flash to 0 while the regular
+				// pricing pipeline (update_item_detail / pricing rules)
+				// catches up.
 				item.batch_price = null;
 				item.base_batch_price = null;
-				context.update_item_detail(item);
+				if (update && context.update_item_detail) {
+					context.update_item_detail(item);
+				}
 			}
 		} else {
 			item.batch_no = null;

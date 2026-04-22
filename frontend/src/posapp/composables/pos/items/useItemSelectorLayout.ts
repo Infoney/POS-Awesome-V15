@@ -32,14 +32,17 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	const cardGap = computed(() => getCardGap(windowWidth.value));
 	const cardPadding = computed(() => getCardPadding(windowWidth.value));
 
+	// Row-style cards (CC Top-Selling-Items layout): slim horizontal rows
+	// instead of tall portrait cards. Tuned to fit thumbnail + name + price
+	// without truncation at the breakpoints the POS ships for.
 	const cardRowHeight = computed(() => {
 		if (windowWidth.value <= 768) {
-			return 260;
+			return 84;
 		}
 		if (windowWidth.value <= 1200) {
-			return 280;
+			return 92;
 		}
-		return 300;
+		return 96;
 	});
 
 	const cardSlotHeight = computed(() => cardRowHeight.value + cardGap.value);

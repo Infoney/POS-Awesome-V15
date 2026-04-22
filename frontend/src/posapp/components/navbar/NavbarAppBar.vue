@@ -23,8 +23,11 @@
 			<v-img
 				:src="brandLogo"
 				:alt="brandLogoAlt"
-				:max-width="isMobile ? 40 : 52"
-				:max-height="isMobile ? 40 : 52"
+				:max-width="isMobile ? 52 : 160"
+				:max-height="isMobile ? 52 : 56"
+				:width="isMobile ? 52 : undefined"
+				:height="isMobile ? 52 : 56"
+				contain
 				:class="['pos-navbar-logo', isRtl ? 'rtl-logo' : 'ltr-logo']"
 				loading="lazy"
 			/>
@@ -552,6 +555,14 @@ export default {
 /* Logo Styling */
 .pos-navbar-logo {
 	transition: transform 0.3s ease;
+	align-self: center;
+	/* Fills the header height (64px bar; 56px logo with 4px breathing room) */
+	object-fit: contain;
+}
+
+.pos-navbar-logo :deep(.v-img__img) {
+	object-fit: contain !important;
+	object-position: left center;
 }
 
 .rtl-logo {
@@ -1027,8 +1038,8 @@ export default {
 }
 
 .mobile-navbar .pos-navbar-logo {
-	max-width: 40px !important;
-	max-height: 40px !important;
+	max-width: 52px !important;
+	max-height: 52px !important;
 }
 
 .mobile-navbar .pos-navbar-title {
@@ -1073,8 +1084,8 @@ export default {
 	}
 
 	.mobile-navbar .pos-navbar-logo {
-		max-width: 32px !important;
-		max-height: 32px !important;
+		max-width: 44px !important;
+		max-height: 44px !important;
 	}
 
 	.mobile-navbar .pos-navbar-title {

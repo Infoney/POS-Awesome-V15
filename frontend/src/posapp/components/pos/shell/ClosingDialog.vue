@@ -45,6 +45,28 @@
 
 			<v-divider></v-divider>
 			<v-card-actions class="dialog-actions-container">
+				<v-btn
+					theme="dark"
+					@click="printReceipt"
+					class="pos-action-btn print-action-btn print-receipt-btn"
+					size="large"
+					elevation="2"
+					:disabled="overviewLoading"
+				>
+					<v-icon start>mdi-printer-pos</v-icon>
+					<span>{{ __("Print Receipt") }}</span>
+				</v-btn>
+				<v-btn
+					theme="dark"
+					@click="printA4"
+					class="pos-action-btn print-action-btn print-a4-btn"
+					size="large"
+					elevation="2"
+					:disabled="overviewLoading"
+				>
+					<v-icon start>mdi-file-pdf-box</v-icon>
+					<span>{{ __("Print A4") }}</span>
+				</v-btn>
 				<v-spacer></v-spacer>
 				<v-btn
 					theme="dark"
@@ -76,6 +98,10 @@ import { useUIStore } from "../../../stores/uiStore.js";
 import { ref, inject, onMounted, onBeforeUnmount, watch } from "vue";
 import { useClosingShift } from "../../../composables/pos/closing/useClosingShift";
 import { useClosingSummary } from "../../../composables/pos/closing/useClosingSummary";
+import {
+	printReceiptClosingShift,
+	printA4ClosingShift,
+} from "../../../composables/pos/closing/usePrintClosingShift";
 
 import ClosingHeader from "../closing/ClosingHeader.vue";
 import ShiftOverview from "../closing/ShiftOverview.vue";
@@ -126,6 +152,91 @@ export default {
 		};
 
 		const summary = useClosingSummary(overview, pos_profile, dialog_data, summaryFormatters);
+
+		// ── Print actions ─────────────────────────────────────────────
+		// Build a self-contained payload from the dialog's already-loaded
+		// reactive state. The two print helpers open a new window with
+		// inline HTML+CSS, so no extra network calls are needed.
+		const buildPrintPayload = () => {
+			const data = dialog_data.value || {};
+			const profile = pos_profile.value || {};
+			const ov = overview.value || {};
+			const session = (typeof window !== "undefined" && window.frappe?.session) || {};
+
+			const companyCurrency =
+				summary.overviewCompanyCurrency.value ||
+				profile.currency ||
+				data.currency ||
+				"";
+
+			const cashMovementCompanyTotal =
+				summary.cashMovementSummary.value?.company_currency_total || 0;
+
+			const periodStart =
+				data.period_start_date ||
+				ov.period_start_date ||
+				ov.start_date ||
+				"";
+			const periodEnd =
+				data.period_end_date ||
+				ov.period_end_date ||
+				ov.end_date ||
+				new Date().toLocaleString();
+
+			return {
+				shiftName:
+					data.name ||
+					data.pos_opening_shift ||
+					ov.pos_opening_shift ||
+					"",
+				companyName:
+					data.company || profile.company || ov.company || "",
+				posProfileName:
+					data.pos_profile ||
+					profile.name ||
+					profile.pos_profile ||
+					"",
+				cashierName:
+					data.user ||
+					session.user_fullname ||
+					session.user ||
+					profile.user ||
+					"",
+				periodStart: String(periodStart || ""),
+				periodEnd: String(periodEnd || ""),
+				companyCurrency,
+				companyCurrencySymbol: summary.companyCurrencySymbol.value || companyCurrency,
+				primaryInsights: summary.primaryInsights.value || [],
+				secondaryInsights: summary.secondaryInsights.value || [],
+				multiCurrencyTotals: summary.multiCurrencyTotals.value || [],
+				paymentsByMode: summary.paymentsByMode.value || [],
+				reconciliation:
+					data.payment_reconciliation || data.payments || [],
+				creditInvoicesByCurrency:
+					summary.creditInvoicesByCurrency.value || [],
+				returnsByCurrency: summary.returnsByCurrency.value || [],
+				cashMovementCompanyTotal,
+				formatCurrencyWithSymbol: summaryFormatters.formatCurrencyWithSymbol,
+				formatCurrency,
+				formatFloat,
+			};
+		};
+
+		const printReceipt = () => {
+			try {
+				printReceiptClosingShift(buildPrintPayload());
+			} catch (err) {
+				console.error("[POSA] Failed to print receipt closing shift", err);
+			}
+		};
+
+		const printA4 = () => {
+			try {
+				printA4ClosingShift(buildPrintPayload());
+			} catch (err) {
+				console.error("[POSA] Failed to print A4 closing shift", err);
+			}
+		};
 
 		const headers = ref([]);
 		const baseHeaders = [
@@ -223,6 +334,8 @@ export default {
 			closeDialog,
 			fetchOverview,
 			submitDialog,
+			printReceipt,
+			printA4,
 			...summary,
 			// Expose formatters used in template
 			formatCurrency,
@@ -269,5 +382,51 @@ export default {
 
 .submit-action-btn {
 	margin-left: 16px;
+}
+
+/* ── Print buttons (CC violet/pink theme) ─────────────────────── */
+.print-action-btn {
+	margin-right: 8px;
+	color: #fff !important;
+	border: 1px solid rgba(139, 92, 246, 0.45) !important;
+	box-shadow: 0 2px 6px rgba(139, 92, 246, 0.18) !important;
+	transition: transform 0.15s ease, box-shadow 0.15s ease,
+		filter 0.15s ease;
+}
+
+.print-action-btn:not(:disabled):hover {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35) !important;
+	filter: brightness(1.04);
+}
+
+.print-receipt-btn {
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.95),
+		rgba(167, 122, 250, 0.95)
+	) !important;
+}
+
+.print-a4-btn {
+	background: linear-gradient(
+		135deg,
+		rgba(226, 54, 112, 0.95),
+		rgba(244, 114, 182, 0.95)
+	) !important;
+}
+
+@media (max-width: 600px) {
+	.dialog-actions-container {
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+
+	.print-action-btn,
+	.cancel-action-btn,
+	.submit-action-btn {
+		flex: 1 1 calc(50% - 8px);
+		margin: 0 !important;
+	}
 }
 </style>

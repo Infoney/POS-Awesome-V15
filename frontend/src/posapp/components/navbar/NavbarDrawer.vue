@@ -13,14 +13,14 @@
 		<div class="drawer-shell">
 			<div>
 				<div v-if="!mini" class="drawer-header">
-					<v-avatar size="40">
-						<v-img :src="companyImg" alt="Company logo" />
+					<v-avatar size="56" class="drawer-logo-avatar">
+						<v-img :src="resolvedMenuLogo" alt="Menu logo" cover />
 					</v-avatar>
 					<span class="drawer-company">{{ company }}</span>
 				</div>
 				<div v-else class="drawer-header-mini">
-					<v-avatar size="40">
-						<v-img :src="companyImg" alt="Company logo" />
+					<v-avatar size="44" class="drawer-logo-avatar">
+						<v-img :src="resolvedMenuLogo" alt="Menu logo" cover />
 					</v-avatar>
 				</div>
 
@@ -83,6 +83,15 @@ const props = defineProps({
 	drawer: Boolean,
 	company: String,
 	companyImg: String,
+	/**
+	 * Optional override for the drawer avatar only. When blank, the drawer
+	 * reuses `companyImg` so existing sites don't need to configure a second
+	 * asset. Intended for a square/rounded crop of the corporate logo.
+	 */
+	menuLogo: {
+		type: String,
+		default: "",
+	},
 	items: Array,
 	item: Number,
 	isDark: Boolean,
@@ -105,6 +114,11 @@ const scrimColor = computed(() => {
 	// Use an opaque background in light mode so that
 	// underlying content doesn't show through the drawer
 	return props.isDark ? true : "rgba(255,255,255,1)";
+});
+
+const resolvedMenuLogo = computed(() => {
+	const override = typeof props.menuLogo === "string" ? props.menuLogo.trim() : "";
+	return override || props.companyImg;
 });
 
 watch(
@@ -203,6 +217,14 @@ function closeDrawer() {
 	font-size: 1rem;
 	color: #0097a7;
 	font-family: inherit;
+}
+
+/* Drawer logo avatar — rounded by default, lets the backing <v-img cover> crop
+   cleanly for both square and circular source art. */
+.drawer-logo-avatar {
+	background: var(--pos-surface-muted, rgba(148, 163, 184, 0.1));
+	border: 1px solid var(--pos-border, rgba(148, 163, 184, 0.18));
+	box-shadow: 0 2px 6px var(--pos-shadow-light, rgba(0, 0, 0, 0.08));
 }
 
 /* Styling for icons within the navigation drawer list items */

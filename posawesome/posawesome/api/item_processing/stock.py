@@ -227,36 +227,60 @@ def get_bulk_stock_availability(items):
 def get_available_qty(items):
     """Return available stock quantity for given items.
 
+    The returned shape mirrors the input (one row out per valid input row),
+    and now includes ``batch_no`` so callers can match results back to
+    their requests positionally OR by composite key. The batch-aware
+    branch delegates to :func:`get_bulk_stock_availability` so we use the
+    same group-warehouse expansion + bulk SLE/Bundle aggregation as the
+    item-details dashboard. Without that, batched lines selling out of a
+    group warehouse (e.g. ``AL-KHANSA PHARMACY``) would compare against
+    an empty leaf-warehouse balance and falsely report 0 — which then
+    causes the frontend's pre-submit guard to block valid sales.
+
     Args:
         items (str | list[dict]): JSON string or list of dicts with
             item_code, warehouse and optional batch_no.
 
     Returns:
-        list: List of dicts with item_code, warehouse and available_qty
-            in stock UOM.
+        list: List of dicts with item_code, warehouse, batch_no and
+            available_qty in stock UOM.
     """
 
     if isinstance(items, str):
         items = json.loads(items)
 
+    items = list(items or [])
+    valid_rows = [
+        it
+        for it in items
+        if it and it.get("item_code") and it.get("warehouse")
+    ]
+    if not valid_rows:
+        return []
+
+    bulk_lookup = get_bulk_stock_availability(valid_rows)
+
     result = []
-    for it in items or []:
+    for it in valid_rows:
         item_code = it.get("item_code")
         warehouse = it.get("warehouse")
-        batch_no = it.get("batch_no")
+        batch_no = cstr(it.get("batch_no"))  # normalize to "" so key matches
 
-        if not item_code or not warehouse:
-            continue
+        available_qty = bulk_lookup.get((item_code, warehouse, batch_no))
 
-        if batch_no:
-            available_qty = get_batch_qty(batch_no, warehouse) or 0
-        else:
-            available_qty = get_stock_availability(item_code, warehouse)
+        # Fall back to the per-row helpers if the bulk path didn't return
+        # a row — keeps the legacy contract intact for unusual cases.
+        if available_qty is None:
+            if batch_no:
+                available_qty = get_batch_qty(batch_no, warehouse) or 0
+            else:
+                available_qty = get_stock_availability(item_code, warehouse)
 
         result.append(
             {
                 "item_code": item_code,
                 "warehouse": warehouse,
+                "batch_no": batch_no or None,
                 "available_qty": flt(available_qty),
             }
         )

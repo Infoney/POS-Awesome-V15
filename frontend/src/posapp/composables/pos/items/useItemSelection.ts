@@ -228,6 +228,7 @@ export function useItemSelection() {
 			// For card click
 			const currentTarget = event.currentTarget as Element | null;
 			source =
+				currentTarget?.querySelector?.(".pos-row-card__image") ||
 				currentTarget?.querySelector?.(".card-item-image") ||
 				currentTarget;
 			if (source) {

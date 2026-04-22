@@ -5,15 +5,52 @@
 	>
 		<v-row no-gutters align="center" justify="center" class="dynamic-spacing-sm">
 			<v-col cols="12" class="mb-2">
-				<v-select
-					:items="itemsGroup"
-					:label="frappe._('Items Group')"
+				<v-autocomplete
+					:items="itemsGroupOptions"
+					:label="frappe._('Items Groups')"
+					:placeholder="selectedGroupsArray.length ? '' : frappe._('All groups')"
 					density="compact"
-					variant="solo"
+					variant="outlined"
 					hide-details
-					:model-value="modelValue"
-					@update:model-value="$emit('update:modelValue', $event)"
-				></v-select>
+					hide-no-data
+					multiple
+					chips
+					closable-chips
+					clearable
+					prepend-inner-icon="mdi-shape-outline"
+					menu-icon="mdi-chevron-down"
+					class="cc-group-picker"
+					:menu-props="{ contentClass: 'cc-group-picker-menu' }"
+					:model-value="selectedGroupsArray"
+					@update:model-value="onGroupsChange"
+				>
+					<template #chip="{ props: chipProps, item }">
+						<v-chip
+							v-bind="chipProps"
+							size="small"
+							class="cc-group-picker__chip"
+							:prepend-icon="item.value === 'ALL' ? 'mdi-asterisk' : 'mdi-tag-outline'"
+						>
+							{{ item.title }}
+						</v-chip>
+					</template>
+					<template #item="{ props: itemProps, item }">
+						<v-list-item
+							v-bind="itemProps"
+							class="cc-group-picker__option"
+							:title="item.title"
+						>
+							<template #prepend="{ isActive }">
+								<v-icon
+									:color="isActive ? 'primary' : 'medium-emphasis'"
+									size="20"
+								>
+									{{ isActive ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline' }}
+								</v-icon>
+							</template>
+						</v-list-item>
+					</template>
+				</v-autocomplete>
 			</v-col>
 			<v-col cols="12" class="mb-2" v-if="posProfile.posa_enable_price_list_dropdown !== false">
 				<v-text-field
@@ -69,11 +106,15 @@
 </template>
 
 <script setup>
+import { computed } from "vue";
+
 const __ = window.__;
 const frappe = window.frappe;
 
-defineProps({
-	modelValue: { type: String, default: "ALL" }, // item_group
+const props = defineProps({
+	// item_group filter — string for back-compat. "ALL" or a single group name,
+	// or several groups joined with "||" (e.g. "Cosmetics||Device").
+	modelValue: { type: String, default: "ALL" },
 	itemsGroup: { type: Array, default: () => [] },
 	itemsView: { type: String, default: "card" },
 	posProfile: { type: Object, required: true },
@@ -83,10 +124,124 @@ defineProps({
 	reserveBottomDockSpace: { type: Boolean, default: false },
 });
 
-defineEmits(["update:modelValue", "update:itemsView", "open-offers", "open-coupons"]);
+const emit = defineEmits([
+	"update:modelValue",
+	"update:itemsView",
+	"open-offers",
+	"open-coupons",
+]);
+
+// Always include "ALL" as a sentinel so the user can quickly clear filters
+// without having to deselect every chip. We dedupe in case the parent
+// already pushed it to the head of the list.
+const itemsGroupOptions = computed(() => {
+	const list = Array.isArray(props.itemsGroup) ? props.itemsGroup : [];
+	const seen = new Set();
+	const out = [];
+	const add = (value) => {
+		if (!value || seen.has(value)) return;
+		seen.add(value);
+		out.push(value);
+	};
+	add("ALL");
+	list.forEach((g) => add(g));
+	return out;
+});
+
+// String contract <-> array contract
+const selectedGroupsArray = computed(() => {
+	const raw = props.modelValue || "";
+	if (!raw || raw === "ALL") return [];
+	return raw
+		.split("||")
+		.map((s) => String(s).trim())
+		.filter(Boolean);
+});
+
+const onGroupsChange = (next) => {
+	const arr = Array.isArray(next) ? next.filter(Boolean) : [];
+	// Empty selection or explicit "ALL" → clear filter
+	if (!arr.length || arr.includes("ALL")) {
+		emit("update:modelValue", "ALL");
+		return;
+	}
+	emit("update:modelValue", arr.join("||"));
+};
 </script>
 
 <style scoped>
+/* ── Items Groups multi-select picker (CC violet card style) ────── */
+.cc-group-picker :deep(.v-field) {
+	border-radius: 12px !important;
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.08),
+		rgba(226, 54, 112, 0.04)
+	), var(--pos-surface-muted, #161c27) !important;
+	min-height: 44px !important;
+	box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.35) !important;
+	transition: box-shadow 0.2s ease;
+}
+
+.cc-group-picker :deep(.v-field__overlay) {
+	background: transparent !important;
+	opacity: 0 !important;
+}
+
+.cc-group-picker :deep(.v-field__outline) {
+	display: none !important;
+}
+
+.cc-group-picker :deep(.v-field--focused) {
+	box-shadow:
+		inset 0 0 0 1.5px rgba(139, 92, 246, 0.85),
+		0 0 0 3px rgba(139, 92, 246, 0.18) !important;
+}
+
+.cc-group-picker :deep(.v-field__input) {
+	min-height: 44px !important;
+	padding-top: 2px !important;
+	padding-bottom: 2px !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	font-family: var(--posa-font-family) !important;
+	font-size: 0.875rem !important;
+	font-weight: 500 !important;
+	letter-spacing: 0.01em !important;
+}
+
+.cc-group-picker :deep(.v-label) {
+	color: var(--pos-text-secondary, #8595ab) !important;
+	font-family: var(--posa-font-family) !important;
+	font-size: 0.875rem !important;
+	font-weight: 500 !important;
+	letter-spacing: 0.01em !important;
+}
+
+.cc-group-picker :deep(.v-field__prepend-inner .v-icon) {
+	color: rgba(139, 92, 246, 0.95);
+	opacity: 1;
+}
+
+.cc-group-picker__chip {
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.18),
+		rgba(226, 54, 112, 0.12)
+	) !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	border: 1px solid rgba(139, 92, 246, 0.45) !important;
+	font-family: var(--posa-font-family) !important;
+	font-weight: 600 !important;
+	font-size: 0.75rem !important;
+	letter-spacing: 0.02em !important;
+	height: 26px !important;
+}
+
+.cc-group-picker__chip :deep(.v-icon) {
+	color: rgba(139, 92, 246, 0.95) !important;
+	font-size: 14px !important;
+}
+
 .action-btn-consistent {
 	height: 36px !important;
 	margin-top: var(--dynamic-xs) !important;
@@ -165,5 +320,103 @@ defineEmits(["update:modelValue", "update:itemsView", "open-offers", "open-coupo
 		padding: var(--dynamic-xs) !important;
 		position: static;
 	}
+}
+</style>
+
+<!--
+  Unscoped block — Vuetify teleports the autocomplete menu to <body>,
+  so the scoped block above can't reach the popup. We tagged the menu
+  with `cc-group-picker-menu` via `:menu-props.contentClass` and style
+  it here so the dropdown matches the CC violet/pink card aesthetic.
+-->
+<style>
+.cc-group-picker-menu.v-overlay__content {
+	border-radius: 14px !important;
+	overflow: hidden;
+	background: linear-gradient(
+		180deg,
+		rgba(22, 28, 39, 0.98),
+		rgba(17, 21, 30, 0.98)
+	) !important;
+	border: 1px solid rgba(139, 92, 246, 0.35) !important;
+	box-shadow:
+		0 18px 40px rgba(0, 0, 0, 0.55),
+		0 0 0 1px rgba(226, 54, 112, 0.12) inset !important;
+	font-family: var(--posa-font-family) !important;
+}
+
+.cc-group-picker-menu .v-list {
+	background: transparent !important;
+	padding: 6px !important;
+}
+
+.cc-group-picker-menu .v-list-item {
+	border-radius: 10px !important;
+	margin-bottom: 2px;
+	min-height: 40px !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	font-family: var(--posa-font-family) !important;
+	transition:
+		background 0.15s ease,
+		box-shadow 0.15s ease;
+}
+
+.cc-group-picker-menu .v-list-item-title {
+	font-family: var(--posa-font-family) !important;
+	font-size: 0.875rem !important;
+	font-weight: 500 !important;
+	letter-spacing: 0.01em !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+}
+
+.cc-group-picker-menu .v-list-item:hover {
+	background: linear-gradient(
+		90deg,
+		rgba(139, 92, 246, 0.16),
+		rgba(226, 54, 112, 0.08)
+	) !important;
+	box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.35);
+}
+
+.cc-group-picker-menu .v-list-item--active,
+.cc-group-picker-menu .v-list-item[aria-selected="true"] {
+	background: linear-gradient(
+		90deg,
+		rgba(139, 92, 246, 0.28),
+		rgba(226, 54, 112, 0.14)
+	) !important;
+	box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.55);
+}
+
+.cc-group-picker-menu .v-list-item--active .v-list-item-title {
+	font-weight: 600 !important;
+	color: #ffffff !important;
+}
+
+.cc-group-picker-menu .v-list-item .v-icon {
+	color: rgba(139, 92, 246, 0.95) !important;
+}
+
+/* Custom scrollbar so the popup doesn't feel like a default browser dropdown. */
+.cc-group-picker-menu ::-webkit-scrollbar {
+	width: 8px;
+}
+.cc-group-picker-menu ::-webkit-scrollbar-track {
+	background: transparent;
+}
+.cc-group-picker-menu ::-webkit-scrollbar-thumb {
+	background: linear-gradient(
+		180deg,
+		rgba(139, 92, 246, 0.45),
+		rgba(226, 54, 112, 0.35)
+	);
+	border-radius: 8px;
+}
+.cc-group-picker-menu ::-webkit-scrollbar-thumb:hover {
+	background: linear-gradient(
+		180deg,
+		rgba(139, 92, 246, 0.7),
+		rgba(226, 54, 112, 0.55)
+	);
 }
 </style>

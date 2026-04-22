@@ -11,8 +11,11 @@
 		>
 			<v-card class="returns-card pos-themed-card" :theme="isDarkTheme ? 'dark' : 'light'">
 				<v-card-title class="returns-card__title">
+					<div class="returns-card__title-icon-wrap">
+						<v-icon class="returns-card__title-icon">mdi-cash-refund</v-icon>
+					</div>
 					<div class="returns-card__title-copy">
-						<span class="text-h5 text-primary">{{ __("Select Return Invoice") }}</span>
+						<span class="returns-card__title-text">{{ __("Select Return Invoice") }}</span>
 						<span class="returns-card__subtitle">
 							{{ __("Search an invoice and continue the return flow without extra steps.") }}
 						</span>
@@ -28,16 +31,12 @@
 				</v-card-title>
 				<v-container class="returns-card__content">
 					<!-- Invoice ID and Date Range search -->
-					<v-row class="mb-2">
+					<v-row class="mb-2" v-if="!from_date && !to_date">
 						<v-col cols="12">
-							<v-alert
-								density="compact"
-								type="info"
-								variant="outlined"
-								v-if="!from_date && !to_date"
-							>
-								<small>{{ __("Use date range to search for older invoices") }}</small>
-							</v-alert>
+							<div class="returns-card__hint">
+								<v-icon class="returns-card__hint-icon">mdi-information-outline</v-icon>
+								<span>{{ __("Use date range to search for older invoices") }}</span>
+							</div>
 						</v-col>
 					</v-row>
 					<v-row class="mb-3">
@@ -45,10 +44,12 @@
 							<v-text-field
 								color="primary"
 								:label="frappe._('Invoice ID')"
-								class="pos-themed-input"
+								class="pos-themed-input cc-field"
 								hide-details
 								v-model="invoice_name"
 								density="compact"
+								variant="outlined"
+								prepend-inner-icon="mdi-receipt-text-outline"
 								clearable
 							></v-text-field>
 						</v-col>
@@ -59,7 +60,8 @@
 								format="dd-MM-yyyy"
 								:enable-time-picker="false"
 								auto-apply
-								class="pos-themed-input"
+								class="pos-themed-input cc-datepicker"
+								placeholder="From date"
 								@update:model-value="formatFromDate()"
 							/>
 						</v-col>
@@ -70,7 +72,8 @@
 								format="dd-MM-yyyy"
 								:enable-time-picker="false"
 								auto-apply
-								class="pos-themed-input"
+								class="pos-themed-input cc-datepicker"
+								placeholder="To date"
 								@update:model-value="formatToDate()"
 							/>
 						</v-col>
@@ -82,10 +85,12 @@
 							<v-text-field
 								color="primary"
 								:label="frappe._('Customer Name')"
-								class="pos-themed-input"
+								class="pos-themed-input cc-field"
 								hide-details
 								v-model="customer_name"
 								density="compact"
+								variant="outlined"
+								prepend-inner-icon="mdi-account-outline"
 								clearable
 							></v-text-field>
 						</v-col>
@@ -93,10 +98,12 @@
 							<v-text-field
 								color="primary"
 								:label="frappe._('Customer ID')"
-								class="pos-themed-input"
+								class="pos-themed-input cc-field"
 								hide-details
 								v-model="customer_id"
 								density="compact"
+								variant="outlined"
+								prepend-inner-icon="mdi-identifier"
 								clearable
 							></v-text-field>
 						</v-col>
@@ -106,10 +113,12 @@
 							<v-text-field
 								color="primary"
 								:label="frappe._('Mobile Number')"
-								class="pos-themed-input"
+								class="pos-themed-input cc-field"
 								hide-details
 								v-model="mobile_no"
 								density="compact"
+								variant="outlined"
+								prepend-inner-icon="mdi-phone-outline"
 								clearable
 							></v-text-field>
 						</v-col>
@@ -117,10 +126,12 @@
 							<v-text-field
 								color="primary"
 								:label="frappe._('Tax ID')"
-								class="pos-themed-input"
+								class="pos-themed-input cc-field"
 								hide-details
 								v-model="tax_id"
 								density="compact"
+								variant="outlined"
+								prepend-inner-icon="mdi-shield-account-outline"
 								clearable
 							></v-text-field>
 						</v-col>
@@ -132,10 +143,12 @@
 							<v-text-field
 								color="primary"
 								:label="frappe._('Minimum Amount')"
-								class="pos-themed-input"
+								class="pos-themed-input cc-field"
 								hide-details
 								v-model="min_amount"
 								density="compact"
+								variant="outlined"
+								prepend-inner-icon="mdi-arrow-down-bold-outline"
 								clearable
 								type="number"
 								min="0"
@@ -146,10 +159,12 @@
 							<v-text-field
 								color="primary"
 								:label="frappe._('Maximum Amount')"
-								class="pos-themed-input"
+								class="pos-themed-input cc-field"
 								hide-details
 								v-model="max_amount"
 								density="compact"
+								variant="outlined"
+								prepend-inner-icon="mdi-arrow-up-bold-outline"
 								clearable
 								type="number"
 								min="0"
@@ -160,7 +175,7 @@
 
 					<v-row>
 						<v-col cols="12" class="pt-0 pb-0">
-							<v-divider></v-divider>
+							<v-divider class="returns-divider"></v-divider>
 						</v-col>
 					</v-row>
 
@@ -168,20 +183,23 @@
 					<v-row class="mt-2 mb-2 returns-actions">
 						<v-col cols="12" sm="4" md="auto">
 							<v-btn
-							block
-							variant="text"
-							color="primary"
-							@click="search_invoices"
-						>
-							<v-icon start>mdi-magnify</v-icon>
-							{{ __("Search") }}
-						</v-btn>
+								block
+								class="cc-action cc-action--primary"
+								@click="search_invoices"
+							>
+								<v-icon start>mdi-magnify</v-icon>
+								{{ __("Search") }}
+							</v-btn>
 						</v-col>
 						<v-col cols="12" sm="4" md="auto">
-						<v-btn block variant="text" color="warning" @click="clear_search">
-							<v-icon start>mdi-refresh</v-icon>
-							{{ __("Clear") }}
-						</v-btn>
+							<v-btn
+								block
+								class="cc-action cc-action--ghost"
+								@click="clear_search"
+							>
+								<v-icon start>mdi-refresh</v-icon>
+								{{ __("Clear") }}
+							</v-btn>
 						</v-col>
 						<v-col
 							cols="12"
@@ -189,14 +207,14 @@
 							md="auto"
 							v-if="pos_profile.posa_allow_return_without_invoice == 1"
 						>
-						<v-btn
-							block
-							variant="text"
-							color="secondary"
-							@click="return_without_invoice"
-						>
-							{{ __("Return without Invoice") }}
-						</v-btn>
+							<v-btn
+								block
+								class="cc-action cc-action--violet"
+								@click="return_without_invoice"
+							>
+								<v-icon start>mdi-receipt-text-remove-outline</v-icon>
+								{{ __("Return without Invoice") }}
+							</v-btn>
 						</v-col>
 					</v-row>
 
@@ -317,14 +335,16 @@
 					</v-row>
 				</v-container>
 				<v-card-actions class="mt-1 returns-card__footer">
-					<v-btn color="error" variant="tonal" @click="close_dialog">
+					<v-btn class="cc-action cc-action--ghost-danger" @click="close_dialog">
+						<v-icon start>mdi-close</v-icon>
 						{{ __("Close") }}
 					</v-btn>
 					<v-btn
 						v-if="selected.length"
-						color="success"
+						class="cc-action cc-action--success"
 						@click="submit_dialog"
 					>
+						<v-icon start>mdi-check</v-icon>
 						{{ __("Select") }}
 					</v-btn>
 				</v-card-actions>
@@ -708,6 +728,16 @@ export default {
 			const invoice_doc = {};
 			invoice_doc.items = [];
 			invoice_doc.is_return = 1;
+			// Pre-fill the customer from the POS profile default (e.g. "Daily
+			// Cash Sales") so the cashier doesn't have to re-pick it after
+			// every blank return.
+			const defaultCustomer =
+				this.pos_profile?.customer ||
+				this.pos_profile?.posa_default_customer ||
+				null;
+			if (defaultCustomer) {
+				invoice_doc.customer = defaultCustomer;
+			}
 			const data = { invoice_doc };
 			this.eventBus.emit("load_return_invoice", data);
 			this.invoicesDialog = false;
@@ -861,41 +891,260 @@ export default {
 	display: flex;
 	flex-direction: column;
 	max-height: min(92vh, 100%);
-	background: var(--pos-surface-raised) !important;
+	background: var(--pos-card-bg, #0e131e) !important;
 	color: var(--pos-text-primary) !important;
-	border: 1px solid var(--pos-border);
+	border: 1px solid var(--pos-border, #252b37);
+	border-radius: 18px;
+	overflow: hidden;
+	box-shadow:
+		0 20px 48px rgba(0, 0, 0, 0.55),
+		0 0 0 1px rgba(226, 54, 112, 0.08);
+	animation: returns-card-slide 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes returns-card-slide {
+	from {
+		opacity: 0;
+		transform: translateY(-12px) scale(0.985);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
 }
 
 .returns-card__title {
 	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 20px 20px 12px;
-	border-bottom: 1px solid var(--pos-border);
+	align-items: center;
+	gap: 14px;
+	padding: 18px 22px;
+	background:
+		linear-gradient(135deg, rgba(226, 54, 112, 0.1), rgba(139, 92, 246, 0.06)),
+		var(--pos-surface-muted, #161c27);
+	border-bottom: 1px solid var(--pos-border, #252b37);
+	flex-shrink: 0;
+}
+
+.returns-card__title-icon-wrap {
+	background: linear-gradient(135deg, rgba(226, 54, 112, 0.22), rgba(139, 92, 246, 0.2));
+	border: 1px solid rgba(226, 54, 112, 0.35);
+	border-radius: 12px;
+	width: 42px;
+	height: 42px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.returns-card__title-icon {
+	font-size: 22px !important;
+	color: var(--pos-primary, #e23670) !important;
 }
 
 .returns-card__title-copy {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 2px;
 	min-width: 0;
+	flex: 1;
+}
+
+.returns-card__title-text {
+	font-size: 1.1rem;
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--pos-text-primary, #e7ebf3);
+	letter-spacing: 0.01em;
 }
 
 .returns-card__subtitle {
-	font-size: 0.88rem;
-	line-height: 1.4;
-	color: var(--pos-text-secondary);
+	font-size: 0.82rem;
+	line-height: 1.35;
+	color: var(--pos-text-secondary, #8595ab);
+}
+
+.returns-card__close {
+	flex-shrink: 0;
+	color: var(--pos-text-secondary, #8595ab) !important;
+}
+
+.returns-card__close:hover {
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	background: rgba(226, 54, 112, 0.08) !important;
 }
 
 .returns-card__content {
 	flex: 1 1 auto;
 	overflow: auto;
-	padding-top: 4px;
+	padding: 18px 22px 16px;
+	background: var(--pos-card-bg, #0e131e);
+}
+
+.returns-card__hint {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 14px;
+	border-radius: 12px;
+	background: linear-gradient(
+		135deg,
+		rgba(226, 54, 112, 0.08),
+		rgba(139, 92, 246, 0.06)
+	);
+	border: 1px solid rgba(226, 54, 112, 0.22);
+	color: var(--pos-text-secondary, #8595ab);
+	font-size: 0.82rem;
+	line-height: 1.35;
+}
+
+.returns-card__hint-icon {
+	font-size: 18px !important;
+	color: var(--pos-primary, #e23670) !important;
+	flex-shrink: 0;
+}
+
+.returns-divider {
+	border-color: var(--pos-border, #252b37) !important;
+	opacity: 0.6;
 }
 
 .returns-actions {
 	align-items: stretch;
+}
+
+/* ── CC field chrome (flat hairline, focus glow) ────────────────── */
+.cc-field :deep(.v-field) {
+	border-radius: 10px !important;
+	background: var(--pos-surface-muted, #161c27) !important;
+	min-height: 42px !important;
+	box-shadow: inset 0 0 0 1px var(--pos-border, #252b37) !important;
+	transition: box-shadow 0.2s ease;
+}
+
+.cc-field :deep(.v-field__overlay) {
+	background: transparent !important;
+	opacity: 0 !important;
+}
+
+.cc-field :deep(.v-field__outline) {
+	display: none !important;
+}
+
+.cc-field :deep(.v-field--focused) {
+	box-shadow:
+		inset 0 0 0 1.5px var(--pos-primary, #e23670),
+		0 0 0 3px rgba(226, 54, 112, 0.14) !important;
+}
+
+.cc-field :deep(.v-field__input) {
+	min-height: 42px !important;
+	font-size: 0.9rem;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+}
+
+.cc-field :deep(.v-label) {
+	color: var(--pos-text-secondary, #8595ab) !important;
+}
+
+.cc-field :deep(.v-field__prepend-inner .v-icon) {
+	color: var(--pos-primary, #e23670);
+	opacity: 0.85;
+}
+
+/* Date pickers: align with cc-field chrome */
+.cc-datepicker :deep(.dp__input) {
+	border-radius: 10px !important;
+	background: var(--pos-surface-muted, #161c27) !important;
+	min-height: 42px !important;
+	border: 1px solid var(--pos-border, #252b37) !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	font-size: 0.9rem !important;
+	padding-left: 38px !important;
+	transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.cc-datepicker :deep(.dp__input:focus) {
+	border-color: var(--pos-primary, #e23670) !important;
+	box-shadow: 0 0 0 3px rgba(226, 54, 112, 0.14) !important;
+}
+
+.cc-datepicker :deep(.dp__input_icon) {
+	color: var(--pos-primary, #e23670) !important;
+	opacity: 0.85;
+}
+
+/* ── CC action buttons ──────────────────────────────────────────── */
+.cc-action.v-btn {
+	min-height: 42px;
+	border-radius: 10px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: none;
+	box-shadow: none !important;
+	transition:
+		transform 0.15s ease,
+		box-shadow 0.2s ease,
+		filter 0.15s ease;
+}
+
+.cc-action.v-btn:hover {
+	transform: translateY(-1px);
+}
+
+.cc-action--primary.v-btn {
+	background: linear-gradient(135deg, #e23670, #b81e54) !important;
+	color: #fff !important;
+	border: 1px solid rgba(226, 54, 112, 0.55);
+}
+
+.cc-action--primary.v-btn:hover {
+	box-shadow: 0 8px 18px rgba(226, 54, 112, 0.32) !important;
+	filter: brightness(1.05);
+}
+
+.cc-action--violet.v-btn {
+	background: linear-gradient(135deg, #8b5cf6, #6d3ee0) !important;
+	color: #fff !important;
+	border: 1px solid rgba(139, 92, 246, 0.55);
+}
+
+.cc-action--violet.v-btn:hover {
+	box-shadow: 0 8px 18px rgba(139, 92, 246, 0.32) !important;
+	filter: brightness(1.05);
+}
+
+.cc-action--success.v-btn {
+	background: linear-gradient(135deg, #10b981, #059669) !important;
+	color: #fff !important;
+	border: 1px solid rgba(16, 185, 129, 0.55);
+}
+
+.cc-action--success.v-btn:hover {
+	box-shadow: 0 8px 18px rgba(16, 185, 129, 0.32) !important;
+	filter: brightness(1.05);
+}
+
+.cc-action--ghost.v-btn {
+	background: var(--pos-surface-muted, #161c27) !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	border: 1px solid var(--pos-border, #252b37);
+}
+
+.cc-action--ghost.v-btn:hover {
+	border-color: rgba(226, 54, 112, 0.45);
+	background: rgba(226, 54, 112, 0.06) !important;
+}
+
+.cc-action--ghost-danger.v-btn {
+	background: transparent !important;
+	color: var(--pos-error, #ef4444) !important;
+	border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.cc-action--ghost-danger.v-btn:hover {
+	background: rgba(239, 68, 68, 0.08) !important;
+	border-color: rgba(239, 68, 68, 0.7);
 }
 
 .returns-results-list {
@@ -984,9 +1233,11 @@ export default {
 	display: flex;
 	justify-content: flex-end;
 	gap: 12px;
-	padding: 14px 20px 18px;
-	background: linear-gradient(180deg, transparent, var(--pos-surface) 30%);
-	border-top: 1px solid var(--pos-border);
+	padding: 14px 22px 18px;
+	background:
+		linear-gradient(135deg, rgba(226, 54, 112, 0.06), rgba(139, 92, 246, 0.04)),
+		var(--pos-surface-muted, #161c27);
+	border-top: 1px solid var(--pos-border, #252b37);
 }
 
 .returns-table :deep(.v-table),
@@ -1020,9 +1271,20 @@ export default {
 		position: sticky;
 		top: 0;
 		z-index: 2;
-		padding: 16px 16px 10px;
-		background: var(--pos-surface);
-		border-bottom: 1px solid var(--pos-border);
+		padding: 14px 14px 12px;
+		background:
+			linear-gradient(135deg, rgba(226, 54, 112, 0.1), rgba(139, 92, 246, 0.06)),
+			var(--pos-surface-muted, #161c27);
+		border-bottom: 1px solid var(--pos-border, #252b37);
+	}
+
+	.returns-card__title-icon-wrap {
+		width: 38px;
+		height: 38px;
+	}
+
+	.returns-card__title-text {
+		font-size: 1rem;
 	}
 
 	.returns-card__content {

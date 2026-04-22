@@ -1,7 +1,7 @@
 <template>
 	<div class="items-card-container">
 		<div v-if="isLoading" class="items-card-grid">
-			<Skeleton v-for="n in 8" :key="n" class="mb-4" height="120" />
+			<Skeleton v-for="n in 8" :key="n" class="mb-2" height="92" />
 		</div>
 		<div
 			v-else-if="displayedItems.length === 0"
@@ -153,9 +153,9 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 
 .items-card-grid {
 	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 16px;
-	padding: 16px;
+	grid-template-columns: 1fr;
+	gap: 10px;
+	padding: 12px;
 	height: calc(100% - 80px);
 	overflow-y: auto;
 	scrollbar-width: thin;
@@ -194,20 +194,20 @@ defineExpose({ scrollToItem, getScrollerElement, scrollerRef });
 }
 
 .virtual-scroller :deep(.items-virtual-list) {
-	padding: 16px;
+	padding: 2px;
 	contain: layout style;
 	box-sizing: border-box;
 }
 
 @media (max-width: 1200px) {
 	.virtual-scroller :deep(.items-virtual-list) {
-		padding: 12px;
+		padding: 2px;
 	}
 }
 
 @media (max-width: 768px) {
 	.virtual-scroller :deep(.items-virtual-list) {
-		padding: 10px;
+		padding: 2px;
 	}
 }
 </style>

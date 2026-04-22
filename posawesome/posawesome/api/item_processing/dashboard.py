@@ -202,9 +202,11 @@ def _batches_available(
 ) -> list[dict[str, Any]]:
     """Per-warehouse batch balances for a batched item.
 
-    Skip non-batched items cheaply. Derives qty from Stock Ledger Entry rather
-    than the Batch doctype's cached `batch_qty` so cancellations stay accurate.
-    Returns only positive-qty batches, ordered by expiry (NULL last) then name.
+    Skip non-batched items cheaply. Modern ERPNext stores batch movements
+    via Serial and Batch Bundle (SLE.batch_no is NULL in that case), so we
+    union the bundle-derived rows with legacy SLE rows that carry the
+    batch_no directly. Returns only positive-qty batches, ordered by
+    warehouse, then expiry (NULL last), then name.
     """
 
     if not hero.get("has_batch_no"):
@@ -214,48 +216,105 @@ def _batches_available(
     if not warehouses:
         return []
 
-    rows = (
+    qty_map: dict[tuple[str, str], float] = {}
+
+    # 1) Bundle-based ledger entries (Serial and Batch Bundle architecture).
+    bundle_rows = (
         frappe.db.sql(
             """
             SELECT
-                sle.batch_no,
-                sle.warehouse,
-                b.expiry_date,
-                COALESCE(SUM(sle.actual_qty), 0) AS qty
-            FROM `tabStock Ledger Entry` sle
-            LEFT JOIN `tabBatch` b ON b.name = sle.batch_no
-            WHERE sle.item_code = %(item_code)s
-              AND sle.batch_no IS NOT NULL
-              AND sle.batch_no != ''
-              AND sle.warehouse IN %(warehouses)s
+                sbb.warehouse,
+                sbe.batch_no,
+                SUM(sbe.qty) AS qty
+            FROM `tabSerial and Batch Entry` sbe
+            INNER JOIN `tabSerial and Batch Bundle` sbb
+                ON sbb.name = sbe.parent
+            INNER JOIN `tabStock Ledger Entry` sle
+                ON sle.serial_and_batch_bundle = sbb.name
+            WHERE sbe.batch_no IS NOT NULL
+              AND sbe.batch_no != ''
+              AND sbb.item_code = %(item_code)s
+              AND sbb.warehouse IN %(warehouses)s
               AND sle.is_cancelled = 0
-            GROUP BY sle.batch_no, sle.warehouse, b.expiry_date
-            HAVING qty > 0
-            ORDER BY sle.warehouse ASC, (b.expiry_date IS NULL), b.expiry_date ASC, sle.batch_no ASC
+            GROUP BY sbb.warehouse, sbe.batch_no
             """,
-            {
-                "item_code": item_code,
-                "warehouses": tuple(warehouses),
-            },
+            {"item_code": item_code, "warehouses": tuple(warehouses)},
             as_dict=True,
         )
         or []
     )
+    for row in bundle_rows:
+        key = (row.get("warehouse"), row.get("batch_no"))
+        qty_map[key] = qty_map.get(key, 0.0) + flt(row.get("qty") or 0)
+
+    # 2) Legacy SLE rows that carry batch_no directly (no bundle).
+    legacy_rows = (
+        frappe.db.sql(
+            """
+            SELECT
+                warehouse,
+                batch_no,
+                SUM(actual_qty) AS qty
+            FROM `tabStock Ledger Entry`
+            WHERE item_code = %(item_code)s
+              AND warehouse IN %(warehouses)s
+              AND batch_no IS NOT NULL
+              AND batch_no != ''
+              AND serial_and_batch_bundle IS NULL
+              AND is_cancelled = 0
+            GROUP BY warehouse, batch_no
+            """,
+            {"item_code": item_code, "warehouses": tuple(warehouses)},
+            as_dict=True,
+        )
+        or []
+    )
+    for row in legacy_rows:
+        key = (row.get("warehouse"), row.get("batch_no"))
+        qty_map[key] = qty_map.get(key, 0.0) + flt(row.get("qty") or 0)
+
+    # Drop empty/negative balances; collect distinct batch names for expiry lookup.
+    positive: list[tuple[str, str, float]] = [
+        (warehouse, batch_no, qty)
+        for (warehouse, batch_no), qty in qty_map.items()
+        if qty > 0 and batch_no
+    ]
+    if not positive:
+        return []
+
+    batch_names = {batch_no for _, batch_no, _ in positive}
+    expiries: dict[str, Any] = {}
+    if batch_names:
+        for doc in frappe.get_all(
+            "Batch",
+            filters={"name": ["in", list(batch_names)]},
+            fields=["name", "expiry_date"],
+        ):
+            expiries[doc.get("name")] = doc.get("expiry_date")
 
     today = frappe.utils.getdate()
     result: list[dict[str, Any]] = []
-    for row in rows:
-        expiry = row.get("expiry_date")
+    for warehouse, batch_no, qty in positive:
+        expiry = expiries.get(batch_no)
         is_expired = bool(expiry and frappe.utils.getdate(expiry) < today)
         result.append(
             {
-                "batch_no": row.get("batch_no"),
-                "warehouse": row.get("warehouse"),
-                "qty": flt(row.get("qty") or 0),
+                "batch_no": batch_no,
+                "warehouse": warehouse,
+                "qty": flt(qty),
                 "expiry_date": cstr(expiry) if expiry else "",
                 "is_expired": is_expired,
             }
         )
+
+    result.sort(
+        key=lambda r: (
+            r["warehouse"] or "",
+            r["expiry_date"] == "",
+            r["expiry_date"],
+            r["batch_no"],
+        )
+    )
     return result
 
 

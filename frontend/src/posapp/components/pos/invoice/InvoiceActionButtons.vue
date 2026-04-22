@@ -3,11 +3,10 @@
 		<v-col cols="6" sm="4">
 			<v-btn
 				block
-				color="accent"
 				theme="dark"
 				prepend-icon="mdi-content-save"
 				@click="$emit('save-and-clear')"
-				class="summary-btn"
+				class="summary-btn summary-btn--save"
 				:loading="saveLoading"
 				:title="__('Save & Clear (Alt+S)')"
 			>
@@ -18,11 +17,10 @@
 		<v-col cols="6" sm="4">
 			<v-btn
 				block
-				color="warning"
 				theme="dark"
 				prepend-icon="mdi-tray-full"
 				@click="$emit('load-drafts')"
-				class="white-text-btn summary-btn"
+				class="white-text-btn summary-btn summary-btn--drafts"
 				:loading="loadDraftsLoading"
 				:title="__('Drafts (Alt+L)')"
 			>
@@ -33,11 +31,10 @@
 		<v-col cols="6" sm="4">
 			<v-btn
 				block
-				color="deep-purple"
 				theme="dark"
 				prepend-icon="mdi-folder-search-outline"
 				@click="$emit('open-invoice-management')"
-				class="summary-btn"
+				class="summary-btn summary-btn--invoice"
 				:loading="invoiceManagementLoading"
 			>
 				<span class="summary-btn__label">{{ __("Invoice Mgmt") }}</span>
@@ -46,11 +43,10 @@
 		<v-col cols="6" sm="4">
 			<v-btn
 				block
-				color="error"
 				theme="dark"
 				prepend-icon="mdi-close-circle"
 				@click="$emit('cancel-sale')"
-				class="summary-btn"
+				class="summary-btn summary-btn--cancel"
 				:loading="cancelLoading"
 				:title="__('Cancel Sale (Alt+2)')"
 			>
@@ -61,11 +57,10 @@
 		<v-col cols="6" sm="4" v-if="pos_profile.posa_allow_return == 1">
 			<v-btn
 				block
-				color="secondary"
 				theme="dark"
 				prepend-icon="mdi-backup-restore"
 				@click="$emit('open-returns')"
-				class="summary-btn"
+				class="summary-btn summary-btn--return"
 				:loading="returnsLoading"
 				:title="__('Sales Return (Alt+8)')"
 			>
@@ -76,11 +71,10 @@
 		<v-col cols="6" sm="4">
 			<v-btn
 				block
-				color="success"
 				theme="dark"
 				prepend-icon="mdi-credit-card"
 				@click="$emit('show-payment')"
-				class="summary-btn pay-btn"
+				class="summary-btn pay-btn summary-btn--pay"
 				:loading="paymentLoading"
 				:title="__('Open payment (Alt+D) — submit + print (Alt+P) — submit only (Alt+X)')"
 			>
@@ -230,21 +224,110 @@ const showCustomerDisplayButton = computed(() =>
 	transform: translateY(0);
 }
 
-/* Special styling for the PAY button — same height as the rest of the row
-   so the 3-col layout stays clean, but visually distinct via gradient
-   + shadow + heavier weight. */
-.pay-btn {
+/* ── Command-Center action button palette ─────────────────────────
+   Each button gets a 135° gradient + colour-matched shadow halo so
+   the row reads like the CC dashboard tiles (Top Selling Items,
+   Stock Alerts, Payments by Store) instead of flat Vuetify chips.
+   The gradient is painted on .v-btn__overlay-replacement (created
+   by overriding the underlying surface) — we set background on the
+   button itself + override Vuetify's color overlay. */
+.summary-btn {
+	color: #ffffff !important;
+}
+
+.summary-btn :deep(.v-btn__overlay) {
+	background: transparent !important;
+}
+
+/* Save & Clear — magenta → orange (CC top revenue tile) */
+.summary-btn--save {
+	background: linear-gradient(135deg, #ec4899 0%, #f97316 100%) !important;
+	box-shadow:
+		0 6px 16px rgba(236, 72, 153, 0.3),
+		0 2px 4px rgba(249, 115, 22, 0.2) !important;
+}
+.summary-btn--save:hover {
+	background: linear-gradient(135deg, #db2777 0%, #ea580c 100%) !important;
+	box-shadow:
+		0 10px 24px rgba(236, 72, 153, 0.4),
+		0 4px 8px rgba(249, 115, 22, 0.25) !important;
+}
+
+/* Drafts — amber → orange (CC second revenue tile) */
+.summary-btn--drafts {
+	background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%) !important;
+	box-shadow:
+		0 6px 16px rgba(245, 158, 11, 0.32),
+		0 2px 4px rgba(249, 115, 22, 0.18) !important;
+}
+.summary-btn--drafts:hover {
+	background: linear-gradient(135deg, #d97706 0%, #ea580c 100%) !important;
+	box-shadow:
+		0 10px 24px rgba(245, 158, 11, 0.42),
+		0 4px 8px rgba(249, 115, 22, 0.25) !important;
+}
+
+/* Invoice Mgmt — indigo → violet */
+.summary-btn--invoice {
+	background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+	box-shadow:
+		0 6px 16px rgba(99, 102, 241, 0.3),
+		0 2px 4px rgba(139, 92, 246, 0.2) !important;
+}
+.summary-btn--invoice:hover {
+	background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+	box-shadow:
+		0 10px 24px rgba(99, 102, 241, 0.4),
+		0 4px 8px rgba(139, 92, 246, 0.25) !important;
+}
+
+/* Cancel Sale — coral → red (matches our brand pink family) */
+.summary-btn--cancel {
+	background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+	box-shadow:
+		0 6px 16px rgba(244, 63, 94, 0.32),
+		0 2px 4px rgba(225, 29, 72, 0.2) !important;
+}
+.summary-btn--cancel:hover {
+	background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
+	box-shadow:
+		0 10px 24px rgba(244, 63, 94, 0.42),
+		0 4px 8px rgba(225, 29, 72, 0.25) !important;
+}
+
+/* Sales Return — teal → emerald (CC third revenue tile) */
+.summary-btn--return {
+	background: linear-gradient(135deg, #14b8a6 0%, #10b981 100%) !important;
+	box-shadow:
+		0 6px 16px rgba(20, 184, 166, 0.3),
+		0 2px 4px rgba(16, 185, 129, 0.2) !important;
+}
+.summary-btn--return:hover {
+	background: linear-gradient(135deg, #0d9488 0%, #059669 100%) !important;
+	box-shadow:
+		0 10px 24px rgba(20, 184, 166, 0.4),
+		0 4px 8px rgba(16, 185, 129, 0.25) !important;
+}
+
+/* PAY — emerald hero, slightly bigger + heavier than its siblings */
+.pay-btn,
+.summary-btn--pay {
 	font-weight: 700 !important;
 	font-size: 0.95rem !important;
 	min-height: 48px !important;
-	background: linear-gradient(135deg, #4caf50, #45a049) !important;
-	box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3) !important;
+	background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+	box-shadow:
+		0 8px 20px rgba(34, 197, 94, 0.35),
+		0 2px 4px rgba(22, 163, 74, 0.25) !important;
 	letter-spacing: 0.04em !important;
 }
 
-.pay-btn:hover {
-	background: linear-gradient(135deg, #45a049, #3d8b40) !important;
-	box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4) !important;
+.pay-btn:hover,
+.summary-btn--pay:hover {
+	background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+	box-shadow:
+		0 12px 28px rgba(34, 197, 94, 0.45),
+		0 4px 8px rgba(22, 163, 74, 0.3) !important;
 	transform: translateY(-2px);
 }
 

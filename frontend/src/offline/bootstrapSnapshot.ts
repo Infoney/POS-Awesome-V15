@@ -699,12 +699,22 @@ function buildPrimaryWarningFromDecision(
 
 	const priorityOrder: BootstrapCapabilityId[] = [
 		"sell_offline",
-		"stock_confidence_offline",
 		"pricing_offline",
 		"print_offline",
 	];
+	// `stock_confidence_offline` is tracked internally for telemetry but
+	// suppressed from the header tooltip — it was too alarmist for cashiers
+	// and duplicated information already surfaced by the stock badges.
+	const SUPPRESSED_FROM_TOOLTIP: BootstrapCapabilityId[] = [
+		"stock_confidence_offline",
+	];
 	const ranked = capabilitySummaries
-		.filter((summary) => summary.severity !== "info" && summary.status !== "ready")
+		.filter(
+			(summary) =>
+				summary.severity !== "info" &&
+				summary.status !== "ready" &&
+				!SUPPRESSED_FROM_TOOLTIP.includes(summary.id),
+		)
 		.sort(
 			(left, right) =>
 				priorityOrder.indexOf(left.id) - priorityOrder.indexOf(right.id),

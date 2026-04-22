@@ -18,16 +18,21 @@
 			{{ formatCurrency(return_discount_meta.prorated_discount) }}
 		</v-alert>
 
-		<div v-if="!useCompactSaleDock" class="summary-hero summary-hero--top">
+		<div
+			v-if="!useCompactSaleDock"
+			class="summary-hero summary-hero--top"
+			:class="{ 'summary-hero--active': hasActiveSaleValue }"
+		>
 			<div class="summary-hero__copy">
 				<span class="summary-hero__eyebrow">{{ __("Active sale") }}</span>
 				<strong class="summary-hero__amount">
-					{{ currencySymbol(displayCurrency) }}{{ formatCurrency(subtotal) }}
+					<span class="summary-hero__currency">{{ currencySymbol(displayCurrency) }}</span>
+					<span class="summary-hero__number">{{ formatCurrency(subtotal) }}</span>
 				</strong>
 				<div class="summary-hero__meta">
 					<span>{{ formatFloat(total_qty, hide_qty_decimals ? 0 : undefined) }} {{ __("qty") }}</span>
 					<span>
-						{{ currencySymbol(displayCurrency) }}{{ formatCurrency(total_items_discount_amount) }}
+						{{ currencySymbol(displayCurrency) }} {{ formatCurrency(total_items_discount_amount) }}
 						{{ __("discount") }}
 					</span>
 				</div>
@@ -43,15 +48,16 @@
 					@blur="handleAdditionalDiscountBlur"
 					:label="frappe._('Additional Discount')"
 					prepend-inner-icon="mdi-cash-minus"
-					variant="solo"
+					variant="outlined"
 					density="compact"
-					color="warning"
+					color="primary"
+					hide-details
 					:prefix="currencySymbol(pos_profile.currency)"
 					:disabled="
 						!pos_profile.posa_allow_user_to_edit_additional_discount ||
 						!!discount_percentage_offer_name
 					"
-					class="summary-field summary-field--dock"
+					class="summary-field summary-field--pill"
 				/>
 
 				<v-text-field
@@ -66,14 +72,15 @@
 					:label="frappe._('Additional Discount %')"
 					suffix="%"
 					prepend-inner-icon="mdi-percent"
-					variant="solo"
+					variant="outlined"
 					density="compact"
-					color="warning"
+					color="primary"
+					hide-details
 					:disabled="
 						!pos_profile.posa_allow_user_to_edit_additional_discount ||
 						!!discount_percentage_offer_name
 					"
-					class="summary-field summary-field--dock"
+					class="summary-field summary-field--pill"
 				/>
 			</div>
 		</div>
@@ -220,6 +227,13 @@ const additionalDiscountPercentageDisplay = ref(
 	normalizeDiscountDisplay(props.additional_discount_percentage),
 );
 const useCompactSaleDock = computed(() => responsive.windowWidth.value < 1100);
+// Drives the pink glowing ring on the Active Sale hero. Subtotal is the
+// source of truth so the ring lights up as soon as any item is in the
+// cart and fades the moment the cart is cleared.
+const hasActiveSaleValue = computed(() => {
+	const n = Number(props.subtotal);
+	return Number.isFinite(n) && Math.abs(n) > 0;
+});
 const showDesktopDrafts = computed(() => Boolean(responsive.isDesktop.value));
 const showReturnDiscountAlert = computed(
 	() =>
@@ -467,6 +481,54 @@ defineExpose({
 		linear-gradient(135deg, rgba(var(--v-theme-primary), 0.1), rgba(var(--v-theme-success), 0.06)),
 		var(--pos-surface-muted);
 	border: 1px solid rgba(var(--v-theme-primary), 0.1);
+	position: relative;
+	transition:
+		border-color 0.3s ease,
+		box-shadow 0.3s ease;
+}
+
+/* Command-Center "Active Missions" style pink glow when the cart has a
+   value. Keeps the same surface but lights up the outline + casts a
+   soft 3-stop halo so it reads as a live, live-value panel. */
+.summary-hero--active {
+	border-color: rgba(226, 54, 112, 0.55);
+	box-shadow:
+		inset 0 0 0 1px rgba(226, 54, 112, 0.35),
+		0 0 0 3px rgba(226, 54, 112, 0.12),
+		0 0 18px rgba(226, 54, 112, 0.28),
+		0 0 42px rgba(226, 54, 112, 0.15);
+	animation: summary-hero-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes summary-hero-pulse {
+	0%,
+	100% {
+		box-shadow:
+			inset 0 0 0 1px rgba(226, 54, 112, 0.35),
+			0 0 0 3px rgba(226, 54, 112, 0.12),
+			0 0 18px rgba(226, 54, 112, 0.28),
+			0 0 42px rgba(226, 54, 112, 0.12);
+	}
+	50% {
+		box-shadow:
+			inset 0 0 0 1px rgba(226, 54, 112, 0.55),
+			0 0 0 3px rgba(226, 54, 112, 0.18),
+			0 0 22px rgba(226, 54, 112, 0.4),
+			0 0 60px rgba(226, 54, 112, 0.22);
+	}
+}
+
+.summary-hero__currency {
+	font-weight: 600;
+	font-size: 0.78em;
+	color: var(--pos-text-secondary);
+	letter-spacing: 0.04em;
+	margin-inline-end: 0.35em;
+}
+
+.summary-hero__number {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
 }
 
 .summary-hero__copy {
@@ -523,6 +585,68 @@ defineExpose({
 
 .summary-field--dock :deep(.v-field) {
 	background: rgba(var(--v-theme-surface), 0.92);
+}
+
+/* Mirror the cart Rate / QTY pill: rounded rectangle, hairline pink
+   outline, same dense height. The three Vuetify outlined segments are
+   zeroed out so the border reads as one continuous hairline instead of
+   three meeting slabs. */
+.summary-field--pill :deep(.v-field) {
+	border-radius: 8px !important;
+	background: var(--pos-primary-container, rgba(226, 54, 112, 0.05)) !important;
+	min-height: 36px !important;
+	box-shadow: inset 0 0 0 1px var(--pos-primary-variant, rgba(226, 54, 112, 0.4)) !important;
+	transition: box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.summary-field--pill :deep(.v-field__overlay) {
+	background: transparent !important;
+	opacity: 0 !important;
+}
+
+.summary-field--pill :deep(.v-field__outline) {
+	display: none !important;
+}
+
+.summary-field--pill :deep(.v-field__outline__start),
+.summary-field--pill :deep(.v-field__outline__end),
+.summary-field--pill :deep(.v-field__outline__notch),
+.summary-field--pill :deep(.v-field__outline__notch::before),
+.summary-field--pill :deep(.v-field__outline__notch::after) {
+	border: 0 !important;
+	border-width: 0 !important;
+}
+
+.summary-field--pill :deep(.v-field--focused) {
+	box-shadow:
+		inset 0 0 0 1.5px var(--pos-primary, rgba(226, 54, 112, 0.85)),
+		0 0 0 3px rgba(226, 54, 112, 0.15) !important;
+}
+
+.summary-field--pill :deep(.v-field__input) {
+	min-height: 36px !important;
+	padding-top: 0 !important;
+	padding-bottom: 0 !important;
+	font-weight: 500;
+	font-size: 0.88rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.summary-field--pill :deep(.v-field__prepend-inner .v-icon) {
+	color: var(--pos-primary, #e23670);
+	opacity: 0.85;
+	font-size: 18px;
+}
+
+.summary-field--pill :deep(.v-field__prefix),
+.summary-field--pill :deep(.v-field__suffix) {
+	color: var(--pos-text-secondary);
+	font-weight: 600;
+	font-size: 0.78rem;
+}
+
+.summary-field--pill :deep(.v-field--disabled) {
+	opacity: 0.55;
 }
 
 @media (max-width: 1279px) {

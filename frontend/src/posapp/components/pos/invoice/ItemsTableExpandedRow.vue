@@ -87,6 +87,7 @@
 							</v-icon>
 						</label>
 						<v-text-field
+							id="rate"
 							density="compact"
 							variant="outlined"
 							hide-details
@@ -104,6 +105,7 @@
 					<div class="posa-cc-field">
 						<label class="posa-cc-field__label">{{ __("Disc %") }}</label>
 						<v-text-field
+							id="discount_percentage"
 							density="compact"
 							variant="outlined"
 							hide-details
@@ -121,6 +123,7 @@
 							{{ __("Disc") }} {{ currencyCode }}
 						</label>
 						<v-text-field
+							id="discount_amount"
 							density="compact"
 							variant="outlined"
 							hide-details
@@ -161,8 +164,9 @@
 				</div>
 			</div>
 
-			<!-- Batches: always visible for batched items -->
-			<div v-if="item.has_batch_no || item.batch_no" class="posa-cc-section">
+			<!-- Batches: only for items flagged as batched (strict check — avoids
+			     rendering the section when has_batch_no is the string "0"). -->
+			<div v-if="itemHasBatchNo" class="posa-cc-section">
 				<span class="posa-cc-eyebrow">{{ __("Batch") }}</span>
 				<div class="posa-cc-batch-grid">
 					<div class="posa-cc-field posa-cc-field--wide">
@@ -216,7 +220,7 @@
 			</div>
 
 			<!-- Serial Numbers: always visible for serialized items -->
-			<div v-if="item.has_serial_no || item.serial_no" class="posa-cc-section">
+			<div v-if="itemHasSerialNo" class="posa-cc-section">
 				<span class="posa-cc-eyebrow">
 					{{ __("Serial Numbers") }}
 					<span class="posa-cc-eyebrow__count">{{ item.serial_no_selected_count || 0 }}</span>
@@ -343,6 +347,18 @@ const primaryBarcode = computed(() => {
 	);
 });
 
+// `has_batch_no`/`has_serial_no` are Frappe booleans that sometimes arrive as
+// string "0"/"1" via the worker cache. Strict numeric parse so non-batched
+// items don't render the Batch section (and block the sale).
+const itemHasBatchNo = computed(() => {
+	const flag = Number(props.item?.has_batch_no ?? 0) > 0;
+	return flag || !!props.item?.batch_no;
+});
+const itemHasSerialNo = computed(() => {
+	const flag = Number(props.item?.has_serial_no ?? 0) > 0;
+	return flag || !!props.item?.serial_no;
+});
+
 const stockStatus = computed(() => {
 	const qty = Number(props.item?._base_actual_qty ?? 0);
 	if (qty > 0) return { tone: "in", label: __("In Stock") };
@@ -355,17 +371,22 @@ const erpUrl = computed(() => {
 	return code ? `/app/item/${encodeURIComponent(code)}` : "";
 });
 
+// Frappe Check fields can arrive as number 1/0, boolean, or string "1"/"0".
+// Coerce through Number() so "0" doesn't leak through as truthy.
+const posProfileFlag = (key: string): boolean =>
+	Number((props.pos_profile as any)?.[key] ?? 0) > 0;
+
 const canEditRate = computed(
-	() => props.pos_profile?.posa_allow_user_to_edit_rate && !props.item?.posa_is_replace,
+	() => posProfileFlag("posa_allow_user_to_edit_rate") && !props.item?.posa_is_replace,
 );
 
 const canChangeListRate = computed(
-	() => !!props.pos_profile?.posa_allow_price_list_rate_change,
+	() => posProfileFlag("posa_allow_price_list_rate_change"),
 );
 
 const canEditDiscount = computed(
 	() =>
-		props.pos_profile?.posa_allow_user_to_edit_item_discount &&
+		posProfileFlag("posa_allow_user_to_edit_item_discount") &&
 		!props.item?.posa_is_replace &&
 		!props.item?.posa_offer_applied,
 );
