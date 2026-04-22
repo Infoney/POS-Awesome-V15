@@ -65,6 +65,25 @@
 				/>
 			</template>
 
+			<!-- Inline Close Shift button between status/gadgets and the cashier chip -->
+			<template v-if="!posProfile?.posa_hide_closing_shift" #shift-actions>
+				<v-btn
+					class="navbar-close-shift-btn"
+					data-test="navbar-close-shift"
+					variant="flat"
+					size="small"
+					density="comfortable"
+					@click="openCloseShift"
+					:aria-label="__('Close Shift')"
+				>
+					<v-icon start size="18">mdi-cash-register</v-icon>
+					<span class="navbar-close-shift-btn__label">{{ __("Close Shift") }}</span>
+					<v-tooltip activator="parent" location="bottom">
+						{{ __("Close current POS shift") }}
+					</v-tooltip>
+				</v-btn>
+			</template>
+
 			<!-- Slot for menu -->
 			<template #menu>
 				<NavbarMenu
@@ -1053,5 +1072,66 @@ export default {
 	position: relative;
 	display: flex;
 	align-items: center;
+}
+
+/* ── Inline Close Shift button (header) ────────────────────────── */
+/* Sits between the system status / gadgets and the cashier chip.
+   CC violet → pink so it reads as a primary header action without
+   competing with the cashier chip. */
+.navbar-close-shift-btn {
+	--v-theme-overlay-multiplier: 0 !important;
+	min-height: 36px;
+	padding: 0 14px !important;
+	border-radius: 999px !important;
+	font-weight: 600 !important;
+	letter-spacing: 0.02em;
+	text-transform: none !important;
+	color: #ffffff !important;
+	background: linear-gradient(
+		135deg,
+		rgba(139, 92, 246, 0.95),
+		rgba(226, 54, 112, 0.95)
+	) !important;
+	border: 1px solid rgba(167, 122, 250, 0.45) !important;
+	box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25) !important;
+	transition:
+		box-shadow 0.18s ease,
+		transform 0.18s ease,
+		filter 0.18s ease !important;
+}
+
+.navbar-close-shift-btn:hover,
+.navbar-close-shift-btn:focus,
+.navbar-close-shift-btn:focus-visible {
+	transform: translateY(-1px);
+	filter: brightness(1.06);
+	box-shadow: 0 6px 18px rgba(226, 54, 112, 0.32) !important;
+}
+
+.navbar-close-shift-btn:deep(.v-btn__overlay),
+.navbar-close-shift-btn:deep(.v-btn__underlay) {
+	opacity: 0 !important;
+	background: transparent !important;
+}
+
+.navbar-close-shift-btn__label {
+	font-size: 0.84rem;
+	line-height: 1;
+}
+
+@media (max-width: 1023px) {
+	.navbar-close-shift-btn__label {
+		display: none;
+	}
+
+	.navbar-close-shift-btn {
+		min-width: 36px;
+		padding: 0 8px !important;
+	}
+
+	.navbar-close-shift-btn :deep(.v-icon.v-btn__prepend),
+	.navbar-close-shift-btn :deep(.v-btn__content > .v-icon:first-child) {
+		margin-inline-end: 0 !important;
+	}
 }
 </style>

@@ -126,6 +126,17 @@
 					</template>
 				</NavbarInfoGadgets>
 
+				<!-- Inline shift actions (e.g. Close Shift) sitting between
+				     the system status / gadgets cluster and the cashier chip. -->
+				<div
+					:class="[
+						'shift-actions-wrapper',
+						isRtl ? 'rtl-shift-actions' : 'ltr-shift-actions',
+					]"
+				>
+					<slot name="shift-actions"></slot>
+				</div>
+
 				<div :class="['profile-section', isRtl ? 'rtl-profile-section' : 'ltr-profile-section']">
 					<v-chip
 						v-if="cashierChipLabel"
@@ -527,16 +538,25 @@ export default {
 	order: 2;
 }
 
-.ltr-actions-section .profile-section {
+/* Close Shift (and friends) live between status/gadgets and the cashier chip */
+.ltr-shift-actions {
 	order: 3;
 }
 
-.ltr-actions-section .primary-actions-cluster {
+.ltr-actions-section .profile-section {
 	order: 4;
+}
+
+.ltr-actions-section .primary-actions-cluster {
+	order: 5;
 }
 
 /* RTL adjustments for gadgets - reverse the order */
 .rtl-info-gadgets {
+	order: 5;
+}
+
+.rtl-shift-actions {
 	order: 4;
 }
 
@@ -546,6 +566,15 @@ export default {
 
 .rtl-actions-section .primary-actions-cluster {
 	order: 1;
+}
+
+.shift-actions-wrapper {
+	display: flex;
+	align-items: center;
+}
+
+.shift-actions-wrapper:empty {
+	display: none;
 }
 
 .pos-navbar-enhanced:hover {
