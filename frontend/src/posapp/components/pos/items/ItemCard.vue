@@ -21,12 +21,12 @@
 			>
 				<template #placeholder>
 					<div class="pos-row-card__fallback">
-						<v-icon size="26" color="white">mdi-currency-usd</v-icon>
+						<v-icon size="20" color="white">mdi-currency-usd</v-icon>
 					</div>
 				</template>
 			</v-img>
 			<div v-else class="pos-row-card__fallback" :aria-label="item.item_name">
-				<v-icon size="26" color="white">mdi-currency-usd</v-icon>
+				<v-icon size="20" color="white">mdi-currency-usd</v-icon>
 			</div>
 		</div>
 
@@ -205,16 +205,16 @@ const onDragEnd = (event) => emit("dragend", event);
 .pos-row-card {
 	display: flex;
 	align-items: center;
-	gap: 14px;
-	padding: 10px 14px 10px 12px;
+	gap: 10px;
+	padding: 6px 12px 6px 10px;
 	background: var(--pos-surface-raised);
 	border: 1px solid var(--pos-border-light);
-	border-radius: 14px;
-	box-shadow: 0 4px 14px var(--pos-shadow-light);
+	border-radius: 12px;
+	box-shadow: 0 3px 10px var(--pos-shadow-light);
 	cursor: pointer;
 	width: 100%;
 	height: 100%;
-	min-height: 76px;
+	min-height: 56px;
 	position: relative;
 	overflow: hidden;
 	transition:
@@ -267,9 +267,9 @@ const onDragEnd = (event) => emit("dragend", event);
 
 .pos-row-card__thumb {
 	flex: 0 0 auto;
-	width: 56px;
-	height: 56px;
-	border-radius: 10px;
+	width: 44px;
+	height: 44px;
+	border-radius: 8px;
 	overflow: hidden;
 	background: var(--pos-surface-muted);
 	border: 1px solid var(--pos-border-light);
@@ -301,7 +301,7 @@ const onDragEnd = (event) => emit("dragend", event);
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 3px;
 }
 
 .pos-row-card__title-row {
@@ -425,18 +425,18 @@ const onDragEnd = (event) => emit("dragend", event);
 
 @media (max-width: 768px) {
 	.pos-row-card {
-		gap: 10px;
-		padding: 8px 12px 8px 10px;
+		gap: 8px;
+		padding: 6px 10px 6px 8px;
 	}
 	.pos-row-card__thumb {
-		width: 48px;
-		height: 48px;
+		width: 40px;
+		height: 40px;
 	}
 	.pos-row-card__name {
-		font-size: 0.9rem;
+		font-size: 0.88rem;
 	}
 	.pos-row-card__price-amount {
-		font-size: 0.95rem;
+		font-size: 0.92rem;
 	}
 	.pos-row-card__code {
 		display: none;

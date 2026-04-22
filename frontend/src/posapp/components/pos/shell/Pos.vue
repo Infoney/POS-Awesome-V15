@@ -474,7 +474,10 @@ export default {
 		});
 
 		// ── Resizable selector / invoice split ───────────────────────────
-		const SPLIT_STORAGE_KEY = "posa.panelSplit.selectorCols";
+		// v2 storage key — bumped when the default selectorCols changed from 7 to 6.
+		// Old `posa.panelSplit.selectorCols` values (mostly the previous default 7)
+		// shouldn't override the new balanced 6/6 layout requested in the redesign.
+		const SPLIT_STORAGE_KEY = "posa.panelSplit.selectorCols.v2";
 		const SPLIT_MIN = 3;
 		const SPLIT_MAX = 9;
 		const readStoredSplit = () => {
@@ -483,7 +486,7 @@ export default {
 				const n = Number(raw);
 				if (Number.isFinite(n) && n >= SPLIT_MIN && n <= SPLIT_MAX) return n;
 			} catch {}
-			return 7;
+			return 6;
 		};
 		const selectorCols = ref(readStoredSplit());
 		const invoiceCols = computed(() => 12 - selectorCols.value);
@@ -527,7 +530,7 @@ export default {
 		};
 
 		const resetPanelSplit = () => {
-			selectorCols.value = 7;
+			selectorCols.value = 6;
 			try {
 				localStorage.setItem(SPLIT_STORAGE_KEY, String(selectorCols.value));
 			} catch {}

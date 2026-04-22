@@ -1,7 +1,7 @@
 <template>
 	<div class="items-card-container">
 		<div v-if="isLoading" class="items-card-grid">
-			<Skeleton v-for="n in 8" :key="n" class="mb-2" height="92" />
+			<Skeleton v-for="n in 8" :key="n" class="mb-2" height="68" />
 		</div>
 		<div
 			v-else-if="displayedItems.length === 0"

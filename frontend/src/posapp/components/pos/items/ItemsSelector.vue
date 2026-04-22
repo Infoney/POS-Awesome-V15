@@ -1479,11 +1479,13 @@ defineExpose({
 }
 
 .dynamic-padding {
-	/* Equal spacing on all sides for consistent alignment */
-	padding: var(--dynamic-sm);
+	/* Tight 6px inset so the items list hugs the left panel chrome.
+	   Was `var(--dynamic-sm)` (~8px); reduced per redesign so the row
+	   cards line up flush with the surrounding panel. */
+	padding: 6px;
 	display: flex;
 	flex-direction: column;
-	gap: var(--dynamic-sm);
+	gap: 6px;
 }
 
 .selection-card {
@@ -1646,7 +1648,7 @@ defineExpose({
 @media (max-width: 768px) {
 	.dynamic-padding {
 		/* Reduce spacing uniformly on smaller screens */
-		padding: var(--dynamic-xs);
+		padding: 5px;
 	}
 
 	.selection-card {
@@ -1668,7 +1670,7 @@ defineExpose({
 
 @media (max-width: 480px) {
 	.dynamic-padding {
-		padding: var(--dynamic-xs);
+		padding: 5px;
 	}
 }
 
