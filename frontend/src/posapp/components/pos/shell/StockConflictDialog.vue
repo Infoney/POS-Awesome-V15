@@ -16,11 +16,7 @@
 						{{ __("Stock conflict detected") }}
 					</h3>
 					<p class="conflict-dialog__subtitle">
-						{{
-							__(
-								"Your sale cannot be completed because the same batch is already claimed by other invoices that haven't been submitted yet.",
-							)
-						}}
+						{{ subtitleText }}
 					</p>
 				</div>
 				<button
@@ -271,6 +267,23 @@ export default {
 			() => drafts.value.length > 0 && selectedKeys.value.size === drafts.value.length,
 		);
 
+		// The dialog handles two distinct shortage reasons:
+		//   1. Batch claimed by another draft  → "same batch is already claimed…"
+		//   2. Bin total too low / non-batched → "stock is below the requested qty…"
+		// Only show the batch wording when at least one shortage actually
+		// references a batch_no — otherwise the cashier sees a confusing
+		// "claimed by other invoices" line for an item that isn't even batched.
+		const subtitleText = computed(() => {
+			const hasBatchShortage = shortages.value.some((s) => !!(s && s.batch_no));
+			return hasBatchShortage
+				? __(
+						"Your sale cannot be completed because the same batch is already claimed by other invoices that haven't been submitted yet.",
+					)
+				: __(
+						"Your sale cannot be completed because the available stock is below the requested quantity.",
+					);
+		});
+
 		const keyFor = (draft) => `${draft.doctype}::${draft.name}`;
 		const isSelected = (draft) => selectedKeys.value.has(keyFor(draft));
 
@@ -511,6 +524,7 @@ export default {
 			drafts,
 			selectedKeys,
 			allSelected,
+			subtitleText,
 			isSelected,
 			toggleSelected,
 			toggleSelectAll,

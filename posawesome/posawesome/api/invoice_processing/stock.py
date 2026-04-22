@@ -120,6 +120,19 @@ def _collect_stock_errors(items):
         # must keep validating regardless of the item-level flag.
         if not _has_batch_no(d) and _allow_negative_stock(d, global_allow_negative=0):
             continue
+
+        # Defensive: a stale cart line or an over-eager auto-picker can attach
+        # a `batch_no` to an item that isn't actually batched. Strip it BEFORE
+        # the bulk Bin/SLE fetch so the row goes down the non-batched path
+        # (Bin total) instead of querying SLE for a phantom batch (which
+        # returns 0 and surfaces a bogus shortage).
+        if d.get("batch_no") and not _has_batch_no(d):
+            try:
+                d["batch_no"] = ""
+            except TypeError:
+                # Frappe child-doc rows reject __setitem__ — use attribute set.
+                d.batch_no = ""
+
         items_to_check.append(d)
 
     if not items_to_check:
@@ -132,14 +145,6 @@ def _collect_stock_errors(items):
         warehouse = d.get("warehouse")
         batch_no = cstr(d.get("batch_no"))
         requested = flt(d.get("stock_qty") or (flt(d.get("qty")) * flt(d.get("conversion_factor") or 1)))
-
-        # Defensive: a stale cart line or an over-eager auto-picker can attach
-        # a `batch_no` to an item that isn't actually batched. Looking that up
-        # against the SLE returns 0 and surfaces a phantom shortage with a
-        # bogus batch tag. Drop the batch before validating so the row falls
-        # through to the plain (Bin total) check below.
-        if batch_no and not _has_batch_no(d):
-            batch_no = ""
 
         if batch_no:
             # Caller picked (or auto-picker assigned) a specific batch — validate
