@@ -496,11 +496,28 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 						? line.stock_qty
 						: Number(line.qty || 0) * conversion,
 				);
+				// Strip batch_no when the line clearly isn't batched. A stale
+				// cart line or an over-eager auto-picker can stamp a phantom
+				// batch on a non-batch item; sending it would surface a fake
+				// "0 of <batch>" shortage in the conflict dialog.
+				const hasBatchFlag = line.has_batch_no;
+				const isBatched =
+					hasBatchFlag === true ||
+					hasBatchFlag === 1 ||
+					hasBatchFlag === "1" ||
+					hasBatchFlag === "true";
+				const safeBatchNo =
+					hasBatchFlag === undefined || hasBatchFlag === null
+						? line.batch_no || ""
+						: isBatched
+							? line.batch_no || ""
+							: "";
 				return {
 					item_code: line.item_code,
 					item_name: line.item_name || line.item_code,
 					warehouse: line.warehouse,
-					batch_no: line.batch_no || "",
+					batch_no: safeBatchNo,
+					has_batch_no: isBatched ? 1 : 0,
 					qty: Number(line.qty || 0),
 					stock_qty: stockQty,
 					conversion_factor: conversion,

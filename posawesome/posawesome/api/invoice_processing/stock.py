@@ -133,6 +133,14 @@ def _collect_stock_errors(items):
         batch_no = cstr(d.get("batch_no"))
         requested = flt(d.get("stock_qty") or (flt(d.get("qty")) * flt(d.get("conversion_factor") or 1)))
 
+        # Defensive: a stale cart line or an over-eager auto-picker can attach
+        # a `batch_no` to an item that isn't actually batched. Looking that up
+        # against the SLE returns 0 and surfaces a phantom shortage with a
+        # bogus batch tag. Drop the batch before validating so the row falls
+        # through to the plain (Bin total) check below.
+        if batch_no and not _has_batch_no(d):
+            batch_no = ""
+
         if batch_no:
             # Caller picked (or auto-picker assigned) a specific batch — validate
             # that batch directly. Catches the "Batch X has negative stock" case
