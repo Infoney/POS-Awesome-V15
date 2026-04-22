@@ -17,33 +17,30 @@
 			</div>
 
 			<v-row class="payments ma-0" dense>
-				<v-col cols="12" md="7" v-if="!isMpesaC2bPayment(payment)">
-					<v-text-field
-						density="compact"
-						variant="solo"
-						:color="isReturn ? 'error' : 'primary'"
-						:label="frappe._('Amount')"
-						:class="['sleek-field pos-themed-input', isReturn ? 'pos-themed-input--refund' : '']"
-						hide-details
-						:model-value="formatCurrency(payment.amount)"
-						@change="$emit('update-amount', payment, $event)"
-						:rules="[isNumber]"
-						:prefix="currencySymbol(currency)"
-						@focus="$emit('set-rest-amount', payment, isReturn)"
-						:readonly="isGiftCardPayment(payment)"
-					></v-text-field>
-				</v-col>
-				<v-col cols="12" md="5" v-if="!isMpesaC2bPayment(payment)">
-					<div class="payment-method-actions">
+				<v-col cols="12" v-if="!isMpesaC2bPayment(payment)" class="pa-0">
+					<div class="payment-method-row">
+						<v-text-field
+							density="compact"
+							variant="solo"
+							:color="isReturn ? 'error' : 'primary'"
+							:label="frappe._('Amount')"
+							:class="['sleek-field pos-themed-input payment-method-amount', isReturn ? 'pos-themed-input--refund' : '']"
+							hide-details
+							:model-value="formatCurrency(payment.amount)"
+							@change="$emit('update-amount', payment, $event)"
+							:rules="[isNumber]"
+							:prefix="currencySymbol(currency)"
+							@focus="$emit('set-rest-amount', payment, isReturn)"
+							:readonly="isGiftCardPayment(payment)"
+						></v-text-field>
 						<v-btn
-							block
 							color="primary"
 							variant="flat"
-							class="payment-method-action-btn"
+							class="payment-method-action-btn payment-method-action-btn--inline"
 							:data-test="`payment-method-action-${payment.mode_of_payment}`"
 							@click="handlePrimaryAction(payment)"
 						>
-							{{ 
+							{{
 								isGiftCardPayment(payment)
 									? __("Redeem / Scan")
 									: payment.mode_of_payment
@@ -221,6 +218,18 @@ const handlePrimaryAction = (payment) => {
 	font-weight: 700;
 }
 
+.payment-method-row {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	min-width: 0;
+}
+
+.payment-method-row .payment-method-amount {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
 .payment-method-action-btn {
 	--v-theme-overlay-multiplier: 0 !important;
 	min-height: 40px;
@@ -241,6 +250,17 @@ const handlePrimaryAction = (payment) => {
 	border: 1px solid rgba(139, 92, 246, 0.45) !important;
 	box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25) !important;
 	color: #ffffff !important;
+}
+
+.payment-method-action-btn--inline {
+	flex: 0 0 auto;
+	max-width: 45%;
+	min-height: 40px;
+	height: auto;
+	padding-inline: 12px !important;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .payment-method-actions {
@@ -317,6 +337,16 @@ const handlePrimaryAction = (payment) => {
 
 	.payment-method-actions {
 		grid-template-columns: 1fr;
+	}
+
+	.payment-method-row {
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.payment-method-action-btn--inline {
+		max-width: 100%;
+		width: 100%;
 	}
 }
 </style>

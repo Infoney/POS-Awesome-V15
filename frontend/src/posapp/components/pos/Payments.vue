@@ -146,6 +146,23 @@
 							"
 							@new-address="new_address"
 						/>
+						<div class="payment-section__subsection">
+							<h3 class="payment-section__title payment-section__title--subsection">
+								{{ __("Sales Person and Print") }}
+							</h3>
+						</div>
+						<PaymentSelectionFields
+							:sales-persons="sales_persons"
+							:sales-person="sales_person"
+							:readonly="readonly"
+							:print-formats="print_formats"
+							:print-format="print_format"
+							:show-print-format="
+								parseBooleanSetting(pos_profile?.posa_allow_select_print_format_in_payments)
+							"
+							@update:sales-person="sales_person = $event"
+							@update:print-format="print_format = $event"
+						/>
 					</section>
 
 					<section class="payment-section payment-section--settlement">
@@ -198,24 +215,6 @@
 						@set-formatted-currency="
 							(data) => setFormatedCurrency(data.target, data.field, null, false, data.value)
 						"
-					/>
-				</section>
-
-				<section class="payment-section payment-section--meta">
-					<div class="payment-section__header">
-						<h3 class="payment-section__title">{{ __("Sales Person and Print") }}</h3>
-					</div>
-					<PaymentSelectionFields
-						:sales-persons="sales_persons"
-						:sales-person="sales_person"
-						:readonly="readonly"
-						:print-formats="print_formats"
-						:print-format="print_format"
-						:show-print-format="
-							parseBooleanSetting(pos_profile?.posa_allow_select_print_format_in_payments)
-						"
-						@update:sales-person="sales_person = $event"
-						@update:print-format="print_format = $event"
 					/>
 				</section>
 			</div>
@@ -2024,8 +2023,7 @@ onBeforeUnmount(() => {
 	grid-template-areas:
 		"summary adjustments"
 		"methods adjustments"
-		"settlement adjustments"
-		"meta adjustments";
+		"settlement adjustments";
 }
 
 .payment-section {
@@ -2059,34 +2057,12 @@ onBeforeUnmount(() => {
 	grid-area: adjustments;
 }
 
-.payment-sections--dialog .payment-section--meta {
-	grid-area: meta;
-}
-
 .payment-section--summary {
 	background: linear-gradient(
 		180deg,
 		rgba(var(--v-theme-primary), 0.08) 0%,
 		var(--pos-surface-muted) 100%
 	);
-}
-
-.payment-sections--dialog .payment-section--meta {
-	background: linear-gradient(
-		180deg,
-		rgba(139, 92, 246, 0.08) 0%,
-		var(--pos-surface-muted) 100%
-	);
-	border-color: rgba(139, 92, 246, 0.22);
-}
-
-.payment-sections--dialog .payment-section--meta .payment-section__title {
-	background: linear-gradient(135deg, #c4b5fd 0%, #fb7185 100%);
-	background-clip: text;
-	-webkit-background-clip: text;
-	color: transparent;
-	-webkit-text-fill-color: transparent;
-	letter-spacing: 0.02em;
 }
 
 .payment-section__header {
