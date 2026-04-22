@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Stop Default MySQL
         run: sudo service mysql stop
@@ -44,7 +44,7 @@ jobs:
           sudo apt-get install -y nodejs yarn
 
       - name: Cache pip dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -69,8 +69,14 @@ jobs:
           bench init --frappe-branch version-15 --python python3 frappe-bench
 
       - name: Setup Site and Install App (Dynamic)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd frappe-bench
+
+          # Authenticate git for private-repo clones (needed when this repo is private).
+          # Uses the workflow's built-in GITHUB_TOKEN which has read access to the current repo.
+          git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
           # Detect the branch name that triggered the workflow
           # Use GITHUB_HEAD_REF for pull request events, otherwise fall back to GITHUB_REF
