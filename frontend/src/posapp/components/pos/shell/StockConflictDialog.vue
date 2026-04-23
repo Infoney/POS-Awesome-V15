@@ -615,16 +615,20 @@ export default {
 }
 
 .conflict-dialog__actions {
-	padding: 14px 22px;
+	padding: 14px 18px;
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 8px;
 	background: var(--pos-surface-muted, #161c27);
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 }
 
+/* Spacer used to push the primary action to the right on wider rows.
+   On the typical 640px dialog the three buttons are tight, so let it
+   collapse to nothing rather than forcing a wrap. */
 .conflict-action__spacer {
-	flex: 1 1 auto;
+	flex: 0 1 8px;
+	min-width: 0;
 }
 
 .conflict-action {
@@ -632,14 +636,18 @@ export default {
 	cursor: pointer;
 	display: inline-flex;
 	align-items: center;
-	gap: 6px;
-	padding: 10px 18px;
+	justify-content: center;
+	gap: 4px;
+	padding: 9px 12px;
 	border-radius: 10px;
 	font-weight: 700;
-	letter-spacing: 0.02em;
-	font-size: 0.92rem;
+	letter-spacing: 0.01em;
+	font-size: 0.84rem;
 	color: #fff;
 	box-sizing: border-box;
+	white-space: nowrap;
+	flex: 0 1 auto;
+	min-width: 0;
 	transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
 }
@@ -687,6 +695,7 @@ export default {
 @media (max-width: 600px) {
 	.conflict-dialog__actions {
 		padding: 12px 14px;
+		flex-wrap: wrap;
 	}
 
 	.conflict-action {
