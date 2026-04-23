@@ -4,6 +4,7 @@ import {
 	saveOfflineInvoice,
 	isOffline,
 	updateLocalStock,
+	updateLocalStockCache,
 } from "../../../../offline/index";
 import { ensureInvoiceClientRequestId } from "../../../../offline/idempotency";
 import stockCoordinator from "../../../utils/stockCoordinator";
@@ -218,6 +219,78 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			eventBus.emit("open_stock_conflict_dialog", payload);
 		}
 		return true;
+	};
+
+	/**
+	 * Push the server-reported `available_qty` for each conflicted item into
+	 * both the offline scope cache and the in-memory stockCoordinator so the
+	 * left items panel re-renders with the real balance instead of the stale
+	 * pre-conflict number.
+	 *
+	 * The original symptom: cashier sees "ADOL CAPLETS 48 — 4 NOS" on the
+	 * panel, the conflict resolver pops up and reports "available 0", but
+	 * once the dialog closes the panel still says 4 NOS — which lets the
+	 * cashier add the item again and re-trigger the same conflict. By
+	 * writing the conflict's `available` value into the same cache the
+	 * panel reads from, the item flips to "0 NOS" and is effectively
+	 * unsellable until the next stock sync proves otherwise.
+	 *
+	 * Multiple shortages for the same item (different batches in the same
+	 * warehouse) all report the same item-level available_qty, so we take
+	 * the minimum to stay conservative if the server ever sends per-batch
+	 * differing numbers.
+	 */
+	const refreshStockFromShortages = (
+		shortages: Array<{
+			item_code: string;
+			available: number;
+		}>,
+	) => {
+		if (!Array.isArray(shortages) || !shortages.length) {
+			return;
+		}
+
+		const lowestByItem = new Map<string, number>();
+		shortages.forEach((row) => {
+			if (!row || !row.item_code) return;
+			const code = String(row.item_code).trim();
+			if (!code) return;
+			const candidate = Number(row.available);
+			if (!Number.isFinite(candidate)) return;
+			const safe = Math.max(0, candidate);
+			const previous = lowestByItem.get(code);
+			if (previous === undefined || safe < previous) {
+				lowestByItem.set(code, safe);
+			}
+		});
+
+		if (!lowestByItem.size) {
+			return;
+		}
+
+		const entries = Array.from(lowestByItem.entries()).map(
+			([item_code, actual_qty]) => ({ item_code, actual_qty }),
+		);
+
+		try {
+			updateLocalStockCache(entries);
+		} catch (err) {
+			console.warn(
+				"[usePaymentSubmission] refreshStockFromShortages: offline cache update failed",
+				err,
+			);
+		}
+
+		try {
+			stockCoordinator.updateBaseQuantities(entries, {
+				source: "stock-conflict",
+			});
+		} catch (err) {
+			console.warn(
+				"[usePaymentSubmission] refreshStockFromShortages: stockCoordinator update failed",
+				err,
+			);
+		}
 	};
 
 	const formatStockErrors = (errors: any[]) => {
@@ -598,6 +671,11 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			requested: Number(row.requested_qty || 0),
 			label: row.item_name || row.item_code,
 		}));
+
+		// Refresh the items panel before showing the dialog so that even
+		// if the cashier picks "Cancel sale" they see the real availability
+		// (typically 0) and can't immediately re-add the same item.
+		refreshStockFromShortages(shortages);
 
 		// Surface the structured conflict resolver dialog if we have an
 		// event bus to talk to. The dialog offers the cashier explicit
@@ -1309,6 +1387,11 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			// actual submit. Detect that here and re-route to the dialog.
 			const serverShortage = detectNegativeStockShortage(exc);
 			if (serverShortage) {
+				// Server-side conflict caught between pre-flight and submit
+				// — sync the panel cache for the same reason the pre-flight
+				// branch does (cashier shouldn't see stale stock after a
+				// failed submit).
+				refreshStockFromShortages([serverShortage]);
 				const dialogShown = emitStockConflictDialog([serverShortage]);
 				if (dialogShown) {
 					if (onFinishNavigation) onFinishNavigation(false);
