@@ -196,6 +196,7 @@ import { forceClearAllCache } from "../../offline/index";
 import { clearAllCaches } from "../../utils/clearAllCaches";
 import { isOffline } from "../../offline/index";
 import { useRtl } from "../composables/core/useRtl";
+import { useCashierLabel } from "../composables/pos/shared/useCashierLabel";
 
 const ServerUsageGadget = defineAsyncComponent(() => import("./navbar/ServerUsageGadget.vue"));
 const DatabaseUsageGadget = defineAsyncComponent(() => import("./navbar/DatabaseUsageGadget.vue"));
@@ -219,6 +220,8 @@ export default {
 		const { isFrozen, freezeTitle, freezeMessage } = storeToRefs(uiStore);
 		const { currentCashier, currentCashierDisplay } = storeToRefs(employeeStore);
 		const { panelOpen: offlinePanelOpen } = storeToRefs(offlineSyncStore);
+		// Configurable label for "Cashier" — see useCashierLabel.
+		const { cashierLabel, relabel } = useCashierLabel();
 
 		return {
 			isRtl,
@@ -241,6 +244,8 @@ export default {
 			currentCashier,
 			currentCashierDisplay,
 			offlinePanelOpen,
+			cashierLabel,
+			relabel,
 		};
 	},
 	components: {
@@ -452,7 +457,7 @@ export default {
 			const personalActions = [
 				{
 					id: "manage-cashier-pin",
-					label: this.__("Manage Cashier PIN"),
+					label: this.relabel(this.__("Manage Cashier PIN")),
 					subtitle: this.currentCashierDisplay || this.__("Create or change your PIN"),
 					icon: "mdi-form-textbox-password",
 					tone: "secondary",

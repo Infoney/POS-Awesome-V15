@@ -11,7 +11,7 @@
 				</div>
 				<div class="gift-cards-view__hero-badges">
 					<span class="gift-cards-view__badge gift-cards-view__badge--soft">
-						{{ isSupervisor ? __("Supervisor Access") : __("Cashier Access") }}
+						{{ isSupervisor ? __("Supervisor Access") : relabel(__("Cashier Access")) }}
 					</span>
 					<span class="gift-cards-view__badge">
 						{{ posProfile?.company || __("No Company Selected") }}
@@ -152,6 +152,7 @@ import { storeToRefs } from "pinia";
 
 import { useEmployeeStore } from "../../../stores/employeeStore";
 import { useUIStore } from "../../../stores/uiStore";
+import { useCashierLabel } from "../../../composables/pos/shared/useCashierLabel";
 
 const __ = window.__;
 const frappe = window.frappe;
@@ -160,6 +161,8 @@ const employeeStore = useEmployeeStore();
 const uiStore = useUIStore();
 const { currentCashier } = storeToRefs(employeeStore);
 const { posProfile } = storeToRefs(uiStore);
+// Configurable label for "Cashier" — see useCashierLabel.
+const { relabel } = useCashierLabel();
 
 const cardCode = ref("");
 const amount = ref("");

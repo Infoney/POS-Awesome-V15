@@ -36,11 +36,11 @@
 			@click="$emit('submit-and-print')"
 			:loading="loading"
 			:disabled="loading || validatePayment"
-			:title="__('Submit & Print (Alt+P)')"
+			:title="__('Submit & Print (F4)')"
 		>
 			<v-icon start size="18">mdi-printer-check</v-icon>
 			<span class="payment-btn__label">{{ __("Submit & Print") }}</span>
-			<ShortcutHint combo="Alt+P" tone="light" class="payment-btn__hint" />
+			<ShortcutHint combo="F4" tone="light" class="payment-btn__hint" />
 		</v-btn>
 	</v-card>
 </template>

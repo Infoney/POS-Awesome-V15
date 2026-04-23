@@ -17,12 +17,12 @@
 			class="navbar-cashier-pin-form__alert navbar-cashier-pin-form__alert--warning"
 			data-test="cashier-pin-empty-state"
 		>
-			{{ __("Load a POS profile and cashier first.") }}
+			{{ relabel(__("Load a POS profile and cashier first.")) }}
 		</div>
 
 		<template v-else>
 			<div class="navbar-cashier-pin-form__summary">
-				<div class="navbar-cashier-pin-form__summary-label">{{ __("Cashier") }}</div>
+				<div class="navbar-cashier-pin-form__summary-label">{{ cashierLabel }}</div>
 				<div class="navbar-cashier-pin-form__summary-value">
 					{{ currentCashierDisplay || __("Not selected") }}
 				</div>
@@ -108,7 +108,7 @@
 			</div>
 
 			<div class="navbar-cashier-pin-form__help">
-				{{ __("Use a 4 to 8 digit PIN for cashier switching and terminal unlock.") }}
+				{{ relabel(__("Use a 4 to 8 digit PIN for cashier switching and terminal unlock.")) }}
 			</div>
 
 			<div class="navbar-cashier-pin-form__actions">
@@ -129,10 +129,14 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from "vue";
+import { useCashierLabel } from "../../composables/pos/shared/useCashierLabel";
 
 defineOptions({
 	name: "NavbarCashierPinForm",
 });
+
+// Configurable label for "Cashier" — see useCashierLabel.
+const { cashierLabel, relabel } = useCashierLabel();
 
 const props = defineProps({
 	posProfile: {
@@ -226,10 +230,10 @@ async function loadPinStatus() {
 		pinStatus.value = response?.message || { has_pin: false };
 		pinMessage.value = pinStatus.value.has_pin
 			? __("Enter the current PIN, then choose a new one.")
-			: __("No cashier PIN is set yet. Create one now.");
+			: relabel(__("No cashier PIN is set yet. Create one now."));
 		pinMessageType.value = pinStatus.value.has_pin ? "info" : "warning";
 	} catch (error) {
-		pinMessage.value = error?.message || __("Unable to load cashier PIN status.");
+		pinMessage.value = error?.message || relabel(__("Unable to load cashier PIN status."));
 		pinMessageType.value = "error";
 	} finally {
 		pinStatusLoading.value = false;
@@ -273,11 +277,11 @@ async function saveCashierPin() {
 			},
 		});
 		pinStatus.value = response?.message || { has_pin: true };
-		pinMessage.value = __("Cashier PIN saved successfully.");
+		pinMessage.value = relabel(__("Cashier PIN saved successfully."));
 		pinMessageType.value = "success";
 		emit("saved", pinStatus.value);
 	} catch (error) {
-		pinMessage.value = error?.message || __("Unable to save cashier PIN.");
+		pinMessage.value = error?.message || relabel(__("Unable to save cashier PIN."));
 		pinMessageType.value = "error";
 	} finally {
 		pinSubmitting.value = false;

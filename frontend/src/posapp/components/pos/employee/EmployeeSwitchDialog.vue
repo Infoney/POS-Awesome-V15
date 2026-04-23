@@ -4,21 +4,21 @@
 				<v-card-title class="employee-switch-dialog__title">
 					<div>
 						<div class="employee-switch-dialog__eyebrow">{{ __("Shared terminal") }}</div>
-						<div class="text-h6">{{ __("Switch Cashier") }}</div>
+						<div class="text-h6">{{ relabel(__("Switch Cashier")) }}</div>
 					</div>
 					<v-btn
 						icon="mdi-close"
 						variant="text"
-						:aria-label="__('Close cashier switcher')"
+						:aria-label="relabel(__('Close cashier switcher'))"
 						@click="employeeStore.closeEmployeeSwitch()"
 					/>
 				</v-card-title>
 				<v-card-text>
 					<div class="employee-switch-dialog__copy">
-						{{ __("Choose the cashier currently operating this terminal.") }}
+						{{ relabel(__("Choose the cashier currently operating this terminal.")) }}
 					</div>
 					<div v-if="!terminalEmployees.length" class="employee-switch-dialog__empty">
-						{{ __("No cashier profiles are available for this POS profile yet.") }}
+						{{ relabel(__("No cashier profiles are available for this POS profile yet.")) }}
 					</div>
 					<div v-else class="employee-switch-dialog__list">
 						<button
@@ -44,7 +44,7 @@
 						class="employee-switch-dialog__help"
 						data-test="cashier-pin-help"
 					>
-						{{ __("Set each cashier PIN in the User form and keep terminal members assigned in POS Profile User.") }}
+						{{ relabel(__("Set each cashier PIN in the User form and keep terminal members assigned in POS Profile User.")) }}
 					</v-alert>
 					<v-text-field
 						v-model="cashierPin"
@@ -53,7 +53,7 @@
 						variant="outlined"
 						density="comfortable"
 						hide-details="auto"
-						:label="__('Cashier PIN')"
+						:label="relabel(__('Cashier PIN'))"
 						:data-test="'cashier-pin-input'"
 						@click:append-inner="showPin = !showPin"
 						@keyup.enter="submitSwitch"
@@ -80,7 +80,7 @@
 						data-test="cashier-pin-submit"
 						@click="submitSwitch"
 					>
-						{{ __("Use Cashier") }}
+						{{ relabel(__("Use Cashier")) }}
 					</v-btn>
 				</v-card-actions>
 			</v-card>
@@ -96,7 +96,7 @@
 				</v-card-title>
 				<v-card-text>
 					<div class="employee-switch-dialog__copy">
-						{{ __("Select the cashier who is taking over this terminal.") }}
+						{{ relabel(__("Select the cashier who is taking over this terminal.")) }}
 					</div>
 					<div class="employee-switch-dialog__list">
 						<button
@@ -120,7 +120,7 @@
 						density="comfortable"
 						class="employee-switch-dialog__help"
 					>
-						{{ __("Set each cashier PIN in the User form and keep terminal members assigned in POS Profile User.") }}
+						{{ relabel(__("Set each cashier PIN in the User form and keep terminal members assigned in POS Profile User.")) }}
 					</v-alert>
 					<v-text-field
 						v-model="cashierPin"
@@ -129,7 +129,7 @@
 						variant="outlined"
 						density="comfortable"
 						hide-details="auto"
-						:label="__('Cashier PIN')"
+						:label="relabel(__('Cashier PIN'))"
 						@click:append-inner="showPin = !showPin"
 						@keyup.enter="submitUnlock"
 					/>
@@ -162,9 +162,15 @@ import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useEmployeeStore } from "../../../stores/employeeStore";
 import { useUIStore } from "../../../stores/uiStore";
+import { useCashierLabel } from "../../../composables/pos/shared/useCashierLabel";
 
 const employeeStore = useEmployeeStore();
 const uiStore = useUIStore();
+// `relabel` substitutes the configurable label into pre-translated
+// strings only when the operator has overridden the default — see
+// useCashierLabel for the full rationale. The "Cashier PIN" / "Use
+// Cashier" / "Switch Cashier" copy below flows through it.
+const { relabel } = useCashierLabel();
 const { terminalEmployees, currentCashier, switchDialogOpen, lockDialogOpen } =
 	storeToRefs(employeeStore);
 const selectedUser = ref("");
@@ -203,7 +209,7 @@ const normalizeErrorMessage = (error) =>
 	error?.message ||
 	error?.exc ||
 	error?.messages?.[0] ||
-	__("Unable to verify cashier PIN.");
+	relabel(__("Unable to verify cashier PIN."));
 
 const selectEmployee = (user) => {
 	selectedUser.value = user;

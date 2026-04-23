@@ -410,7 +410,7 @@
 
 							<div class="trend-grid">
 								<div class="trend-panel">
-									<div class="summary-metric__label">{{ __("Cashier-wise") }}</div>
+									<div class="summary-metric__label">{{ relabel(__("Cashier-wise")) }}</div>
 									<div v-if="discountCashierRows.length" class="list-stack trend-list">
 										<div v-for="row in discountCashierRows" :key="`dvr-cashier-${row.cashier}`" class="insight-row">
 											<div class="insight-row__top">
@@ -620,7 +620,7 @@
 					<v-col cols="12">
 						<v-card class="dashboard-card" elevation="2">
 							<div class="dashboard-card__header">
-								<h2 class="text-subtitle-1 font-weight-bold mb-0">{{ __("Staff / Cashier Performance Report") }}</h2>
+								<h2 class="text-subtitle-1 font-weight-bold mb-0">{{ relabel(__("Staff / Cashier Performance Report")) }}</h2>
 								<div class="dashboard-chip-row">
 									<v-chip size="small" color="info" variant="tonal">
 										{{ staffReportRangeLabel }}
@@ -639,7 +639,7 @@
 
 							<div class="summary-grid">
 								<div class="summary-metric">
-									<div class="summary-metric__label">{{ __("Cashiers") }}</div>
+									<div class="summary-metric__label">{{ cashierLabelPlural }}</div>
 									<div class="summary-metric__value">{{ formatQuantity(Number(staffSummary.cashier_count || 0)) }}</div>
 								</div>
 								<div class="summary-metric">
@@ -668,7 +668,7 @@
 
 							<div class="trend-grid">
 								<div class="trend-panel">
-									<div class="summary-metric__label">{{ __("Top Sales by Cashier") }}</div>
+									<div class="summary-metric__label">{{ relabel(__("Top Sales by Cashier")) }}</div>
 									<div v-if="staffCashierRows.length" class="list-stack trend-list">
 										<div v-for="row in staffCashierRows" :key="`staff-sales-${row.cashier}`" class="insight-row">
 											<div class="insight-row__top">
@@ -692,7 +692,7 @@
 								</div>
 
 								<div class="trend-panel">
-									<div class="summary-metric__label">{{ __("Most Active Cashiers") }}</div>
+									<div class="summary-metric__label">{{ relabel(__("Most Active Cashiers")) }}</div>
 									<div v-if="staffInvoiceRows.length" class="list-stack trend-list">
 										<div v-for="row in staffInvoiceRows" :key="`staff-inv-${row.cashier}`" class="insight-row">
 											<div class="insight-row__top">
@@ -1121,7 +1121,7 @@
 									</div>
 								</div>
 								<div class="summary-metric">
-									<div class="summary-metric__label">{{ __("Cashiers") }}</div>
+									<div class="summary-metric__label">{{ cashierLabelPlural }}</div>
 									<div class="summary-metric__value">{{ formatQuantity(Number(branchSummary.cashier_count || 0)) }}</div>
 								</div>
 							</div>
@@ -2022,6 +2022,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useUIStore } from "@/posapp/stores/uiStore";
 import { useEmployeeStore } from "@/posapp/stores/employeeStore";
+import { useCashierLabel } from "@/posapp/composables/pos/shared/useCashierLabel";
 import {
 	type BranchLocationRow,
 	type BranchTopItemsByLocationRow,
@@ -2059,6 +2060,8 @@ defineOptions({
 
 const uiStore = useUIStore();
 const employeeStore = useEmployeeStore();
+// Configurable label for "Cashier" (e.g. "Pharmacist") — see useCashierLabel.
+const { cashierLabelPlural, relabel } = useCashierLabel();
 
 const loading = ref(false);
 const errorMessage = ref("");

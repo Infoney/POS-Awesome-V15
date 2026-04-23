@@ -76,10 +76,10 @@
 				@click="$emit('show-payment')"
 				class="summary-btn pay-btn summary-btn--pay"
 				:loading="paymentLoading"
-				:title="__('Open payment (Alt+D) — submit + print (Alt+P) — submit only (Alt+X)')"
+				:title="__('Open payment (F4) — submit + print (Alt+P) — submit only (Alt+X)')"
 			>
 				<span class="summary-btn__label">{{ __("PAY") }}</span>
-				<ShortcutHint combo="Alt+D" tone="light" />
+				<ShortcutHint combo="F4" tone="light" />
 			</v-btn>
 		</v-col>
 		<v-col cols="6" sm="4" v-if="pos_profile.custom_allow_select_sales_order == 1">

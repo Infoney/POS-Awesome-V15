@@ -1572,6 +1572,14 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 };
 
 // Keyboard Shortcuts
+//
+// Pay flow on the new bindings:
+//   F4 (invoice screen) → opens this payment overlay (see invoiceShortcuts.ts).
+//   F4 (here)           → submit + print.
+// So the cashier can drive the whole sale with two F4 presses.
+//
+// Alt+P stays as an alias for submit-and-print and Alt+X / Ctrl+X for
+// submit-only — keeps existing muscle memory working without UI noise.
 const handlePaymentShortcut = (event) => {
 	if (event.defaultPrevented || submissionInFlight.value || loading.value) return;
 	if (event.repeat) return;
@@ -1579,6 +1587,15 @@ const handlePaymentShortcut = (event) => {
 
 	const isAltOnly = event.altKey && !event.ctrlKey && !event.metaKey;
 	const key = event.key.toLowerCase();
+
+	// F4 → submit + print (primary). Match by event.key directly so we
+	// don't rely on Alt being held.
+	if (event.key === "F4") {
+		event.preventDefault();
+		event.stopPropagation();
+		submit(null, false, true);
+		return;
+	}
 
 	if (isAltOnly && key === "p") {
 		event.preventDefault();

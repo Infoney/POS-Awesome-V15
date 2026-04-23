@@ -11,6 +11,8 @@
 
 declare const frappe: any;
 
+import { getCashierLabel } from "../shared/useCashierLabel";
+
 type AnyDict = Record<string, any>;
 
 interface InsightCard {
@@ -331,7 +333,7 @@ export function printReceiptClosingShift(payload: PrintClosingShiftPayload) {
 		<div class="divider"></div>
 
 		${formatRow(tt("Shift"), shiftName)}
-		${formatRow(tt("Cashier"), cashierName)}
+		${formatRow(getCashierLabel(), cashierName)}
 		${formatRow(tt("Opened"), periodStart, { muted: true })}
 		${formatRow(tt("Closed"), periodEnd)}
 
@@ -638,7 +640,7 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 		</div>
 
 		<div class="shift-meta">
-			<div><span class="label">${escapeHtml(tt("Cashier"))}:</span><span class="value">${escapeHtml(cashierName)}</span></div>
+			<div><span class="label">${escapeHtml(getCashierLabel())}:</span><span class="value">${escapeHtml(cashierName)}</span></div>
 			<div><span class="label">${escapeHtml(tt("Cash Movements"))}:</span><span class="value">${escapeHtml(
 		formatCurrencyWithSymbol(cashMovementCompanyTotal || 0, companyCurrency),
 	)}</span></div>

@@ -59,7 +59,7 @@
 						<div class="menu-profile-card__copy">
 							<div class="menu-profile-card__title">{{ displayUserName }}</div>
 							<div class="menu-profile-card__subtitle">
-								{{ cashierName ? `${__("Cashier")}: ${cashierName}` : __("Current User") }}
+								{{ cashierName ? `${cashierLabel}: ${cashierName}` : __("Current User") }}
 							</div>
 						</div>
 					</div>
@@ -305,6 +305,7 @@ import { useUpdateStore } from "../../stores/updateStore";
 import { useEmployeeStore } from "../../stores/employeeStore";
 import { storeToRefs } from "pinia";
 import QzTrayDialog from "./QzTrayDialog.vue";
+import { useCashierLabel } from "../../composables/pos/shared/useCashierLabel";
 
 export default {
 	name: "NavbarMenu",
@@ -324,7 +325,18 @@ export default {
 		const employeeStore = useEmployeeStore();
 		const { currentCashier, currentCashierDisplay } = storeToRefs(employeeStore);
 		const eventBus = inject("eventBus", null);
-		return { printLastInvoice, updateStore, employeeStore, currentCashier, currentCashierDisplay, eventBus };
+		// Configurable label for "Cashier" — see useCashierLabel.
+		const { cashierLabel, relabel } = useCashierLabel();
+		return {
+			printLastInvoice,
+			updateStore,
+			employeeStore,
+			currentCashier,
+			currentCashierDisplay,
+			eventBus,
+			cashierLabel,
+			relabel,
+		};
 	},
 	data() {
 		return {
@@ -403,8 +415,8 @@ export default {
 					: null,
 				{
 					id: "switch-cashier",
-					label: __("Switch Cashier"),
-					subtitle: this.cashierName || __("Change terminal cashier"),
+					label: this.relabel(__("Switch Cashier")),
+					subtitle: this.cashierName || this.relabel(__("Change terminal cashier")),
 					icon: "mdi-account-switch-outline",
 					tone: "primary",
 					handler: "openEmployeeSwitch",
@@ -457,7 +469,7 @@ export default {
 				{
 					id: "personal",
 					title: __("Personal"),
-					description: __("Cashier identity and appearance preferences."),
+					description: this.relabel(__("Cashier identity and appearance preferences.")),
 					actions: [
 						{
 							id: "language",

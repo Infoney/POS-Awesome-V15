@@ -103,9 +103,14 @@ const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 
 			const key = event.key;
 
+			// F4 is the primary "Pay" shortcut — opens the payment overlay.
+			// Pair with the second F4 binding inside Payments.vue, so the
+			// cashier flow is `F4 (open payment) → F4 (submit + print)`.
+			// Switch-cashier moved to Alt+D below.
 			if (key === "F4") {
 				consumeEvent(event);
-				this.eventBus.emit("open_employee_switch");
+				showCompactPanel(this.eventBus, "selector");
+				this.show_payment?.();
 				return;
 			}
 
@@ -294,10 +299,11 @@ const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 				return;
 			}
 
+			// Alt+D used to open payment; that's now F4. Re-purposed here
+			// as the keyboard accelerator for "Switch Cashier" (was F4).
 			if (isLetter(event, "d")) {
 				consumeEvent(event);
-				showCompactPanel(this.eventBus, "selector");
-				this.show_payment?.();
+				this.eventBus.emit("open_employee_switch");
 				return;
 			}
 
