@@ -6,6 +6,49 @@ const CHUNK_CACHE_RECOVERY_KEY = "posa_chunk_cache_recovery_once";
 const CHUNK_RECOVERY_IN_PROGRESS_KEY = "posa_chunk_recovery_in_progress";
 const LOADER_RECOVERY_KEY = "posa_loader_chunk_recovery_once";
 const CHUNK_RECOVERY_STABLE_DELAY_MS = 3000;
+const RECOVERY_URL_PARAMS = [
+	"_posa_chunk_reload",
+	"_posa_chunk_cache_recovery",
+	"_posa_loader_recovery",
+];
+
+// Module-load safety net: any value sitting in `posa_chunk_recovery_in_progress`
+// at the start of a fresh page load is stale by definition — the prior page
+// that set it is gone. Leaving it set would cause `recoverFromChunkLoadError`
+// to short-circuit (return true without doing anything) on the very first
+// chunk failure of this boot, masking the real failure and breaking recovery.
+if (typeof window !== "undefined" && window.sessionStorage) {
+	try {
+		window.sessionStorage.removeItem(CHUNK_RECOVERY_IN_PROGRESS_KEY);
+	} catch {}
+}
+
+function stripRecoveryParamsFromUrl() {
+	if (
+		typeof window === "undefined" ||
+		!window.history ||
+		typeof window.history.replaceState !== "function" ||
+		!window.location
+	) {
+		return;
+	}
+
+	try {
+		const url = new URL(window.location.href);
+		let changed = false;
+		for (const param of RECOVERY_URL_PARAMS) {
+			if (url.searchParams.has(param)) {
+				url.searchParams.delete(param);
+				changed = true;
+			}
+		}
+		if (changed) {
+			const search = url.searchParams.toString();
+			const next = `${url.pathname}${search ? `?${search}` : ""}${url.hash || ""}`;
+			window.history.replaceState({}, "", next);
+		}
+	} catch {}
+}
 
 function normalizeErrorText(error: unknown): string {
 	const message =
@@ -185,6 +228,20 @@ export async function recoverFromChunkLoadError(
 		return redirectToPosApp("_posa_chunk_cache_recovery");
 	}
 
-	resetRecoveryState();
+	// Both recovery branches have already fired in this tab session and the
+	// chunk *still* won't load. Anything we do from here would be a redirect
+	// loop. Keep the retry-history flags set (they're the gate that makes the
+	// next failure land back here instead of restarting the cycle), but clear
+	// the in-progress flag so future calls reach this fall-through path
+	// cleanly. Strip the recovery params from the URL so it stops collecting
+	// stale `?_posa_chunk_reload=...&_posa_chunk_cache_recovery=...` markers.
+	console.error(
+		"Chunk recovery: chunk failure persists after reload and cache cleanup; " +
+			"aborting further recovery attempts to avoid a redirect loop. " +
+			"The user may need to hard-refresh (Ctrl+Shift+R) or clear site data.",
+		{ source, error },
+	);
+	stripRecoveryParamsFromUrl();
+	window.sessionStorage.removeItem(CHUNK_RECOVERY_IN_PROGRESS_KEY);
 	return false;
 }
