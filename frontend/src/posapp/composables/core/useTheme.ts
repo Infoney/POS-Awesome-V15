@@ -140,9 +140,11 @@ export function useTheme() {
 			root.style.setProperty("--pos-text-disabled", "#9e9e9e");
 			root.style.setProperty("--pos-text-muted", "#b0b8c4");
 
-			root.style.setProperty("--pos-primary", "#00D4FF");
-			root.style.setProperty("--pos-primary-variant", "#00A0CC");
-			root.style.setProperty("--pos-secondary", "#00E5B8");
+			// Brand primary is the Command Center orange. Was cyan #00D4FF
+			// — the source of the cyan accents the user asked to retire.
+			root.style.setProperty("--pos-primary", "#f46a25");
+			root.style.setProperty("--pos-primary-variant", "#c75418");
+			root.style.setProperty("--pos-secondary", "#e23670");
 
 			root.style.setProperty("--pos-border", "rgba(255, 255, 255, 0.12)");
 			root.style.setProperty("--pos-divider", "#373737");
@@ -174,9 +176,11 @@ export function useTheme() {
 			root.style.setProperty("--pos-text-disabled", "#9e9e9e");
 			root.style.setProperty("--pos-text-muted", "#667085");
 
-			root.style.setProperty("--pos-primary", "#0097A7");
-			root.style.setProperty("--pos-primary-variant", "#00838F");
-			root.style.setProperty("--pos-secondary", "#00BCD4");
+			// Brand primary is the Command Center orange. Was teal #0097A7
+			// — same family as the dark-mode cyan we replaced above.
+			root.style.setProperty("--pos-primary", "#f46a25");
+			root.style.setProperty("--pos-primary-variant", "#c75418");
+			root.style.setProperty("--pos-secondary", "#e23670");
 
 			root.style.setProperty("--pos-border", "rgba(0, 0, 0, 0.12)");
 			root.style.setProperty("--pos-divider", "rgba(0, 0, 0, 0.06)");
@@ -299,7 +303,7 @@ export function useTheme() {
 			background: isDarkMode.value ? "#121212" : "#ffffff",
 			surface: isDarkMode.value ? "#1E1E1E" : "#ffffff",
 			surfaceVariant: isDarkMode.value ? "#2d2d2d" : "#f5f5f5",
-			primary: isDarkMode.value ? "#00D4FF" : "#0097A7",
+			primary: "#f46a25",
 			textPrimary: isDarkMode.value ? "#ffffff" : "#212121",
 			textSecondary: isDarkMode.value ? "#e0e0e0" : "#666666",
 			border: isDarkMode.value

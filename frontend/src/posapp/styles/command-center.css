@@ -86,15 +86,17 @@
 	--pos-text-hint: var(--cc-subtle);
 	--pos-text-muted: var(--cc-muted);
 
-	/* Pink replaces the cyan primary so accents/buttons feel CC */
-	--pos-primary: var(--cc-pink);
-	--pos-primary-variant: #b91c5c;
-	--pos-primary-container: rgba(var(--cc-pink-rgb), 0.12);
+	/* Orange replaces the legacy cyan primary so accents/buttons feel CC.
+	   Was --cc-pink — switched to --cc-orange so every `color="primary"`
+	   surface uses the brand orange the user asked for everywhere. */
+	--pos-primary: var(--cc-orange);
+	--pos-primary-variant: #c75418;
+	--pos-primary-container: rgba(var(--cc-orange-rgb), 0.12);
 	--pos-on-primary: #ffffff;
 
-	--pos-secondary: var(--cc-orange);
-	--pos-secondary-variant: #c75418;
-	--pos-secondary-container: rgba(var(--cc-orange-rgb), 0.12);
+	--pos-secondary: var(--cc-pink);
+	--pos-secondary-variant: #b91c5c;
+	--pos-secondary-container: rgba(var(--cc-pink-rgb), 0.12);
 	--pos-on-secondary: #ffffff;
 
 	--pos-accent: var(--cc-orange);
@@ -150,9 +152,12 @@
 		--pos-surface-muted: var(--cc-bg-sec);
 		--pos-text-primary: var(--cc-text);
 		--pos-text-secondary: var(--cc-muted);
-		--pos-primary: var(--cc-pink);
-		--pos-primary-container: rgba(var(--cc-pink-rgb), 0.12);
-		--pos-secondary: var(--cc-orange);
+		/* Brand primary is the Command Center orange (#f46a25). Was pink —
+		   kept the explicit `[data-theme="dark"]` block in sync so system-dark
+		   automatic mode picks up the same orange the user requested. */
+		--pos-primary: var(--cc-orange);
+		--pos-primary-container: rgba(var(--cc-orange-rgb), 0.12);
+		--pos-secondary: var(--cc-pink);
 		--pos-success: var(--cc-green);
 		--pos-warning: var(--cc-orange);
 		--pos-error: var(--cc-pink);

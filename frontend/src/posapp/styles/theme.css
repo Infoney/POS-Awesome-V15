@@ -21,16 +21,16 @@
 	--pos-text-hint: #bdbdbd;
 	--pos-text-muted: #667085;
 
-	/* Primary Colors - Original Light Mode */
-	--pos-primary: #0097a7;
-	--pos-primary-variant: #00838f;
-	--pos-primary-container: #e0f7fa;
+	/* Primary Colors — CC orange replaces the legacy teal. Was #0097a7. */
+	--pos-primary: #f46a25;
+	--pos-primary-variant: #c75418;
+	--pos-primary-container: #fde4d2;
 	--pos-on-primary: #ffffff;
 
-	/* Secondary Colors - Original Light Mode */
-	--pos-secondary: #00bcd4;
-	--pos-secondary-variant: #0097a7;
-	--pos-secondary-container: #e0f7fa;
+	/* Secondary Colors — CC pink replaces the legacy cyan #00bcd4. */
+	--pos-secondary: #e23670;
+	--pos-secondary-variant: #b91c5c;
+	--pos-secondary-container: #fbd8e3;
 	--pos-on-secondary: #ffffff;
 
 	/* Accent Colors - Modern Orange (Light Mode) */
@@ -128,17 +128,17 @@
 	--pos-text-hint: #bdbdbd;
 	--pos-text-muted: #b0b8c4;
 
-	/* Primary Colors - High Contrast Blue-Cyan */
-	--pos-primary: #00d4ff;
-	--pos-primary-variant: #00a0cc;
-	--pos-primary-container: #003344;
-	--pos-on-primary: #000000;
+	/* Primary Colors — CC orange replaces the high-contrast cyan #00d4ff. */
+	--pos-primary: #f46a25;
+	--pos-primary-variant: #c75418;
+	--pos-primary-container: rgba(244, 106, 37, 0.16);
+	--pos-on-primary: #ffffff;
 
-	/* Secondary Colors - High Contrast Cyan-Green */
-	--pos-secondary: #00e5b8;
-	--pos-secondary-variant: #00b894;
-	--pos-secondary-container: #004433;
-	--pos-on-secondary: #000000;
+	/* Secondary Colors — CC pink replaces the cyan-green #00e5b8. */
+	--pos-secondary: #e23670;
+	--pos-secondary-variant: #b91c5c;
+	--pos-secondary-container: rgba(226, 54, 112, 0.16);
+	--pos-on-secondary: #ffffff;
 
 	/* Accent Colors - Modern Orange */
 	--pos-accent: #ff6b35;
@@ -207,14 +207,14 @@
 		--pos-text-disabled: #666666;
 		--pos-text-hint: #757575;
 		--pos-text-muted: #b0b8c4;
-		--pos-primary: #00d4ff;
-		--pos-primary-variant: #00a0cc;
-		--pos-primary-container: #003344;
-		--pos-on-primary: #000000;
-		--pos-secondary: #00e5b8;
-		--pos-secondary-variant: #00b894;
-		--pos-secondary-container: #004433;
-		--pos-on-secondary: #000000;
+		--pos-primary: #f46a25;
+		--pos-primary-variant: #c75418;
+		--pos-primary-container: rgba(244, 106, 37, 0.16);
+		--pos-on-primary: #ffffff;
+		--pos-secondary: #e23670;
+		--pos-secondary-variant: #b91c5c;
+		--pos-secondary-container: rgba(226, 54, 112, 0.16);
+		--pos-on-secondary: #ffffff;
 		--pos-accent: #ff6b35;
 		--pos-accent-variant: #e55a2b;
 		--pos-success: #4caf50;
