@@ -506,16 +506,25 @@ export default {
 									handler: "openCustomerDisplay",
 								}
 							: null,
-						this.isEnabledSetting(this.posProfile?.posa_silent_print)
-							? {
-									id: "qz-tray-setup",
-									label: __("QZ Tray Setup"),
-									subtitle: __("Connect printer and manage certificate"),
-									icon: "mdi-printer-wireless",
-									tone: "primary",
-									handler: "openQzTraySetup",
-								}
-							: null,
+						// QZ Tray Setup is always exposed under Terminal — it used to
+						// be gated by `posa_silent_print`, but that's a chicken-and-
+						// egg: you can't reach the dialog to install the certificate
+						// or pick a printer until silent print is enabled, and silent
+						// print needs QZ to actually print silently. Keep it always
+						// reachable so the cashier can connect/test/install certs
+						// regardless of the current silent-print toggle.
+						{
+							id: "qz-tray-setup",
+							label: __("QZ Tray Setup"),
+							subtitle: this.isEnabledSetting(this.posProfile?.posa_silent_print)
+								? __("Connect printer and manage certificate")
+								: __(
+										"Connect printer and certificate (enable Silent Print on POS Profile to use)",
+									),
+							icon: "mdi-printer-wireless",
+							tone: "primary",
+							handler: "openQzTraySetup",
+						},
 					].filter(Boolean),
 				},
 				{
