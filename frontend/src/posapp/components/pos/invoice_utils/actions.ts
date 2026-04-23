@@ -145,6 +145,7 @@ export async function cancel_invoice(context: any) {
 	context.posting_date = frappe.datetime.nowdate();
 
 	if (doc.name && context.pos_profile.posa_allow_delete) {
+		const cancelledName = doc.name;
 		await frappe.call({
 			method: "posawesome.posawesome.api.invoices.delete_invoice",
 			args: { invoice: doc.name },
@@ -158,6 +159,20 @@ export async function cancel_invoice(context: any) {
 				}
 			},
 		});
+		// Drop the entry from the Drafts list immediately. The server doc
+		// just got deleted, so leaving it in `draftsData`/`parkedOrders`
+		// would let the cashier click a stale row and see a "Sales Invoice
+		// <name> not found" error from the next fetch. (Triggered when
+		// "Cancel sale" is picked from the StockConflictDialog and the
+		// cancelled draft was already in the local list.)
+		try {
+			context.uiStore?.removeDraftByName?.(cancelledName);
+		} catch (err) {
+			console.warn(
+				"[cancel_invoice] failed to remove cancelled draft from local list",
+				err,
+			);
+		}
 	}
 
 	// Use the clear_invoice logic

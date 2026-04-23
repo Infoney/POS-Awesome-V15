@@ -109,6 +109,26 @@ export const useUIStore = defineStore("ui", () => {
     parkedOrders.value = Array.isArray(data) ? data : [];
   };
 
+  // Surgically remove a single draft from both `draftsData` and
+  // `parkedOrders` after its server doc has been deleted (e.g. the
+  // cashier picks "Cancel sale" from the conflict resolver). Without
+  // this, the Drafts list keeps showing the entry and clicking it
+  // surfaces a "Sales Invoice <name> not found" error from the server.
+  const removeDraftByName = (invoiceName?: string | null) => {
+    if (!invoiceName) return;
+    const target = String(invoiceName).trim();
+    if (!target) return;
+    const matches = (entry: any) => {
+      if (!entry) return false;
+      const candidates = [entry.name, entry.invoice_name, entry.id];
+      return candidates.some(
+        (value) => value !== undefined && value !== null && String(value) === target,
+      );
+    };
+    draftsData.value = draftsData.value.filter((entry) => !matches(entry));
+    parkedOrders.value = parkedOrders.value.filter((entry) => !matches(entry));
+  };
+
   const parkedOrdersCount = computed(() => parkedOrders.value.length);
   const hasParkedOrders = computed(() => parkedOrdersCount.value > 0);
 
@@ -305,6 +325,7 @@ export const useUIStore = defineStore("ui", () => {
     closeDrafts,
     setDraftsData,
     setParkedOrders,
+    removeDraftByName,
     ordersDialog,
     ordersData,
     openOrders,

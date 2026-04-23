@@ -44,6 +44,20 @@
 				</span>
 			</div>
 
+			<!-- Batch info pill, only when the item is batched and has data
+			     to show. Uses the Command Center cc-chip pattern (rounded
+			     pill, tinted background) so it sits visually above the
+			     meta row without competing with the stock bar. -->
+			<div v-if="batchChipText" class="pos-row-card__batch-row">
+				<span
+					class="pos-row-card__batch-chip"
+					:title="batchChipTitle"
+				>
+					<v-icon size="11" class="pos-row-card__batch-icon">mdi-tag-outline</v-icon>
+					<span class="pos-row-card__batch-text">{{ batchChipText }}</span>
+				</span>
+			</div>
+
 			<div class="pos-row-card__meta-row">
 				<span class="pos-row-card__stock-track" :title="stockTooltip">
 					<span
@@ -68,23 +82,24 @@
 						:hide-qty-decimals="hideQtyDecimals"
 					/>
 				</span>
-			</div>
-		</div>
-
-		<div class="pos-row-card__price">
-			<div class="pos-row-card__price-primary">
-				<span class="pos-row-card__price-currency">{{ currencySymbol(primaryCurrency) }}</span>
-				<span class="pos-row-card__price-amount">
-					{{ formatCurrency(primaryRate, primaryCurrency, primaryPrecision) }}
+				<!-- Price sits inline with NOS — was a separate right-aligned
+				     column before, but the cashier wants the qty + price as
+				     one visual unit so they can scan a row in one glance. -->
+				<span class="pos-row-card__price-inline">
+					<span class="pos-row-card__price-currency">{{ currencySymbol(primaryCurrency) }}</span>
+					<span class="pos-row-card__price-amount">
+						{{ formatCurrency(primaryRate, primaryCurrency, primaryPrecision) }}
+					</span>
+					<ItemRateInfoMenu
+						v-if="showRateInfo"
+						:rate-info="rateInfo"
+						:currency-symbol="currencySymbol"
+						:format-currency="formatCurrency"
+						:rate-precision="ratePrecision"
+					/>
 				</span>
-				<ItemRateInfoMenu
-					v-if="showRateInfo"
-					:rate-info="rateInfo"
-					:currency-symbol="currencySymbol"
-					:format-currency="formatCurrency"
-					:rate-precision="ratePrecision"
-				/>
 			</div>
+
 			<div v-if="showSecondaryPrice" class="pos-row-card__price-secondary">
 				{{ currencySymbol(secondaryCurrency) }}
 				{{ formatCurrency(item.rate, secondaryCurrency, primaryPrecision) }}
@@ -194,6 +209,42 @@ const showStockInfo = computed(() => {
 	if (item.has_batch_no) return true;
 	if (Array.isArray(item.batch_no_data) && item.batch_no_data.length > 0) return true;
 	return numericQty.value <= 0;
+});
+
+// Batch chip data — only shown when the item is batched and we actually
+// have batch rows to label. Empty / non-batched items render no chip
+// (the meta row collapses cleanly).
+const sellableBatches = computed(() => {
+	const raw = props.item?.batch_no_data;
+	if (!Array.isArray(raw)) return [];
+	return raw.filter((b) => {
+		if (!b || !b.batch_no) return false;
+		if (b.is_expired) return false;
+		const qty = Number(b.batch_qty ?? 0);
+		return Number.isFinite(qty) && qty > 0;
+	});
+});
+
+const batchChipText = computed(() => {
+	const item = props.item;
+	if (!item) return "";
+	if (!item.has_batch_no) return "";
+	const list = sellableBatches.value;
+	if (!list.length) return "";
+	if (list.length === 1) {
+		return `Batch ${list[0].batch_no}`;
+	}
+	return `${list.length} batches`;
+});
+
+const batchChipTitle = computed(() => {
+	const list = sellableBatches.value;
+	if (!list.length) return "";
+	return list
+		.slice(0, 6)
+		.map((b) => `${b.batch_no} (${b.batch_qty || 0})`)
+		.concat(list.length > 6 ? [`+${list.length - 6} more`] : [])
+		.join(", ");
 });
 
 const onClick = (event) => emit("click", event, props.item);
@@ -387,40 +438,71 @@ const onDragEnd = (event) => emit("dragend", event);
 	opacity: 0.8;
 }
 
-.pos-row-card__price {
-	flex: 0 0 auto;
-	text-align: right;
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: 2px;
-	min-width: 92px;
-}
-
-.pos-row-card__price-primary {
+/* Inline price now lives inside the meta row beside the NOS chip. */
+.pos-row-card__price-inline {
 	display: inline-flex;
 	align-items: baseline;
 	gap: 4px;
+	flex: 0 0 auto;
 	font-weight: 700;
 	color: var(--pos-primary);
-	font-size: 1rem;
+	white-space: nowrap;
+	margin-left: 2px;
 }
 
 .pos-row-card__price-currency {
-	font-size: 0.75rem;
+	font-size: 0.7rem;
 	font-weight: 600;
 	color: var(--pos-text-secondary);
 	letter-spacing: 0.04em;
 }
 
 .pos-row-card__price-amount {
-	font-size: 1.02rem;
+	font-size: 0.95rem;
 	font-variant-numeric: tabular-nums;
 }
 
 .pos-row-card__price-secondary {
-	font-size: 0.74rem;
+	font-size: 0.7rem;
 	color: var(--pos-text-secondary);
+	text-align: right;
+}
+
+/* Batch chip — Command Center pill: rounded edge box, tinted with the
+   pink brand color so the cashier can spot batched items at a glance
+   without the chip pulling focus from the stock progress bar. */
+.pos-row-card__batch-row {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.pos-row-card__batch-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: rgba(226, 54, 112, 0.12);
+	color: var(--cc-pink, #e23670);
+	border: 1px solid rgba(226, 54, 112, 0.25);
+	font-size: 0.68rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	line-height: 1.2;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pos-row-card__batch-icon {
+	opacity: 0.85;
+}
+
+.pos-row-card__batch-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 @media (max-width: 768px) {

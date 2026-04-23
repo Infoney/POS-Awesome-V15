@@ -640,9 +640,12 @@ export default {
 	gap: 4px;
 	padding: 9px 12px;
 	border-radius: 10px;
-	font-weight: 700;
-	letter-spacing: 0.01em;
-	font-size: 0.84rem;
+	/* Match the bottom-bar Save & Clear / PAY buttons — medium weight,
+	   small font, no extra letter-spacing. The previous bold/0.84rem
+	   read heavier than the rest of the UI. */
+	font-weight: 500;
+	letter-spacing: 0;
+	font-size: 0.78rem;
 	color: #fff;
 	box-sizing: border-box;
 	white-space: nowrap;
