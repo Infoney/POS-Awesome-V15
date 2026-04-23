@@ -120,7 +120,7 @@ import { useInvoiceStore } from "../../../stores/invoiceStore";
 import { storeToRefs } from "pinia";
 import { useTheme } from "../../../composables/core/useTheme";
 import { useResponsive } from "../../../composables/core/useResponsive";
-import { fetchDraftInvoiceDoc } from "../../../utils/draftInvoices";
+import { fetchDraftInvoiceDocWithStockCheck } from "../../../utils/draftInvoices";
 
 export default {
 	// props: ["draftsDialog"],
@@ -206,12 +206,19 @@ export default {
 				const selectedDraft = this.selected[0];
 
 				try {
-					const message = await fetchDraftInvoiceDoc({
-						draft: selectedDraft,
-						posProfile: this.uiStore.posProfile,
-					});
+					// Fetch the draft AND re-check stock in one round trip.
+					// Drafts don't post Stock Ledger entries, so between save
+					// and reload another terminal may have sold the same
+					// items. Surfacing the delta here lets the cashier adjust
+					// quantities or swap batches BEFORE they get to payment.
+					const { message, stockWarnings } =
+						await fetchDraftInvoiceDocWithStockCheck({
+							draft: selectedDraft,
+							posProfile: this.uiStore.posProfile,
+						});
 					if (message) {
 						this.invoiceStore.triggerLoadInvoice(message);
+						this.notifyStockWarnings(stockWarnings);
 					}
 				} catch (error) {
 					console.error("Error loading draft invoice:", error);
@@ -229,6 +236,59 @@ export default {
 					color: "error",
 				});
 			}
+		},
+
+		/**
+		 * Surface a non-blocking warning toast when a reopened draft has
+		 * lines that no longer fit current stock. Intentionally
+		 * non-blocking: the cart still loads so the cashier can adjust
+		 * quantities, swap batches, or cancel — same UX flexibility they
+		 * have for any other in-progress sale.
+		 */
+		notifyStockWarnings(stockWarnings) {
+			if (!stockWarnings || stockWarnings.ok !== false) {
+				return;
+			}
+			const lines = Array.isArray(stockWarnings.lines)
+				? stockWarnings.lines
+				: [];
+			if (!lines.length) {
+				return;
+			}
+
+			const formatQty = (value) => {
+				const num = Number(value || 0);
+				if (!Number.isFinite(num)) return "0";
+				return num % 1 === 0 ? num.toFixed(0) : num.toFixed(2);
+			};
+
+			const detail = lines
+				.map((line) => {
+					const label = line.item_name || line.item_code;
+					const batch = line.batch_no
+						? ` · ${__("Batch")} ${line.batch_no}`
+						: "";
+					return __(
+						"{0}{1} — available {2}, draft wants {3}",
+						[
+							label,
+							batch,
+							formatQty(line.available_qty),
+							formatQty(line.requested_qty),
+						],
+					);
+				})
+				.join("\n");
+
+			this.toastStore.show({
+				title: __(
+					"Stock has changed since this draft was saved ({0} item(s))",
+					[lines.length],
+				),
+				detail,
+				color: "warning",
+				timeout: 8000,
+			});
 		},
 	},
 	created: function () {

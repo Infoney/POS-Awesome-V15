@@ -349,6 +349,165 @@ def check_invoice_availability(items, pos_profile=None):
     return {"ok": False, "lines": lines}
 
 
+@frappe.whitelist()
+def validate_draft_invoice_stock(invoice_name, doctype="Sales Invoice", pos_profile=None):
+    """Re-check stock availability for an existing draft invoice.
+
+    Drafts do **not** post Stock Ledger entries — they're just saved cart
+    state. Between the moment a cashier saves a draft and the moment they
+    reopen it, another terminal (or a different drawer here) may have sold
+    the very items this draft expects to claim. The cashier shouldn't have
+    to discover that at the payment screen; this endpoint surfaces the
+    delta the moment the draft is loaded so they can adjust quantities,
+    swap batches, or cancel the load with full information.
+
+    Why a separate endpoint (vs. piggybacking on ``get_draft_invoice_doc``):
+        * The frontend needs the doc itself even when stock is fine — keeping
+          the heavy doc fetch separate from the validation call lets the UI
+          render the cart immediately and surface warnings as they arrive.
+        * Other callers (Invoice Management, audit screens) can fetch the
+          doc without paying for a stock check they don't need.
+
+    The pipeline is the **exact same** ``_collect_stock_errors`` /
+    ``_should_block`` chain that ``check_invoice_availability`` and
+    ``_validate_stock_on_invoice`` run, so a "warning" here is a faithful
+    preview of what the cashier would hit at submit time.
+
+    Args:
+        invoice_name: name of the draft invoice (Sales Invoice or POS Invoice).
+        doctype: parent doctype. Defaults to ``"Sales Invoice"``; pass
+            ``"POS Invoice"`` for terminals configured to skip the Sales
+            Invoice intermediary.
+        pos_profile: optional POS Profile name. Used to honour the per-profile
+            ``posa_block_sale_beyond_available_qty`` flag — same policy as
+            ``check_invoice_availability``. Falls back to the draft's own
+            ``pos_profile`` when omitted.
+
+    Returns:
+        Same shape as ``check_invoice_availability``::
+
+            {
+                "ok": bool,
+                "lines": [
+                    {
+                        "item_code": str,
+                        "item_name": str,
+                        "warehouse": str,
+                        "batch_no": str,
+                        "requested_qty": float,
+                        "available_qty": float,
+                        "reason": str,
+                    },
+                    ...
+                ],
+                "invoice_name": str,
+                "invoice_doctype": str,
+            }
+    """
+    if not invoice_name:
+        return {"ok": True, "lines": [], "invoice_name": None, "invoice_doctype": doctype}
+
+    if doctype not in ("Sales Invoice", "POS Invoice"):
+        # Defensive: caller can only validate the doctypes our draft flow
+        # actually uses. Anything else is treated as a noop rather than
+        # raising — the worst case here is a silent skip, never a false
+        # positive that blocks the cashier.
+        return {"ok": True, "lines": [], "invoice_name": invoice_name, "invoice_doctype": doctype}
+
+    if not frappe.db.exists(doctype, invoice_name):
+        return {"ok": True, "lines": [], "invoice_name": invoice_name, "invoice_doctype": doctype}
+
+    try:
+        doc = frappe.get_cached_doc(doctype, invoice_name)
+    except Exception:
+        # If the cached fetch fails (rare; usually permissions), fall back
+        # to a non-cached read which will raise a clean PermissionError the
+        # frontend can show. We deliberately do NOT swallow that — the
+        # cashier needs to know the draft can't be opened at all.
+        doc = frappe.get_doc(doctype, invoice_name)
+
+    # Sales Invoices that don't update stock won't post SLEs at submit, so
+    # there's nothing to validate. Mirrors the early-out in
+    # ``_validate_stock_on_invoice``.
+    if doctype == "Sales Invoice" and not cint(getattr(doc, "update_stock", 0)):
+        return {"ok": True, "lines": [], "invoice_name": invoice_name, "invoice_doctype": doctype}
+
+    items_to_check = [d.as_dict() for d in (doc.items or []) if d.get("is_stock_item")]
+    if hasattr(doc, "packed_items"):
+        items_to_check.extend([d.as_dict() for d in (doc.packed_items or [])])
+
+    if not items_to_check:
+        return {"ok": True, "lines": [], "invoice_name": invoice_name, "invoice_doctype": doctype}
+
+    # Reuse the same conversion-factor / stock_qty fallback logic that
+    # ``check_invoice_availability`` applies, so single-batch and bundled
+    # rows behave identically across "load draft" and "submit" entry points.
+    for row in items_to_check:
+        if not row.get("conversion_factor"):
+            row["conversion_factor"] = 1
+        if not row.get("stock_qty"):
+            row["stock_qty"] = flt(row.get("qty")) * flt(row["conversion_factor"])
+        if row.get("batch_no") is None:
+            row["batch_no"] = ""
+
+    errors = _collect_stock_errors(items_to_check)
+    if not errors:
+        return {"ok": True, "lines": [], "invoice_name": invoice_name, "invoice_doctype": doctype}
+
+    # Apply the same submit-time policy: batch shortages always surface
+    # (ERPNext's SLE running-balance validator will reject them at submit
+    # regardless of the profile flag), plain Bin overdraws only surface if
+    # the POS profile blocks them.
+    effective_profile = pos_profile or getattr(doc, "pos_profile", None)
+    block_overdraw = _should_block(effective_profile)
+    filtered = [
+        err for err in errors
+        if _is_batch_specific_error(err) or block_overdraw
+    ]
+    if not filtered:
+        return {"ok": True, "lines": [], "invoice_name": invoice_name, "invoice_doctype": doctype}
+
+    item_codes = {err.get("item_code") for err in filtered if err.get("item_code")}
+    name_lookup = {
+        code: (frappe.get_cached_value("Item", code, "item_name") or code)
+        for code in item_codes
+    }
+    # Prefer per-row overrides on the draft itself — cashiers sometimes
+    # rename rows (e.g. "Cough Syrup (Patient: Ahmed)") and we want the
+    # warning toast to match what they saw in the cart.
+    for row in items_to_check:
+        code = row.get("item_code")
+        if code and row.get("item_name") and code not in name_lookup:
+            name_lookup[code] = row["item_name"]
+
+    lines = []
+    for err in filtered:
+        code = err.get("item_code")
+        batch_no = err.get("batch_no") or ""
+        if err.get("reason") == "no_batch_with_enough_qty":
+            reason = "no_batch_with_enough_qty"
+        elif batch_no:
+            reason = "insufficient_batch_stock"
+        else:
+            reason = "insufficient_stock"
+        lines.append({
+            "item_code": code,
+            "item_name": name_lookup.get(code, code),
+            "warehouse": err.get("warehouse"),
+            "batch_no": batch_no,
+            "requested_qty": flt(err.get("requested_qty")),
+            "available_qty": flt(err.get("available_qty")),
+            "reason": reason,
+        })
+
+    return {
+        "ok": False,
+        "lines": lines,
+        "invoice_name": invoice_name,
+        "invoice_doctype": doctype,
+    }
+
+
 def _validate_stock_on_invoice(invoice_doc):
     if invoice_doc.doctype == "Sales Invoice" and not cint(getattr(invoice_doc, "update_stock", 0)):
         frappe.logger().debug("Skipping stock validation for Sales Invoice without stock update")
