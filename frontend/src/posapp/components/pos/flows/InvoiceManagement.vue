@@ -1762,23 +1762,43 @@ export default {
 <style scoped>
 .invoice-management-dialog-content { background: transparent !important; }
 
+/* CC pass — dialog uses the Command Center pink/orange palette instead of
+   the legacy blue/amber radial gradients. */
 .invoice-management-card {
 	background:
-		radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 28%),
-		radial-gradient(circle at top left, rgba(245, 158, 11, 0.12), transparent 24%),
-		var(--pos-surface-raised) !important;
-	color: var(--pos-text-primary) !important;
-	border: 1px solid rgba(148, 163, 184, 0.18);
+		radial-gradient(circle at top right, rgba(var(--cc-pink-rgb), 0.14), transparent 28%),
+		radial-gradient(circle at top left, rgba(var(--cc-orange-rgb), 0.12), transparent 24%),
+		var(--cc-bg-card) !important;
+	color: var(--cc-text) !important;
+	border: 1px solid var(--cc-border);
+	border-radius: 14px;
 	display: flex;
 	flex-direction: column;
 	max-height: min(94vh, 1040px);
+	position: relative;
+	overflow: hidden;
+	box-shadow: var(--cc-shadow-md);
+}
+
+/* 2px CC pink→orange accent bar at the top of the dialog card. */
+.invoice-management-card::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: linear-gradient(90deg, var(--cc-pink), var(--cc-orange));
+	opacity: 0.85;
+	pointer-events: none;
+	z-index: 2;
 }
 
 .invoice-management-card--dark {
 	background:
-		radial-gradient(circle at top right, rgba(56, 189, 248, 0.1), transparent 28%),
-		radial-gradient(circle at top left, rgba(251, 191, 36, 0.08), transparent 24%),
-		var(--pos-surface-raised) !important;
+		radial-gradient(circle at top right, rgba(var(--cc-pink-rgb), 0.12), transparent 28%),
+		radial-gradient(circle at top left, rgba(var(--cc-orange-rgb), 0.1), transparent 24%),
+		var(--cc-bg-card) !important;
 }
 
 .invoice-management-header {
@@ -2068,52 +2088,136 @@ export default {
 	flex-wrap: wrap;
 	gap: 8px;
 	padding: 14px 18px 18px;
-	border-top: 1px solid rgba(148, 163, 184, 0.12);
-	background: rgba(248, 250, 252, 0.76);
+	border-top: 1px solid rgba(var(--cc-pink-rgb), 0.12);
+	background: rgba(var(--cc-pink-rgb), 0.04);
 }
 
+/* CC button overrides for the action rows.
+ *
+ * The Vuetify dark theme primary is `#00D4FF` with `on-primary: #000`,
+ * so a `<v-btn variant="flat" color="primary">` renders as a cyan box
+ * with black text + black icon — the "black blob" the cashier sees on
+ * hover. We force the CC pink palette here so the button matches the
+ * rest of the Command Center surfaces and has a readable hover state.
+ */
+.invoice-record-card__actions :deep(.v-btn--variant-flat) {
+	background: linear-gradient(135deg, var(--cc-pink), var(--cc-orange)) !important;
+	color: #ffffff !important;
+	border: 1px solid transparent;
+	box-shadow: var(--cc-shadow-sm);
+	transition:
+		filter var(--cc-ease-base),
+		transform var(--cc-ease-base),
+		box-shadow var(--cc-ease-base);
+}
+
+.invoice-record-card__actions :deep(.v-btn--variant-flat:hover) {
+	filter: brightness(1.08);
+	transform: translateY(-1px);
+	box-shadow: var(--cc-shadow-md), var(--cc-glow-pink);
+}
+
+.invoice-record-card__actions :deep(.v-btn--variant-flat .v-btn__overlay),
+.invoice-record-card__actions :deep(.v-btn--variant-flat .v-btn__underlay) {
+	display: none !important;
+}
+
+.invoice-record-card__actions :deep(.v-btn--variant-text) {
+	color: var(--cc-muted) !important;
+	transition:
+		background-color var(--cc-ease-base),
+		color var(--cc-ease-base);
+}
+
+.invoice-record-card__actions :deep(.v-btn--variant-text:hover) {
+	background: rgba(var(--cc-pink-rgb), 0.1) !important;
+	color: var(--cc-pink) !important;
+}
+
+/* List-view action buttons (drafts/unpaid tables) get the same
+ * treatment so a "primary" icon button doesn't render as cyan. */
+.invoice-management-card :deep(.v-data-table .v-btn--icon[class*="text-primary"]) {
+	color: var(--cc-pink) !important;
+}
+.invoice-management-card :deep(.v-data-table .v-btn--icon[class*="text-primary"]:hover) {
+	background: rgba(var(--cc-pink-rgb), 0.12) !important;
+}
+.invoice-management-card :deep(.v-data-table .v-btn--icon[class*="text-error"]:hover) {
+	background: rgba(var(--cc-pink-rgb), 0.12) !important;
+}
+
+/* CC pass — record cards get the Command Center surface tier system
+   instead of the legacy slate/violet/blue saturated gradients. The
+   hero strip carries a subtle brand tint via the `--cc-*-rgb` triplets
+   so each card type stays recognizable without screaming. */
 .invoice-management-card--dark .invoice-record-card {
-	border-color: rgba(100, 116, 139, 0.34);
-	background: linear-gradient(180deg, rgba(36, 43, 51, 0.98), rgba(26, 32, 40, 0.96));
-	box-shadow: 0 22px 48px rgba(2, 6, 23, 0.38);
+	border-color: var(--cc-border);
+	background: var(--cc-bg-sec);
+	box-shadow: var(--cc-shadow-sm);
+	transition:
+		border-color var(--cc-ease-base),
+		box-shadow var(--cc-ease-base),
+		transform var(--cc-ease-base);
+}
+
+.invoice-management-card--dark .invoice-record-card:hover {
+	border-color: var(--cc-border-hover);
+	box-shadow: var(--cc-shadow-md);
+	transform: translateY(-1px);
 }
 
 .invoice-management-card--dark .invoice-record-card__hero {
-	border-bottom-color: rgba(100, 116, 139, 0.24);
-	background: linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(30, 64, 175, 0.34));
+	border-bottom-color: var(--cc-border);
+	background:
+		linear-gradient(135deg, rgba(var(--cc-blue-rgb), 0.12), rgba(var(--cc-blue-rgb), 0.04)),
+		var(--cc-bg-ter);
 }
 
 .invoice-management-card--dark .invoice-record-card__hero--warm {
-	background: linear-gradient(135deg, rgba(67, 20, 7, 0.96), rgba(120, 53, 15, 0.52));
+	background:
+		linear-gradient(135deg, rgba(var(--cc-orange-rgb), 0.16), rgba(var(--cc-orange-rgb), 0.04)),
+		var(--cc-bg-ter);
 }
 
 .invoice-management-card--dark .invoice-record-card__hero--draft {
-	background: linear-gradient(135deg, rgba(76, 29, 149, 0.96), rgba(88, 28, 135, 0.44));
+	background:
+		linear-gradient(135deg, rgba(var(--cc-purple-rgb), 0.16), rgba(var(--cc-purple-rgb), 0.04)),
+		var(--cc-bg-ter);
 }
 
 .invoice-management-card--dark .invoice-record-card__hero--return {
-	background: linear-gradient(135deg, rgba(127, 29, 29, 0.96), rgba(153, 27, 27, 0.42));
+	background:
+		linear-gradient(135deg, rgba(var(--cc-pink-rgb), 0.16), rgba(var(--cc-pink-rgb), 0.04)),
+		var(--cc-bg-ter);
 }
 
 .invoice-management-card--dark .invoice-record-card--success .invoice-record-card__hero {
-	background: linear-gradient(135deg, rgba(20, 83, 45, 0.96), rgba(22, 101, 52, 0.42));
+	background:
+		linear-gradient(135deg, rgba(var(--cc-green-rgb), 0.16), rgba(var(--cc-green-rgb), 0.04)),
+		var(--cc-bg-ter);
 }
 
 .invoice-management-card--dark .invoice-record-card--warning .invoice-record-card__hero {
-	background: linear-gradient(135deg, rgba(120, 53, 15, 0.96), rgba(161, 98, 7, 0.42));
+	background:
+		linear-gradient(135deg, rgba(var(--cc-orange-rgb), 0.16), rgba(var(--cc-orange-rgb), 0.04)),
+		var(--cc-bg-ter);
 }
 
 .invoice-management-card--dark .invoice-record-card--error .invoice-record-card__hero {
-	background: linear-gradient(135deg, rgba(127, 29, 29, 0.96), rgba(153, 27, 27, 0.42));
+	background:
+		linear-gradient(135deg, rgba(var(--cc-pink-rgb), 0.18), rgba(var(--cc-pink-rgb), 0.04)),
+		var(--cc-bg-ter);
 }
 
 .invoice-management-card--dark .invoice-record-card--info .invoice-record-card__hero {
-	background: linear-gradient(135deg, rgba(12, 74, 110, 0.96), rgba(30, 64, 175, 0.4));
+	background:
+		linear-gradient(135deg, rgba(var(--cc-blue-rgb), 0.16), rgba(var(--cc-blue-rgb), 0.04)),
+		var(--cc-bg-ter);
 }
 
 .invoice-management-card--dark .invoice-record-card__actions {
-	border-top-color: rgba(100, 116, 139, 0.22);
-	background: rgba(15, 23, 42, 0.32);
+	border-top-color: var(--cc-border);
+	background: rgba(var(--cc-pink-rgb), 0.04);
 }
 
 .meta-pair-grid {

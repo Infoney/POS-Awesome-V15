@@ -107,7 +107,17 @@ const invoiceShortcuts: Record<string, unknown> & ThisType<InvoiceShortcutsVm> =
 			// Pair with the second F4 binding inside Payments.vue, so the
 			// cashier flow is `F4 (open payment) → F4 (submit + print)`.
 			// Switch-cashier moved to Alt+D below.
+			//
+			// IMPORTANT: when the payment overlay is already visible we must
+			// NOT consume the event here. Both this handler and the one
+			// inside Payments.vue listen on document keydown; whichever was
+			// registered first wins. If we eat F4 here, the in-overlay
+			// "Submit & Print" binding never fires and the second F4 press
+			// becomes a no-op. Bail out and let Payments.vue handle it.
 			if (key === "F4") {
+				if (this.paymentVisible) {
+					return;
+				}
 				consumeEvent(event);
 				showCompactPanel(this.eventBus, "selector");
 				this.show_payment?.();
