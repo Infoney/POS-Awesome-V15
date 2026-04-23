@@ -218,6 +218,14 @@ defineExpose({ scrollToIndex, getTableElement, tableRef });
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
+	/* Override Vuetify's `text-primary` (cyan) so the rate column matches
+	 * the Command Center "in-stock / positive" green. The class is still
+	 * applied above for backward compat with any non-scoped readers. */
+	color: var(--cc-green, #34b29d) !important;
+}
+
+.rate-cell-primary :deep(*) {
+	color: inherit !important;
 }
 
 .qty-cell {

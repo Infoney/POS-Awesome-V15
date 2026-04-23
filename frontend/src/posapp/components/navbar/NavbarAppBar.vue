@@ -21,6 +21,7 @@
 			/>
 
 			<v-img
+				v-if="brandLogo"
 				:src="brandLogo"
 				:alt="brandLogoAlt"
 				:max-width="isMobile ? 52 : 160"
@@ -239,7 +240,10 @@
 
 <script>
 import { useRtl } from "../../composables/core/useRtl";
-import posLogo from "../pos/pos.png";
+// Legacy `pos.png` import removed — see Navbar.vue for the rationale.
+// `brandLogo` now returns "" until the POS Profile or website-settings
+// logo resolves, and the <v-img> below is gated behind `v-if` so we
+// don't paint a fallback bitmap on first frame.
 import NavbarInfoGadgets from "./NavbarInfoGadgets.vue";
 
 export default {
@@ -253,7 +257,6 @@ export default {
 			isRtl,
 			rtlStyles,
 			rtlClasses,
-			posLogo,
 		};
 	},
 	data() {
@@ -281,6 +284,13 @@ export default {
 		posProfile: {
 			type: Object,
 			default: () => ({}),
+		},
+		// Resolved website-settings logo from the parent Navbar.
+		// Empty string == "not yet resolved", which the template uses to
+		// suppress the <v-img> entirely so we never paint a stale fallback.
+		companyImg: {
+			type: String,
+			default: "",
 		},
 		pendingInvoices: {
 			type: Number,
@@ -367,11 +377,19 @@ export default {
 		},
 
 		brandLogo() {
-			const raw = this.posProfile?.posa_brand_logo;
-			if (typeof raw === "string" && raw.trim()) {
-				return raw.trim();
+			// Prefer the per-profile brand logo. Fall back to whatever
+			// website-settings logo the parent Navbar resolved (passed in via
+			// `companyImg`), and finally to "" — which the template's
+			// `v-if` treats as "render nothing", so the cashier never sees a
+			// stale bitmap flash before the real logo loads.
+			const profile = this.posProfile?.posa_brand_logo;
+			if (typeof profile === "string" && profile.trim()) {
+				return profile.trim();
 			}
-			return this.posLogo;
+			if (typeof this.companyImg === "string" && this.companyImg.trim()) {
+				return this.companyImg.trim();
+			}
+			return "";
 		},
 
 		brandLogoAlt() {

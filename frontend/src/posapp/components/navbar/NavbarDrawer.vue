@@ -13,13 +13,13 @@
 		<div class="drawer-shell">
 			<div>
 				<div v-if="!mini" class="drawer-header">
-					<v-avatar size="56" class="drawer-logo-avatar">
+					<v-avatar v-if="resolvedMenuLogo" size="56" class="drawer-logo-avatar">
 						<v-img :src="resolvedMenuLogo" alt="Menu logo" cover />
 					</v-avatar>
 					<span class="drawer-company">{{ company }}</span>
 				</div>
 				<div v-else class="drawer-header-mini">
-					<v-avatar size="44" class="drawer-logo-avatar">
+					<v-avatar v-if="resolvedMenuLogo" size="44" class="drawer-logo-avatar">
 						<v-img :src="resolvedMenuLogo" alt="Menu logo" cover />
 					</v-avatar>
 				</div>

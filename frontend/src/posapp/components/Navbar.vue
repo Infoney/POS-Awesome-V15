@@ -4,6 +4,7 @@
 		<NavbarAppBar
 			:pos-profile="posProfile"
 			:cashier-name="currentCashierDisplay"
+			:company-img="companyImg"
 			:pending-invoices="pendingInvoices"
 			:loading-progress="loadingProgress"
 			:loading-active="loadingActive"
@@ -185,7 +186,12 @@ import CacheUsageMeter from "./navbar/CacheUsageMeter.vue";
 import AboutDialog from "./navbar/AboutDialog.vue";
 import OfflineInvoices from "./OfflineInvoices.vue";
 import EmployeeSwitchDialog from "./pos/employee/EmployeeSwitchDialog.vue";
-import posLogo from "./pos/pos.png";
+// NOTE: the legacy bundled POS Awesome logo (`./pos/pos.png`) used to be
+// imported here and seeded as `companyImg`, which painted on the very
+// first frame and produced a visible "old logo flash" before the
+// website-settings / profile brand logo loaded. We now leave the logo
+// empty until a real source resolves — see `companyImg` below and the
+// `v-if`-gated <v-img> in the navbar children.
 import { forceClearAllCache } from "../../offline/index";
 import { clearAllCaches } from "../../utils/clearAllCaches";
 import { isOffline } from "../../offline/index";
@@ -321,7 +327,9 @@ export default {
 			],
 			items: [],
 			company: "POS Awesome",
-			companyImg: posLogo,
+			// Start blank — populated from frappe.boot.website_settings.app_logo
+			// (or the POS Profile's `posa_brand_logo`) once boot resolves.
+			companyImg: "",
 			showAboutDialog: false,
 			showOfflineInvoices: false,
 			settingsPanelOpen: false,
