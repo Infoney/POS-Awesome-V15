@@ -183,16 +183,21 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 					: "Sales Invoice"),
 			onResolved: extra.onResolved,
 		};
-		// Defer the emit by a tick when the caller is mid-catch and is about
-		// to also close the parent Payments v-dialog. Opening the conflict
-		// dialog SYNCHRONOUSLY while the parent dialog is still mounted has
-		// caused Vuetify's overlay stack to leave the new dialog visually on
-		// screen but with its scrim and focus trap stuck behind the closing
-		// parent — buttons stop responding and the page locks up while the
-		// closing animation thrashes layout against the new dialog. Emitting
-		// on a `setTimeout(0)` lets the parent dialog flip its `v-model` to
-		// false first, so by the time StockConflictDialog mounts the only
-		// overlay on screen is its own.
+		// Defer the emit by a tick so the caller's `throw` -> catch chain in
+		// `submitInvoice` and `Payments.vue` finishes (and `paymentVisible`
+		// flips to false) before the conflict overlay mounts. Avoids a
+		// half-state where the conflict UI is up while the Payments dialog
+		// is still mid-teardown.
+		//
+		// Historical note: a previous version of StockConflictDialog wrapped
+		// itself in <v-dialog>. Mounting it while the Payments <v-dialog>
+		// was leaving put both into Vuetify's VOverlay stack at once and
+		// pegged the main thread (focus-trap re-entry + scroll-lock toggle
+		// loop) so hard the browser tab locked and DevTools wouldn't open
+		// — even though both dialogs visually rendered. The dialog was
+		// rewritten to use a plain <Teleport> + native scrim, which
+		// sidesteps Vuetify's overlay machinery entirely; this defer is
+		// now defensive rather than critical.
 		const deferred = extra.defer !== false;
 		if (
 			deferred &&

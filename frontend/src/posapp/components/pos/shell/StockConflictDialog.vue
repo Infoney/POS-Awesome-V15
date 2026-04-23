@@ -1,138 +1,157 @@
 <template>
-	<v-dialog
-		v-model="open"
-		max-width="640px"
-		scrollable
-	>
-		<v-card class="conflict-dialog-card" elevation="10">
-			<!-- ─────────────────── Header ─────────────────── -->
-			<div class="conflict-dialog__header">
-				<div class="conflict-dialog__icon-wrap">
-					<v-icon class="conflict-dialog__icon">mdi-alert-octagon</v-icon>
-				</div>
-				<div class="conflict-dialog__header-text">
-					<h3 class="conflict-dialog__title">
-						{{ __("Stock has changed") }}
-					</h3>
-					<p class="conflict-dialog__subtitle">
-						{{ subtitleText }}
-					</p>
-				</div>
-				<button
-					type="button"
-					class="conflict-dialog__close"
-					:aria-label="__('Close')"
-					@click="cancelDialog"
-				>
-					<v-icon>mdi-close</v-icon>
-				</button>
-			</div>
+	<!--
+		The conflict resolver intentionally does NOT use <v-dialog>. Mounting
+		a Vuetify dialog while the Payments <v-dialog> is in its leave
+		transition put both dialogs into the global VOverlay stack at the
+		same time and pegged the main thread (focus-trap re-entry + scroll
+		lock toggling). The browser locked so hard DevTools wouldn't open
+		even after the parent dialog had visually closed. A plain teleport
+		with a native scrim sidesteps every piece of that machinery.
 
-			<!-- ─────────────────── Body ─────────────────── -->
-			<v-card-text class="conflict-dialog__body">
-				<!-- Shortage summary cards -->
-				<section v-if="shortages.length" class="conflict-section">
-					<header class="conflict-section__header">
-						<v-icon size="16" class="conflict-section__icon">mdi-package-variant-closed-remove</v-icon>
-						<span class="conflict-section__title">
-							{{ __("Lines that exceed available stock") }}
-						</span>
-					</header>
-					<div class="shortage-grid">
-						<div
-							v-for="s in shortages"
-							:key="`${s.item_code}::${s.batch_no}::${s.warehouse}`"
-							class="shortage-card"
-						>
-							<div class="shortage-card__head">
-								<span class="shortage-card__item">{{ s.label || s.item_code }}</span>
-								<span class="shortage-card__warehouse" :title="s.warehouse">
-									<v-icon size="12">mdi-warehouse</v-icon>
-									{{ s.warehouse }}
-								</span>
-							</div>
-							<div v-if="s.batch_no" class="shortage-card__row">
-								<span class="shortage-card__label">{{ __("Batch") }}</span>
-								<code class="shortage-card__batch">{{ s.batch_no }}</code>
-							</div>
-							<div class="shortage-card__numbers">
-								<div class="shortage-card__metric">
-									<span class="shortage-card__metric-label">{{ __("Available") }}</span>
-									<strong class="shortage-card__metric-value shortage-card__metric-value--warn">
-										{{ formatQty(s.available) }}
-									</strong>
+		See PR notes / commit history for the prior `setTimeout(0)` defer
+		attempt — that helped close the parent dialog first but didn't
+		break the lockup. The root cause was Vuetify's overlay stack, not
+		the timing.
+	-->
+	<Teleport v-if="open" to="body">
+		<div
+			class="conflict-overlay"
+			role="presentation"
+			@click.self="cancelDialog"
+		>
+			<div
+				class="conflict-dialog-card"
+				role="dialog"
+				aria-modal="true"
+				:aria-label="__('Stock has changed')"
+				@click.stop
+			>
+				<!-- ─────────────────── Header ─────────────────── -->
+				<div class="conflict-dialog__header">
+					<div class="conflict-dialog__icon-wrap">
+						<v-icon class="conflict-dialog__icon">mdi-alert-octagon</v-icon>
+					</div>
+					<div class="conflict-dialog__header-text">
+						<h3 class="conflict-dialog__title">
+							{{ __("Stock has changed") }}
+						</h3>
+						<p class="conflict-dialog__subtitle">
+							{{ subtitleText }}
+						</p>
+					</div>
+					<button
+						type="button"
+						class="conflict-dialog__close"
+						:aria-label="__('Close')"
+						@click="cancelDialog"
+					>
+						<v-icon>mdi-close</v-icon>
+					</button>
+				</div>
+
+				<!-- ─────────────────── Body ─────────────────── -->
+				<div class="conflict-dialog__body">
+					<!-- Shortage summary cards -->
+					<section v-if="shortages.length" class="conflict-section">
+						<header class="conflict-section__header">
+							<v-icon size="16" class="conflict-section__icon">mdi-package-variant-closed-remove</v-icon>
+							<span class="conflict-section__title">
+								{{ __("Lines that exceed available stock") }}
+							</span>
+						</header>
+						<div class="shortage-grid">
+							<div
+								v-for="s in shortages"
+								:key="`${s.item_code}::${s.batch_no}::${s.warehouse}`"
+								class="shortage-card"
+							>
+								<div class="shortage-card__head">
+									<span class="shortage-card__item">{{ s.label || s.item_code }}</span>
+									<span class="shortage-card__warehouse" :title="s.warehouse">
+										<v-icon size="12">mdi-warehouse</v-icon>
+										{{ s.warehouse }}
+									</span>
 								</div>
-								<v-icon size="14" class="shortage-card__arrow">mdi-arrow-right</v-icon>
-								<div class="shortage-card__metric">
-									<span class="shortage-card__metric-label">{{ __("Requested") }}</span>
-									<strong class="shortage-card__metric-value">
-										{{ formatQty(s.requested) }}
-									</strong>
+								<div v-if="s.batch_no" class="shortage-card__row">
+									<span class="shortage-card__label">{{ __("Batch") }}</span>
+									<code class="shortage-card__batch">{{ s.batch_no }}</code>
+								</div>
+								<div class="shortage-card__numbers">
+									<div class="shortage-card__metric">
+										<span class="shortage-card__metric-label">{{ __("Available") }}</span>
+										<strong class="shortage-card__metric-value shortage-card__metric-value--warn">
+											{{ formatQty(s.available) }}
+										</strong>
+									</div>
+									<v-icon size="14" class="shortage-card__arrow">mdi-arrow-right</v-icon>
+									<div class="shortage-card__metric">
+										<span class="shortage-card__metric-label">{{ __("Requested") }}</span>
+										<strong class="shortage-card__metric-value">
+											{{ formatQty(s.requested) }}
+										</strong>
+									</div>
 								</div>
 							</div>
 						</div>
-					</div>
-				</section>
+					</section>
 
-				<!-- Plain-language explainer so the cashier knows what each
-				     button does without guessing. Drafts intentionally do
-				     NOT reserve stock here — see _collect_stock_errors. -->
-				<section class="conflict-section">
-					<header class="conflict-section__header">
-						<v-icon size="16" class="conflict-section__icon">mdi-information-outline</v-icon>
-						<span class="conflict-section__title">
-							{{ __("How to proceed") }}
-						</span>
-					</header>
-					<p class="conflict-explainer">
-						{{
-							__(
-								"Drafts don't reserve stock — another terminal may have sold these units in the meantime. Reduce the cart to what's available now, stash the sale as a draft to revisit later, or cancel.",
-							)
-						}}
-					</p>
-				</section>
-			</v-card-text>
+					<!-- Plain-language explainer so the cashier knows what each
+					     button does without guessing. Drafts intentionally do
+					     NOT reserve stock here — see _collect_stock_errors. -->
+					<section class="conflict-section">
+						<header class="conflict-section__header">
+							<v-icon size="16" class="conflict-section__icon">mdi-information-outline</v-icon>
+							<span class="conflict-section__title">
+								{{ __("How to proceed") }}
+							</span>
+						</header>
+						<p class="conflict-explainer">
+							{{
+								__(
+									"Drafts don't reserve stock — another terminal may have sold these units in the meantime. Reduce the cart to what's available now, stash the sale as a draft to revisit later, or cancel.",
+								)
+							}}
+						</p>
+					</section>
+				</div>
 
-			<!-- ─────────────────── Actions ─────────────────── -->
-			<v-divider class="conflict-dialog__divider" />
-			<v-card-actions class="conflict-dialog__actions">
-				<v-btn
-					theme="dark"
-					class="conflict-action conflict-action--cancel"
-					size="large"
-					@click="cancelCurrentSale"
-				>
-					<v-icon start>mdi-cart-remove</v-icon>
-					{{ __("Cancel current sale") }}
-				</v-btn>
-				<v-btn
-					theme="dark"
-					class="conflict-action conflict-action--draft"
-					size="large"
-					@click="saveCurrentAsDraft"
-				>
-					<v-icon start>mdi-content-save-edit-outline</v-icon>
-					{{ __("Save as draft") }}
-				</v-btn>
-				<v-spacer />
-				<v-btn
-					theme="dark"
-					class="conflict-action conflict-action--primary"
-					:disabled="!shortages.length"
-					size="large"
-					@click="reduceQtyToAvailable"
-				>
-					<v-icon start>mdi-arrow-collapse-down</v-icon>
-					{{ __("Reduce qty & retry") }}
-				</v-btn>
-			</v-card-actions>
-		</v-card>
-	</v-dialog>
+				<!-- ─────────────────── Actions ─────────────────── -->
+				<hr class="conflict-dialog__divider" />
+				<div class="conflict-dialog__actions">
+					<button
+						type="button"
+						class="conflict-action conflict-action--cancel"
+						@click="cancelCurrentSale"
+					>
+						<v-icon start>mdi-cart-remove</v-icon>
+						{{ __("Cancel current sale") }}
+					</button>
+					<button
+						type="button"
+						class="conflict-action conflict-action--draft"
+						@click="saveCurrentAsDraft"
+					>
+						<v-icon start>mdi-content-save-edit-outline</v-icon>
+						{{ __("Save as draft") }}
+					</button>
+					<span class="conflict-action__spacer" />
+					<button
+						type="button"
+						class="conflict-action conflict-action--primary"
+						:disabled="!shortages.length"
+						@click="reduceQtyToAvailable"
+					>
+						<v-icon start>mdi-arrow-collapse-down</v-icon>
+						{{ __("Reduce qty & retry") }}
+					</button>
+				</div>
+			</div>
+		</div>
+	</Teleport>
 </template>
 
 <script>
-import { computed, inject, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useToastStore } from "../../../stores/toastStore.js";
 
 export default {
@@ -271,6 +290,27 @@ export default {
 			closeDialog();
 		};
 
+		// Escape closes the dialog, mirroring the Vuetify behaviour we
+		// replaced. Listener is only attached while the overlay is open
+		// so we don't intercept Escape elsewhere.
+		const onKeydown = (event) => {
+			if (event.key === "Escape" && open.value) {
+				event.stopPropagation();
+				closeDialog();
+			}
+		};
+
+		watch(open, (isOpen) => {
+			if (typeof document === "undefined") return;
+			if (isOpen) {
+				document.addEventListener("keydown", onKeydown, true);
+				document.body.classList.add("conflict-overlay-open");
+			} else {
+				document.removeEventListener("keydown", onKeydown, true);
+				document.body.classList.remove("conflict-overlay-open");
+			}
+		});
+
 		onMounted(() => {
 			if (eventBus) {
 				eventBus.on("open_stock_conflict_dialog", onOpenEvent);
@@ -279,6 +319,10 @@ export default {
 		onBeforeUnmount(() => {
 			if (eventBus) {
 				eventBus.off("open_stock_conflict_dialog", onOpenEvent);
+			}
+			if (typeof document !== "undefined") {
+				document.removeEventListener("keydown", onKeydown, true);
+				document.body.classList.remove("conflict-overlay-open");
 			}
 		});
 
@@ -298,17 +342,46 @@ export default {
 </script>
 
 <style scoped>
+/* ── Overlay shell (replaces v-dialog) ─────────────────────────── */
+.conflict-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 2400; /* above Vuetify's default 2400-ish v-dialog stack */
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+	background: rgba(8, 12, 22, 0.62);
+	backdrop-filter: blur(2px);
+	animation: conflict-overlay-in 140ms ease-out;
+}
+
+@keyframes conflict-overlay-in {
+	from { opacity: 0; }
+	to   { opacity: 1; }
+}
+
 /* ── Dialog shell ───────────────────────────────────────────────── */
 .conflict-dialog-card {
-	border-radius: 18px;
+	width: min(640px, 100%);
+	max-height: calc(100vh - 32px);
 	overflow: hidden;
-	background: var(--pos-card-bg, #0e131e) !important;
+	display: flex;
+	flex-direction: column;
+	border-radius: 18px;
+	background: var(--pos-card-bg, #0e131e);
 	border: 1px solid rgba(244, 114, 182, 0.25);
 	box-shadow:
 		0 24px 56px rgba(0, 0, 0, 0.6),
 		0 0 0 1px rgba(226, 54, 112, 0.12);
 	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
 	color: var(--pos-text-primary, #e7ebf3);
+	animation: conflict-card-in 180ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes conflict-card-in {
+	from { opacity: 0; transform: translateY(6px) scale(0.98); }
+	to   { opacity: 1; transform: translateY(0)   scale(1); }
 }
 
 .conflict-dialog-card,
@@ -384,12 +457,13 @@ export default {
 
 /* ── Body ──────────────────────────────────────────────────────── */
 .conflict-dialog__body {
-	padding: 18px 22px 6px !important;
-	max-height: 60vh;
+	padding: 18px 22px 6px;
 	display: flex;
 	flex-direction: column;
 	gap: 18px;
 	background: var(--pos-card-bg, #0e131e);
+	overflow-y: auto;
+	flex: 1 1 auto;
 }
 
 .conflict-section {
@@ -535,23 +609,39 @@ export default {
 
 /* ── Footer / actions ──────────────────────────────────────────── */
 .conflict-dialog__divider {
-	border-color: rgba(139, 92, 246, 0.18) !important;
+	border: 0;
+	border-top: 1px solid rgba(139, 92, 246, 0.18);
+	margin: 0;
 }
 
 .conflict-dialog__actions {
-	padding: 14px 22px !important;
+	padding: 14px 22px;
+	display: flex;
+	align-items: center;
 	gap: 10px;
 	background: var(--pos-surface-muted, #161c27);
 	flex-wrap: wrap;
 }
 
+.conflict-action__spacer {
+	flex: 1 1 auto;
+}
+
 .conflict-action {
-	border-radius: 10px !important;
-	text-transform: none !important;
-	font-weight: 700 !important;
-	letter-spacing: 0.02em !important;
-	color: #fff !important;
-	transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease !important;
+	all: unset;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 18px;
+	border-radius: 10px;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	font-size: 0.92rem;
+	color: #fff;
+	box-sizing: border-box;
+	transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
 }
 
 .conflict-action:not(:disabled):hover {
@@ -559,14 +649,19 @@ export default {
 	filter: brightness(1.05);
 }
 
+.conflict-action:focus-visible {
+	outline: 2px solid rgba(167, 139, 250, 0.7);
+	outline-offset: 2px;
+}
+
 .conflict-action--cancel {
-	background: linear-gradient(135deg, rgba(244, 63, 94, 0.95), rgba(225, 29, 72, 0.95)) !important;
-	box-shadow: 0 4px 14px rgba(244, 63, 94, 0.28) !important;
+	background: linear-gradient(135deg, rgba(244, 63, 94, 0.95), rgba(225, 29, 72, 0.95));
+	box-shadow: 0 4px 14px rgba(244, 63, 94, 0.28);
 }
 
 .conflict-action--draft {
-	background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95)) !important;
-	box-shadow: 0 4px 14px rgba(59, 130, 246, 0.28) !important;
+	background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95));
+	box-shadow: 0 4px 14px rgba(59, 130, 246, 0.28);
 }
 
 .conflict-action--primary {
@@ -575,24 +670,41 @@ export default {
 		#8b5cf6 0%,
 		#a78bfa 40%,
 		#e23670 100%
-	) !important;
-	border: 1px solid rgba(167, 139, 250, 0.5) !important;
-	box-shadow: 0 6px 18px rgba(139, 92, 246, 0.35) !important;
+	);
+	border: 1px solid rgba(167, 139, 250, 0.5);
+	box-shadow: 0 6px 18px rgba(139, 92, 246, 0.35);
 }
 
+.conflict-action[disabled],
 .conflict-action--primary:disabled {
 	opacity: 0.45;
 	filter: grayscale(0.3);
-	box-shadow: none !important;
+	box-shadow: none;
+	cursor: not-allowed;
+	pointer-events: none;
 }
 
 @media (max-width: 600px) {
 	.conflict-dialog__actions {
-		padding: 12px 14px !important;
+		padding: 12px 14px;
 	}
 
 	.conflict-action {
 		flex: 1 1 calc(50% - 6px);
+		justify-content: center;
 	}
+
+	.conflict-action__spacer {
+		display: none;
+	}
+}
+</style>
+
+<style>
+/* Global helper so the underlying page can be locked from scrolling
+   while the conflict overlay is up — mirrors what v-dialog does
+   without pulling in Vuetify's overlay machinery. */
+body.conflict-overlay-open {
+	overflow: hidden;
 }
 </style>
