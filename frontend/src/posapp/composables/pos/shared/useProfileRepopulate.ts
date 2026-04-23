@@ -11,18 +11,23 @@
  * this:
  *   - `items` (Dexie) is filtered by `profile_scope` (`<profile>_<warehouse>`)
  *   - `itemsCache` keys include the same scope
- * BUT the in-memory store and the flat `local_stock_cache` don't reset
- * on their own. Without this composable the cashier sees prior-profile
- * rows / stock numbers until they manually refresh.
+ *   - `stock_cache_scopes` (since the stock-cache refactor) is a map
+ *     of `<profile>_<warehouse>` → entries, with an LRU cap and a
+ *     5-minute freshness TTL
+ * The in-memory items store still needs to be reset so the UI doesn't
+ * keep showing prior-profile rows, but the stock cache itself no
+ * longer needs a blind wipe — `initializeStockCache` will switch to
+ * the new scope and skip the server fetch if that scope was warmed
+ * within the TTL.
  *
  * What it does
  * ------------
  *   1. Watches `uiStore.posProfile.name` — skips the very first value
  *      (initial bootstrap is handled elsewhere by `ItemsSelector`).
  *   2. On change: aborts in-flight loaders, clears the in-memory items
- *      array, clears the flat stock cache, then re-runs
- *      `itemsStore.initialize()` for the new profile (which respects
- *      the new scope key).
+ *      array, re-runs `itemsStore.initialize()` for the new profile,
+ *      then asks `initializeStockCache` to ensure the stock scope is
+ *      fresh (no-op if recently warmed).
  *   3. Emits `profile_repopulate_progress` events on the bus so the
  *      indicator chip in Pos.vue can show a per-resource progress bar.
  *
@@ -39,10 +44,11 @@ import { useUIStore } from "../../../stores/uiStore.js";
 import { useItemsStore } from "../../../stores/itemsStore.js";
 import { useCustomersStore } from "../../../stores/customersStore.js";
 import {
-	clearLocalStockCache,
 	getLocalStock,
 	initializeStockCache,
+	resolveStockScope,
 	setStockCacheReady,
+	setStockScope,
 } from "../../../../offline/index";
 
 type EventBus = {
@@ -105,16 +111,24 @@ export function useProfileRepopulate() {
 			itemsStore.resetForProfile(newProfile);
 			emit("items", 5, "Clearing previous catalogue");
 
-			// ── 2) Stock cache is *flat* (one map for the whole app), so
-			//        a profile change must wipe it — different warehouses
-			//        could otherwise leak stale Bin balances into the new
-			//        profile. We refill it after items load below.
+			// ── 2) Switch the stock cache to the new profile's scope.
+			//        No blind wipe — the scope-keyed cache keeps the
+			//        previous profile's entries under its own key, so
+			//        flipping back later is a cache hit. If the new
+			//        scope was warmed recently, `initializeStockCache`
+			//        below will see it's fresh and skip the server
+			//        round-trip entirely.
 			try {
-				clearLocalStockCache();
+				const nextScope = resolveStockScope(newProfile);
+				setStockScope(nextScope);
+				emit(
+					"stock",
+					5,
+					nextScope ? `Switched to ${nextScope}` : "Stock scope cleared",
+				);
 			} catch (err) {
-				console.warn("[useProfileRepopulate] stock clear failed", err);
+				console.warn("[useProfileRepopulate] stock scope switch failed", err);
 			}
-			emit("stock", 5, "Clearing stock cache");
 
 			// ── 3) Re-point the customers store too — its address list
 			//        is tied to profile.customer_groups + payment methods.
@@ -149,19 +163,20 @@ export function useProfileRepopulate() {
 			// done in lockstep with items — they're not a separate fetch.
 			emit("batches", 100, "Batches refreshed");
 
-			// ── 5) Warm the stock cache for the new catalogue so the
-			//        first scan / cart-add doesn't pay a round-trip.
+			// ── 5) Ensure the stock cache for the new scope is fresh.
+			//        `initializeStockCache` is a no-op if the scope was
+			//        warmed within the TTL, so bouncing between two
+			//        recently-used profiles costs nothing.
 			emit("stock", 30, "Refreshing stock balances");
 			try {
 				const items = (itemsStore.items as any[]) || [];
 				if (items.length) {
 					await initializeStockCache(items, newProfile);
-					// Push the freshly fetched Bin balances onto the item
-					// rows in memory. Without this the cards would keep
-					// rendering actual_qty = 0 (the default useItemsLoader
-					// forces for items that arrive without a stock field)
-					// even though the flat local_stock_cache is now warm.
-					// The per-item detail fetcher *also* does this sync on
+					// Push the cached Bin balances onto the item rows in
+					// memory. Without this the cards would keep showing
+					// actual_qty = 0 (the default useItemsLoader forces
+					// for items that arrive without a stock field). The
+					// per-item detail fetcher *also* does this sync on
 					// scroll, but waiting for that causes the cashier to
 					// see a page of "0" until they interact.
 					items.forEach((item) => {

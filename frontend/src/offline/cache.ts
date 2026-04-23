@@ -1066,6 +1066,8 @@ export function reduceCacheUsage() {
 	memory.customer_addresses_cache = {};
 	memory.payment_method_currency_cache = {};
 	memory.local_stock_cache = {};
+	memory.stock_cache_scopes = {};
+	memory.stock_cache_current_scope = null;
 	memory.stock_cache_ready = false;
 	memory.coupons_cache = {};
 	memory.item_groups_cache = [];
@@ -1081,6 +1083,8 @@ export function reduceCacheUsage() {
 	persist("customer_addresses_cache");
 	persist("payment_method_currency_cache");
 	persist("local_stock_cache");
+	persist("stock_cache_scopes");
+	persist("stock_cache_current_scope");
 	persist("stock_cache_ready");
 	persist("coupons_cache");
 	persist("item_groups_cache");

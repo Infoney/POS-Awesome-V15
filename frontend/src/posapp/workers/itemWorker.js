@@ -177,6 +177,8 @@ const KEY_TABLE_MAP = {
 	customer_addresses_cache: "cache",
 	payment_method_currency_cache: "cache",
 	local_stock_cache: "local_stock",
+	stock_cache_scopes: "local_stock",
+	stock_cache_current_scope: "settings",
 	coupons_cache: "coupons",
 	item_groups_cache: "item_groups",
 	translation_cache: "translations",
@@ -198,7 +200,12 @@ const KEY_TABLE_MAP = {
 	pos_last_sync_totals: "sync_state",
 };
 
-const LARGE_KEYS = new Set(["items", "item_details_cache", "local_stock_cache"]);
+const LARGE_KEYS = new Set([
+	"items",
+	"item_details_cache",
+	"local_stock_cache",
+	"stock_cache_scopes",
+]);
 const LOCAL_STORAGE_KEYS = new Set([
 	"manual_offline",
 	"bootstrap_snapshot",
@@ -206,6 +213,7 @@ const LOCAL_STORAGE_KEYS = new Set([
 	"bootstrap_limited_mode",
 	"cache_ready",
 	"stock_cache_ready",
+	"stock_cache_current_scope",
 	"schema_signature",
 	"tax_inclusive",
 ]);
