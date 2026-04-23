@@ -167,13 +167,13 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			requested: number;
 			label: string;
 		}>,
-		extra: { onResolved?: () => void | Promise<void> } = {},
+		extra: { onResolved?: () => void | Promise<void>; defer?: boolean } = {},
 	): boolean => {
 		if (!eventBus || typeof eventBus.emit !== "function") return false;
 		if (!shortages.length) return false;
 		const doc = unref(invoiceDoc);
 		const profile = unref(posProfile);
-		eventBus.emit("open_stock_conflict_dialog", {
+		const payload = {
 			shortages,
 			invoiceName: doc?.name || null,
 			invoiceDoctype:
@@ -182,7 +182,36 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 					? "POS Invoice"
 					: "Sales Invoice"),
 			onResolved: extra.onResolved,
-		});
+		};
+		// Defer the emit by a tick when the caller is mid-catch and is about
+		// to also close the parent Payments v-dialog. Opening the conflict
+		// dialog SYNCHRONOUSLY while the parent dialog is still mounted has
+		// caused Vuetify's overlay stack to leave the new dialog visually on
+		// screen but with its scrim and focus trap stuck behind the closing
+		// parent — buttons stop responding and the page locks up while the
+		// closing animation thrashes layout against the new dialog. Emitting
+		// on a `setTimeout(0)` lets the parent dialog flip its `v-model` to
+		// false first, so by the time StockConflictDialog mounts the only
+		// overlay on screen is its own.
+		const deferred = extra.defer !== false;
+		if (
+			deferred &&
+			typeof window !== "undefined" &&
+			typeof window.setTimeout === "function"
+		) {
+			window.setTimeout(() => {
+				try {
+					eventBus.emit("open_stock_conflict_dialog", payload);
+				} catch (err) {
+					console.error(
+						"[usePaymentSubmission] emitStockConflictDialog deferred emit failed",
+						err,
+					);
+				}
+			}, 0);
+		} else {
+			eventBus.emit("open_stock_conflict_dialog", payload);
+		}
 		return true;
 	};
 
