@@ -1,8 +1,7 @@
 <template>
 	<v-dialog
 		v-model="open"
-		max-width="780px"
-		:persistent="resolving"
+		max-width="640px"
 		scrollable
 	>
 		<v-card class="conflict-dialog-card" elevation="10">
@@ -13,7 +12,7 @@
 				</div>
 				<div class="conflict-dialog__header-text">
 					<h3 class="conflict-dialog__title">
-						{{ __("Stock conflict detected") }}
+						{{ __("Stock has changed") }}
 					</h3>
 					<p class="conflict-dialog__subtitle">
 						{{ subtitleText }}
@@ -22,7 +21,6 @@
 				<button
 					type="button"
 					class="conflict-dialog__close"
-					:disabled="resolving"
 					:aria-label="__('Close')"
 					@click="cancelDialog"
 				>
@@ -37,7 +35,7 @@
 					<header class="conflict-section__header">
 						<v-icon size="16" class="conflict-section__icon">mdi-package-variant-closed-remove</v-icon>
 						<span class="conflict-section__title">
-							{{ __("What's blocking the sale") }}
+							{{ __("Lines that exceed available stock") }}
 						</span>
 					</header>
 					<div class="shortage-grid">
@@ -53,9 +51,9 @@
 									{{ s.warehouse }}
 								</span>
 							</div>
-							<div class="shortage-card__row">
+							<div v-if="s.batch_no" class="shortage-card__row">
 								<span class="shortage-card__label">{{ __("Batch") }}</span>
-								<code class="shortage-card__batch">{{ s.batch_no || "—" }}</code>
+								<code class="shortage-card__batch">{{ s.batch_no }}</code>
 							</div>
 							<div class="shortage-card__numbers">
 								<div class="shortage-card__metric">
@@ -76,111 +74,23 @@
 					</div>
 				</section>
 
-				<!-- Drafts list -->
+				<!-- Plain-language explainer so the cashier knows what each
+				     button does without guessing. Drafts intentionally do
+				     NOT reserve stock here — see _collect_stock_errors. -->
 				<section class="conflict-section">
 					<header class="conflict-section__header">
-						<v-icon size="16" class="conflict-section__icon">mdi-file-document-multiple-outline</v-icon>
+						<v-icon size="16" class="conflict-section__icon">mdi-information-outline</v-icon>
 						<span class="conflict-section__title">
-							{{ __("Draft invoices holding this stock") }}
-						</span>
-						<span v-if="loading" class="conflict-section__hint">
-							<v-progress-circular size="14" width="2" indeterminate color="#a78bfa" />
-							{{ __("Searching…") }}
-						</span>
-						<span v-else-if="!drafts.length" class="conflict-section__hint">
-							{{ __("No related drafts found") }}
+							{{ __("How to proceed") }}
 						</span>
 					</header>
-
-					<div
-						v-if="!loading && !drafts.length"
-						class="conflict-empty"
-					>
-						<v-icon size="22" class="conflict-empty__icon">mdi-information-outline</v-icon>
-						<p>
-							{{
-								__(
-									"We couldn't find a draft invoice claiming this batch. The actual stock may have just been depleted on another terminal — please refresh availability and try again.",
-								)
-							}}
-						</p>
-					</div>
-
-					<ul v-if="drafts.length" class="draft-list">
-						<li
-							v-for="draft in drafts"
-							:key="`${draft.doctype}::${draft.name}`"
-							class="draft-card"
-							:class="{ 'draft-card--selected': isSelected(draft) }"
-						>
-							<label class="draft-card__check">
-								<input
-									type="checkbox"
-									:checked="isSelected(draft)"
-									:disabled="resolving"
-									@change="toggleSelected(draft)"
-								/>
-								<span class="draft-card__check-mark"></span>
-							</label>
-
-							<div class="draft-card__body">
-								<div class="draft-card__top">
-									<span class="draft-card__name">{{ draft.name }}</span>
-									<span class="draft-card__doctype">{{ draft.doctype }}</span>
-									<span class="draft-card__customer">{{ draft.customer_name || draft.customer || __("No customer") }}</span>
-								</div>
-								<div class="draft-card__meta">
-									<span class="draft-card__meta-chip">
-										<v-icon size="12">mdi-calendar</v-icon>
-										{{ formatDate(draft.posting_date || draft.modified) }}
-									</span>
-									<span class="draft-card__meta-chip">
-										<v-icon size="12">mdi-account-circle-outline</v-icon>
-										{{ draft.owner }}
-									</span>
-									<span v-if="draft.conflict_qty" class="draft-card__meta-chip draft-card__meta-chip--warn">
-										<v-icon size="12">mdi-package-variant-closed</v-icon>
-										{{ __("Holds") }} {{ formatQty(draft.conflict_qty) }}
-									</span>
-								</div>
-								<div class="draft-card__items">
-									<span
-										v-for="(line, idx) in draft.items"
-										:key="`${draft.name}-${idx}`"
-										class="draft-card__line"
-									>
-										{{ line.item_name || line.item_code }}
-										<small v-if="line.batch_no">· {{ line.batch_no }}</small>
-										<small>· {{ formatQty(line.stock_qty || line.qty) }}</small>
-									</span>
-								</div>
-							</div>
-
-							<button
-								type="button"
-								class="draft-card__view"
-								:disabled="resolving"
-								:aria-label="__('Open invoice in new tab')"
-								@click="openDraft(draft)"
-							>
-								<v-icon size="18">mdi-open-in-new</v-icon>
-							</button>
-						</li>
-					</ul>
-
-					<div v-if="drafts.length" class="draft-list__footer">
-						<button
-							type="button"
-							class="draft-list__select-all"
-							:disabled="resolving"
-							@click="toggleSelectAll"
-						>
-							{{ allSelected ? __("Clear selection") : __("Select all") }}
-						</button>
-						<span class="draft-list__counter">
-							{{ __("{0} of {1} selected", [selectedKeys.size, drafts.length]) }}
-						</span>
-					</div>
+					<p class="conflict-explainer">
+						{{
+							__(
+								"Drafts don't reserve stock — another terminal may have sold these units in the meantime. Reduce the cart to what's available now, stash the sale as a draft to revisit later, or cancel.",
+							)
+						}}
+					</p>
 				</section>
 			</v-card-text>
 
@@ -189,19 +99,7 @@
 			<v-card-actions class="conflict-dialog__actions">
 				<v-btn
 					theme="dark"
-					class="conflict-action conflict-action--ghost"
-					:disabled="resolving"
-					size="large"
-					@click="refreshDrafts"
-				>
-					<v-icon start>mdi-refresh</v-icon>
-					{{ __("Refresh") }}
-				</v-btn>
-				<v-spacer />
-				<v-btn
-					theme="dark"
 					class="conflict-action conflict-action--cancel"
-					:disabled="resolving"
 					size="large"
 					@click="cancelCurrentSale"
 				>
@@ -211,23 +109,22 @@
 				<v-btn
 					theme="dark"
 					class="conflict-action conflict-action--draft"
-					:disabled="resolving"
 					size="large"
 					@click="saveCurrentAsDraft"
 				>
 					<v-icon start>mdi-content-save-edit-outline</v-icon>
 					{{ __("Save as draft") }}
 				</v-btn>
+				<v-spacer />
 				<v-btn
 					theme="dark"
 					class="conflict-action conflict-action--primary"
-					:disabled="!selectedKeys.size || resolving"
-					:loading="resolving"
+					:disabled="!shortages.length"
 					size="large"
-					@click="deleteSelectedDrafts"
+					@click="reduceQtyToAvailable"
 				>
-					<v-icon start>mdi-trash-can-outline</v-icon>
-					{{ __("Delete & retry") }}
+					<v-icon start>mdi-arrow-collapse-down</v-icon>
+					{{ __("Reduce qty & retry") }}
 				</v-btn>
 			</v-card-actions>
 		</v-card>
@@ -246,15 +143,12 @@ export default {
 		const __ = window.__ || ((t) => t);
 
 		const open = ref(false);
-		const loading = ref(false);
-		const resolving = ref(false);
 		const shortages = ref([]);
-		const drafts = ref([]);
-		const selectedKeys = ref(new Set());
 		// Optional context payload passed in by usePaymentSubmission so
-		// the dialog knows what to do when the cashier picks "save as draft"
-		// or "cancel current sale". Each handler is optional — if absent,
-		// we fall back to a sensible default (just close the dialog).
+		// the dialog knows what to do when the cashier picks "save as
+		// draft", "cancel current sale", or "reduce qty & retry". Each
+		// handler is optional — if absent, we fall back to a sensible
+		// default (emit a bus event the Invoice mixin already listens to).
 		const context = ref({
 			invoiceName: null,
 			invoiceDoctype: null,
@@ -263,117 +157,29 @@ export default {
 			onResolved: null,
 		});
 
-		const allSelected = computed(
-			() => drafts.value.length > 0 && selectedKeys.value.size === drafts.value.length,
-		);
-
-		// The dialog handles two distinct shortage reasons:
-		//   1. Batch claimed by another draft  → "same batch is already claimed…"
-		//   2. Bin total too low / non-batched → "stock is below the requested qty…"
-		// Only show the batch wording when at least one shortage actually
-		// references a batch_no — otherwise the cashier sees a confusing
-		// "claimed by other invoices" line for an item that isn't even batched.
+		// Two distinct shortage stories drive the subtitle:
+		//   1. Batch-specific shortage → name the batch wording so the
+		//      cashier knows a different batch may still work.
+		//   2. Plain Bin overdraw → just say the qty is below request.
+		// Drafts intentionally do NOT factor in here — they don't post
+		// SLEs, so they cannot be the cause. Saying "another draft holds
+		// this stock" was the old (and misleading) framing.
 		const subtitleText = computed(() => {
 			const hasBatchShortage = shortages.value.some((s) => !!(s && s.batch_no));
 			return hasBatchShortage
 				? __(
-						"Your sale cannot be completed because the same batch is already claimed by other invoices that haven't been submitted yet.",
+						"This batch doesn't have enough stock right now. Try a different batch, reduce the qty to what's available, or stash the sale.",
 					)
 				: __(
-						"Your sale cannot be completed because the available stock is below the requested quantity.",
+						"Available stock is below the requested quantity. Reduce the qty to what's available, stash the sale, or cancel.",
 					);
 		});
-
-		const keyFor = (draft) => `${draft.doctype}::${draft.name}`;
-		const isSelected = (draft) => selectedKeys.value.has(keyFor(draft));
 
 		const formatQty = (value) => {
 			const num = Number(value || 0);
 			if (!Number.isFinite(num)) return "—";
 			return num % 1 === 0 ? num.toFixed(0) : num.toFixed(2);
 		};
-
-		const formatDate = (raw) => {
-			if (!raw) return "—";
-			try {
-				const date = new Date(raw);
-				if (Number.isNaN(date.getTime())) return raw;
-				return date.toLocaleDateString(undefined, {
-					year: "numeric",
-					month: "short",
-					day: "numeric",
-				});
-			} catch {
-				return raw;
-			}
-		};
-
-		const toggleSelected = (draft) => {
-			const next = new Set(selectedKeys.value);
-			const key = keyFor(draft);
-			if (next.has(key)) next.delete(key);
-			else next.add(key);
-			selectedKeys.value = next;
-		};
-
-		const toggleSelectAll = () => {
-			if (allSelected.value) {
-				selectedKeys.value = new Set();
-			} else {
-				selectedKeys.value = new Set(drafts.value.map(keyFor));
-			}
-		};
-
-		const openDraft = (draft) => {
-			try {
-				const slug = draft.doctype.toLowerCase().replace(/\s+/g, "-");
-				const url = `/app/${slug}/${encodeURIComponent(draft.name)}`;
-				window.open(url, "_blank", "noopener");
-			} catch (err) {
-				console.error("[StockConflictDialog] failed to open draft", err);
-			}
-		};
-
-		const fetchDrafts = async () => {
-			if (!shortages.value.length) {
-				drafts.value = [];
-				return;
-			}
-			loading.value = true;
-			try {
-				const payload = shortages.value.map((s) => ({
-					item_code: s.item_code,
-					batch_no: s.batch_no || null,
-					warehouse: s.warehouse || null,
-				}));
-				const resp = await frappe.call({
-					method:
-						"posawesome.posawesome.api.item_processing.stock.get_draft_invoices_for_items",
-					args: {
-						items: payload,
-						exclude_invoice: context.value.invoiceName || null,
-					},
-				});
-				const list = Array.isArray(resp?.message?.drafts)
-					? resp.message.drafts
-					: [];
-				drafts.value = list;
-				// Pre-select all by default — the cashier almost always
-				// wants to delete every blocker in one shot.
-				selectedKeys.value = new Set(list.map(keyFor));
-			} catch (err) {
-				console.error("[StockConflictDialog] fetchDrafts failed", err);
-				toastStore.show({
-					title: __("Couldn't load conflicting drafts"),
-					color: "error",
-				});
-				drafts.value = [];
-			} finally {
-				loading.value = false;
-			}
-		};
-
-		const refreshDrafts = () => fetchDrafts();
 
 		const onOpenEvent = (payload) => {
 			shortages.value = Array.isArray(payload?.shortages)
@@ -386,22 +192,14 @@ export default {
 				onSaveCurrentAsDraft: payload?.onSaveCurrentAsDraft || null,
 				onResolved: payload?.onResolved || null,
 			};
-			selectedKeys.value = new Set();
-			drafts.value = [];
 			open.value = true;
-			fetchDrafts();
 		};
 
 		const closeDialog = () => {
 			open.value = false;
-			resolving.value = false;
-			selectedKeys.value = new Set();
 		};
 
-		const cancelDialog = () => {
-			if (resolving.value) return;
-			closeDialog();
-		};
+		const cancelDialog = () => closeDialog();
 
 		const cancelCurrentSale = () => {
 			try {
@@ -437,72 +235,40 @@ export default {
 			closeDialog();
 		};
 
-		const deleteSelectedDrafts = async () => {
-			if (!selectedKeys.value.size) return;
-			const targets = drafts.value.filter((d) => selectedKeys.value.has(keyFor(d)));
-			if (!targets.length) return;
-
-			resolving.value = true;
+		// "Reduce qty & retry": fire the shortage payload back at the
+		// Invoice component, which clamps each short cart line to its
+		// available qty (or removes it when zero). Then signal the
+		// caller via onResolved so usePaymentSubmission can re-trigger
+		// the original submit without the cashier touching anything.
+		const reduceQtyToAvailable = () => {
+			if (!shortages.value.length) {
+				closeDialog();
+				return;
+			}
 			try {
-				const resp = await frappe.call({
-					method:
-						"posawesome.posawesome.api.item_processing.stock.delete_draft_invoices",
-					args: {
-						invoices: targets.map((d) => ({
-							doctype: d.doctype,
-							name: d.name,
-						})),
-					},
+				eventBus?.emit("reduce_qty_for_shortages", {
+					shortages: shortages.value,
 				});
-				const result = resp?.message || {};
-				const deleted = Array.isArray(result.deleted) ? result.deleted : [];
-				const failed = Array.isArray(result.failed) ? result.failed : [];
-
-				if (deleted.length) {
-					toastStore.show({
-						title: __("Deleted {0} draft invoice(s)", [deleted.length]),
-						color: "success",
-					});
-				}
-				if (failed.length) {
-					const detail = failed
-						.map((f) => `${f.name}: ${f.error || __("Unknown error")}`)
-						.join("\n");
-					toastStore.show({
-						title: __("Couldn't delete {0} invoice(s)", [failed.length]),
-						color: "warning",
-						detail,
-					});
-				}
-
-				// If everything went away, close + signal the caller so it
-				// can retry the original submission.
-				if (!failed.length && deleted.length) {
-					if (typeof context.value.onResolved === "function") {
-						try {
-							context.value.onResolved({ deleted });
-						} catch (innerErr) {
-							console.error(
-								"[StockConflictDialog] onResolved callback failed",
-								innerErr,
-							);
-						}
-					}
-					closeDialog();
-					return;
-				}
-
-				// Otherwise reload the list so the cashier can see what's left
-				await fetchDrafts();
 			} catch (err) {
-				console.error("[StockConflictDialog] deleteSelectedDrafts failed", err);
+				console.error("[StockConflictDialog] reduceQtyToAvailable failed", err);
 				toastStore.show({
-					title: __("Failed to delete drafts"),
+					title: __("Couldn't adjust cart automatically"),
 					color: "error",
 				});
-			} finally {
-				resolving.value = false;
+				return;
 			}
+
+			if (typeof context.value.onResolved === "function") {
+				try {
+					context.value.onResolved({ reducedQty: true });
+				} catch (innerErr) {
+					console.error(
+						"[StockConflictDialog] onResolved callback failed",
+						innerErr,
+					);
+				}
+			}
+			closeDialog();
 		};
 
 		onMounted(() => {
@@ -518,24 +284,13 @@ export default {
 
 		return {
 			open,
-			loading,
-			resolving,
 			shortages,
-			drafts,
-			selectedKeys,
-			allSelected,
 			subtitleText,
-			isSelected,
-			toggleSelected,
-			toggleSelectAll,
-			openDraft,
-			refreshDrafts,
 			cancelDialog,
 			cancelCurrentSale,
 			saveCurrentAsDraft,
-			deleteSelectedDrafts,
+			reduceQtyToAvailable,
 			formatQty,
-			formatDate,
 			__,
 		};
 	},
@@ -622,14 +377,9 @@ export default {
 	transition: background-color 0.18s ease, color 0.18s ease;
 }
 
-.conflict-dialog__close:hover:not(:disabled) {
+.conflict-dialog__close:hover {
 	background: rgba(244, 63, 94, 0.15);
 	color: #fb7185;
-}
-
-.conflict-dialog__close:disabled {
-	opacity: 0.35;
-	cursor: not-allowed;
 }
 
 /* ── Body ──────────────────────────────────────────────────────── */
@@ -666,13 +416,15 @@ export default {
 	color: rgba(231, 235, 243, 0.75);
 }
 
-.conflict-section__hint {
-	margin-left: auto;
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 0.78rem;
-	color: rgba(231, 235, 243, 0.6);
+.conflict-explainer {
+	margin: 0;
+	font-size: 0.84rem;
+	line-height: 1.5;
+	color: rgba(231, 235, 243, 0.7);
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: rgba(15, 23, 42, 0.4);
+	border: 1px solid rgba(167, 139, 250, 0.18);
 }
 
 /* ── Shortage cards ────────────────────────────────────────────── */
@@ -781,247 +533,6 @@ export default {
 	color: rgba(231, 235, 243, 0.4);
 }
 
-/* ── Drafts list ───────────────────────────────────────────────── */
-.draft-list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.draft-card {
-	display: flex;
-	align-items: stretch;
-	gap: 10px;
-	padding: 12px 14px;
-	border-radius: 12px;
-	background: var(--pos-surface-muted, #161c27);
-	border: 1px solid rgba(139, 92, 246, 0.18);
-	transition: border-color 0.18s ease, background-color 0.18s ease;
-}
-
-.draft-card:hover {
-	border-color: rgba(167, 139, 250, 0.4);
-}
-
-.draft-card--selected {
-	border-color: rgba(244, 114, 182, 0.55);
-	background: linear-gradient(
-		135deg,
-		rgba(244, 63, 94, 0.06),
-		rgba(139, 92, 246, 0.04)
-	);
-}
-
-.draft-card__check {
-	display: grid;
-	place-items: center;
-	align-self: flex-start;
-	margin-top: 2px;
-	cursor: pointer;
-	user-select: none;
-}
-
-.draft-card__check input {
-	position: absolute;
-	opacity: 0;
-	pointer-events: none;
-}
-
-.draft-card__check-mark {
-	width: 18px;
-	height: 18px;
-	border-radius: 5px;
-	border: 1.5px solid rgba(167, 139, 250, 0.5);
-	background: rgba(15, 23, 42, 0.6);
-	display: grid;
-	place-items: center;
-	transition: background-color 0.18s ease, border-color 0.18s ease;
-}
-
-.draft-card__check-mark::after {
-	content: "";
-	width: 10px;
-	height: 10px;
-	border-radius: 3px;
-	background: linear-gradient(135deg, #a78bfa, #e23670);
-	transform: scale(0);
-	transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.draft-card__check input:checked + .draft-card__check-mark {
-	border-color: #e23670;
-	background: rgba(244, 63, 94, 0.15);
-}
-
-.draft-card__check input:checked + .draft-card__check-mark::after {
-	transform: scale(1);
-}
-
-.draft-card__body {
-	flex: 1;
-	min-width: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.draft-card__top {
-	display: flex;
-	align-items: baseline;
-	gap: 8px;
-	flex-wrap: wrap;
-}
-
-.draft-card__name {
-	font-weight: 700;
-	font-size: 0.92rem;
-	color: #fff;
-	letter-spacing: 0.01em;
-}
-
-.draft-card__doctype {
-	font-size: 0.66rem;
-	font-weight: 600;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	padding: 2px 8px;
-	border-radius: 999px;
-	background: rgba(139, 92, 246, 0.18);
-	color: #d8b4fe;
-}
-
-.draft-card__customer {
-	font-size: 0.84rem;
-	color: rgba(231, 235, 243, 0.7);
-}
-
-.draft-card__meta {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.draft-card__meta-chip {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	font-size: 0.72rem;
-	color: rgba(231, 235, 243, 0.55);
-	padding: 2px 8px;
-	border-radius: 999px;
-	background: rgba(15, 23, 42, 0.45);
-	border: 1px solid rgba(148, 163, 184, 0.2);
-}
-
-.draft-card__meta-chip--warn {
-	color: #fb7185;
-	background: rgba(244, 63, 94, 0.12);
-	border-color: rgba(244, 63, 94, 0.3);
-}
-
-.draft-card__items {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.draft-card__line {
-	font-size: 0.78rem;
-	color: rgba(231, 235, 243, 0.7);
-	background: rgba(139, 92, 246, 0.06);
-	border: 1px solid rgba(139, 92, 246, 0.18);
-	border-radius: 8px;
-	padding: 3px 8px;
-}
-
-.draft-card__line small {
-	color: rgba(231, 235, 243, 0.5);
-	margin-left: 4px;
-}
-
-.draft-card__view {
-	all: unset;
-	width: 36px;
-	height: 36px;
-	display: grid;
-	place-items: center;
-	border-radius: 8px;
-	background: rgba(15, 23, 42, 0.45);
-	border: 1px solid rgba(148, 163, 184, 0.2);
-	color: rgba(231, 235, 243, 0.7);
-	cursor: pointer;
-	align-self: center;
-	transition: background-color 0.18s ease, color 0.18s ease;
-}
-
-.draft-card__view:hover:not(:disabled) {
-	background: rgba(139, 92, 246, 0.18);
-	color: #a78bfa;
-}
-
-.draft-card__view:disabled {
-	opacity: 0.4;
-	cursor: not-allowed;
-}
-
-.draft-list__footer {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding-top: 4px;
-}
-
-.draft-list__select-all {
-	all: unset;
-	cursor: pointer;
-	font-size: 0.78rem;
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	color: #a78bfa;
-	padding: 4px 10px;
-	border-radius: 8px;
-	transition: background-color 0.18s ease;
-}
-
-.draft-list__select-all:hover:not(:disabled) {
-	background: rgba(139, 92, 246, 0.12);
-}
-
-.draft-list__select-all:disabled {
-	opacity: 0.4;
-	cursor: not-allowed;
-}
-
-.draft-list__counter {
-	font-size: 0.78rem;
-	color: rgba(231, 235, 243, 0.55);
-}
-
-/* ── Empty state ───────────────────────────────────────────────── */
-.conflict-empty {
-	display: flex;
-	gap: 10px;
-	padding: 14px 16px;
-	border-radius: 10px;
-	background: rgba(15, 23, 42, 0.45);
-	border: 1px dashed rgba(148, 163, 184, 0.25);
-	color: rgba(231, 235, 243, 0.7);
-	font-size: 0.86rem;
-}
-
-.conflict-empty p {
-	margin: 0;
-	line-height: 1.5;
-}
-
-.conflict-empty__icon {
-	color: #fbbf24;
-	flex-shrink: 0;
-}
-
 /* ── Footer / actions ──────────────────────────────────────────── */
 .conflict-dialog__divider {
 	border-color: rgba(139, 92, 246, 0.18) !important;
@@ -1046,16 +557,6 @@ export default {
 .conflict-action:not(:disabled):hover {
 	transform: translateY(-1px);
 	filter: brightness(1.05);
-}
-
-.conflict-action--ghost {
-	background: transparent !important;
-	border: 1px solid rgba(167, 139, 250, 0.35) !important;
-	color: #c7c2f0 !important;
-}
-
-.conflict-action--ghost:not(:disabled):hover {
-	background: rgba(139, 92, 246, 0.12) !important;
 }
 
 .conflict-action--cancel {

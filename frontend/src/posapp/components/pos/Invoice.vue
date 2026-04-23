@@ -600,6 +600,110 @@ export default {
 			this.expanded = Array.isArray(ids) ? ids.slice(-1) : [];
 		},
 
+		/**
+		 * Clamp short cart lines to what stock will actually allow,
+		 * driven by the StockConflictDialog "Reduce qty" action.
+		 *
+		 * `payload.shortages` mirrors the shape produced by the backend
+		 * `check_invoice_availability` / `validate_draft_invoice_stock`
+		 * endpoints (see usePaymentSubmission.ts). Each entry carries the
+		 * stock-UOM `available` quantity; the cart line stores qty in its
+		 * own UOM, so we divide by `conversion_factor` to get the right
+		 * cart number. A `available <= 0` shortage means the line can't
+		 * ship at all — remove it entirely instead of zeroing it (the
+		 * cashier never wants to keep a "0 qty" placeholder around).
+		 *
+		 * Match key is item_code + (batch_no || "") + warehouse so the
+		 * same item billed against two different batches is treated as
+		 * two independent lines, which matches how the validator reports
+		 * shortages.
+		 */
+		applyShortagesToCart(payload) {
+			const shortages = Array.isArray(payload?.shortages)
+				? payload.shortages
+				: [];
+			if (!shortages.length) {
+				return { adjusted: 0, removed: 0 };
+			}
+
+			const cartLines = Array.isArray(this.items) ? this.items : [];
+			if (!cartLines.length) {
+				return { adjusted: 0, removed: 0 };
+			}
+
+			const lineKey = (line) =>
+				[
+					line?.item_code || "",
+					line?.batch_no || "",
+					line?.warehouse || "",
+				].join("::");
+
+			let adjusted = 0;
+			let removed = 0;
+
+			shortages.forEach((shortage) => {
+				if (!shortage || !shortage.item_code) return;
+				const targetKey = [
+					shortage.item_code,
+					shortage.batch_no || "",
+					shortage.warehouse || "",
+				].join("::");
+
+				// Snapshot the matches up-front: removing during iteration
+				// would mutate `this.items` mid-loop and skip lines.
+				const matches = cartLines.filter(
+					(line) => lineKey(line) === targetKey,
+				);
+				if (!matches.length) return;
+
+				const stockAvailable = Number(shortage.available || 0);
+
+				matches.forEach((line) => {
+					const conversion =
+						Number(line.conversion_factor || 1) || 1;
+					const cartAvailable = stockAvailable / conversion;
+					const isReturn = Number(line.qty || 0) < 0;
+
+					if (!Number.isFinite(cartAvailable) || cartAvailable <= 0) {
+						this.remove_item(line);
+						removed += 1;
+						return;
+					}
+
+					// Only round down — clamping UP would re-introduce the
+					// shortage we're trying to fix.
+					const safeQty = isReturn
+						? -Math.abs(cartAvailable)
+						: Math.floor(cartAvailable * 1e6) / 1e6;
+					this.setFormatedQty(line, "qty", null, false, safeQty);
+					adjusted += 1;
+				});
+			});
+
+			if (adjusted || removed) {
+				const parts = [];
+				if (adjusted) {
+					parts.push(
+						__("Reduced {0} line(s) to match available stock", [
+							adjusted,
+						]),
+					);
+				}
+				if (removed) {
+					parts.push(
+						__("Removed {0} line(s) with no stock left", [removed]),
+					);
+				}
+				this.toastStore?.show?.({
+					title: __("Cart adjusted to match current stock"),
+					detail: parts.join(" · "),
+					color: "info",
+				});
+			}
+
+			return { adjusted, removed };
+		},
+
 		applyReturnDiscountProration(options = {}) {
 			const { defer } = options || {};
 			if (defer && typeof this.$nextTick === "function") {
@@ -1066,6 +1170,14 @@ export default {
 				if (typeof this.save_and_clear_invoice === "function") {
 					this.save_and_clear_invoice();
 				}
+			},
+			// "Reduce qty" action from StockConflictDialog: clamp each
+			// short cart line to what's actually available right now
+			// (or remove the line entirely when nothing is left). One
+			// click puts the cart back in a submittable state without
+			// asking the cashier to do the math themselves.
+			reduce_qty_for_shortages: (payload) => {
+				this.applyShortagesToCart(payload);
 			},
 		};
 
