@@ -14,7 +14,8 @@ from posawesome.posawesome.api.invoice_processing.utils import (
     _resolve_effective_price_list,
     _build_invoice_remarks,
     _set_return_valid_upto,
-    get_latest_rate
+    get_latest_rate,
+    set_missing_values_quietly,
 )
 from posawesome.posawesome.api.invoice_processing.stock import (
     _strip_client_freebies_from_payload,
@@ -690,8 +691,13 @@ def update_invoice(data):
 
     _deduplicate_free_items(invoice_doc)
 
-    # Set missing values first
-    invoice_doc.set_missing_values()
+    # Set missing values first.
+    # `set_missing_values_quietly` strips ERPNext's spurious "Payment methods
+    # refreshed. Please review before proceeding." toast that fires from
+    # `update_multi_mode_option` on every re-validation when the draft already
+    # carries a payments table — POSAwesome rebuilds payments from the
+    # cashier's payload right after, so the warning is wrong here.
+    set_missing_values_quietly(invoice_doc)
     if effective_price_list:
         invoice_doc.selling_price_list = effective_price_list
 

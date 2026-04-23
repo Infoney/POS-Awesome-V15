@@ -13,7 +13,8 @@ from posawesome.posawesome.api.invoice_processing.utils import (
     _validate_return_window,
     get_latest_rate,
     get_price_list_currency,
-    get_available_currencies
+    get_available_currencies,
+    run_set_missing_values_quietly,
 )
 from posawesome.posawesome.api.invoice_processing.stock import (
     _strip_client_freebies_from_payload,
@@ -177,7 +178,9 @@ def create_sales_invoice_from_order(sales_order):
 
     invoice_doc = make_sales_invoice(sales_order)
     invoice_doc.flags.ignore_permissions = True
-    invoice_doc.run_method("set_missing_values")
+    # See `run_set_missing_values_quietly` for why we strip ERPNext's
+    # "Payment methods refreshed" toast on every set_missing_values call.
+    run_set_missing_values_quietly(invoice_doc)
     invoice_doc.run_method("calculate_taxes_and_totals")
     return invoice_doc
 

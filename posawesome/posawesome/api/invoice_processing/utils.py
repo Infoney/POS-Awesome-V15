@@ -144,3 +144,58 @@ def get_price_list_currency(price_list):
 @frappe.whitelist()
 def get_available_currencies():
     return frappe.get_all("Currency", filters={"enabled": 1}, fields=["name"])
+
+
+def _drop_spurious_payment_methods_refreshed_toast():
+    """Strip ERPNext's misleading "Payment methods refreshed" toast.
+
+    `erpnext.accounts.doctype.sales_invoice.sales_invoice.update_multi_mode_option`
+    fires `frappe.msgprint("Payment methods refreshed. Please review before
+    proceeding.", indicator="orange", alert=True)` whenever a Sales Invoice
+    that already has `payments` rows is re-validated through `set_pos_fields`
+    (called from `set_missing_values` with `for_validate=False`). It runs on
+    every POSAwesome `update_invoice` save because the cashier's draft
+    already carries a payments table from the previous round-trip.
+
+    POSAwesome rebuilds the payments table itself via
+    `_ensure_invoice_payments_linkage` from the cashier's payload, so the
+    "review before proceeding" warning is wrong here — nothing was lost. We
+    drop only this one entry from `frappe.local.message_log` (matched on the
+    localized message via the same translation key ERPNext uses, so the
+    filter works across languages).
+    """
+    log = getattr(frappe.local, "message_log", None)
+    if not log:
+        return
+    needle = _("Payment methods refreshed. Please review before proceeding.")
+    if not needle:
+        return
+
+    def _matches(entry):
+        if isinstance(entry, dict):
+            text = entry.get("message", "") or ""
+        else:
+            text = str(entry or "")
+        return needle in text
+
+    filtered = [entry for entry in log if not _matches(entry)]
+    if len(filtered) != len(log):
+        frappe.local.message_log = filtered
+
+
+def set_missing_values_quietly(invoice_doc):
+    """Wrap `doc.set_missing_values()` and drop the spurious "Payment methods
+    refreshed" toast that ERPNext emits on every re-validation.
+
+    See `_drop_spurious_payment_methods_refreshed_toast` for the rationale.
+    """
+    invoice_doc.set_missing_values()
+    _drop_spurious_payment_methods_refreshed_toast()
+
+
+def run_set_missing_values_quietly(invoice_doc):
+    """Same as `set_missing_values_quietly` but uses `run_method` so doctype
+    hooks/overrides participate. Mirrors call sites that prefer `run_method`.
+    """
+    invoice_doc.run_method("set_missing_values")
+    _drop_spurious_payment_methods_refreshed_toast()
