@@ -50,6 +50,23 @@ def _has_post_submit_payment_work(data):
     )
 
 
+# Error Log.method (the doctype field that backs `title`) is a varchar(140).
+# `frappe.log_error("very long story...")` overflows that cap and raises
+# CharacterLengthExceededError from inside whatever except block called it,
+# silently killing realtime "failed" signals downstream and freezing the POS
+# while the browser waits forever. Always feed log_error a bounded title and
+# put the long detail in `message`.
+_LOG_TITLE_MAX = 120  # leave headroom under the 140-char DB cap
+
+
+def _short_log_title(prefix, ref=None):
+    suffix = f": {ref}" if ref else ""
+    title = f"{prefix}{suffix}"
+    if len(title) <= _LOG_TITLE_MAX:
+        return title
+    return title[: _LOG_TITLE_MAX - 1] + "…"
+
+
 def _apply_invoice_gift_card_settlement(invoice_doc, data):
     from posawesome.posawesome.api.gift_cards import apply_invoice_gift_card_redemptions
 
@@ -150,7 +167,16 @@ def process_post_submit_payments_job(kwargs):
     except Exception as e:
         frappe.db.rollback()
         error_msg = str(e)
-        frappe.log_error(f"POS Post Submit Payment Processing Failed for {invoice}: {error_msg}")
+        # See note in submit_in_background_job's except block: log_error must
+        # never raise out of an except handler that still owes the client a
+        # realtime "failed" signal.
+        try:
+            frappe.log_error(
+                title=_short_log_title("POS Post-Submit Payments Failed", invoice),
+                message=error_msg,
+            )
+        except Exception:
+            pass
         user = kwargs.get("user")
         if user and hasattr(frappe, "publish_realtime"):
             frappe.publish_realtime(
@@ -616,7 +642,13 @@ def update_invoice(data):
             invoice_doc.customer = cust.name
             invoice_doc.customer_name = cust.customer_name
         except Exception as e:
-            frappe.log_error(f"Failed to create customer {customer_name}: {e}")
+            try:
+                frappe.log_error(
+                    title=_short_log_title("Failed to create customer", customer_name),
+                    message=str(e),
+                )
+            except Exception:
+                pass
 
     if invoice_doc.get("customer"):
         resolved_customer_name = frappe.db.get_value(
@@ -1074,7 +1106,20 @@ def submit_in_background_job(kwargs):
     except Exception as e:
         frappe.db.rollback()
         error_msg = str(e)
-        frappe.log_error(f"POS Background Submission Failed for {invoice}: {error_msg}")
+        # NOTE: frappe.log_error's FIRST positional arg is `title`, capped at
+        # 140 chars. Stock-conflict messages routinely overflow that cap and
+        # raise CharacterLengthExceededError from inside this except block —
+        # which (before this guard) escaped before publish_realtime ran,
+        # leaving the browser hanging on the submit promise indefinitely.
+        # Use a bounded title and route the long error into `message`, then
+        # swallow any logging failure so the realtime event always fires.
+        try:
+            frappe.log_error(
+                title=_short_log_title("POS Bg Submission Failed", invoice),
+                message=error_msg,
+            )
+        except Exception:
+            pass
         frappe.publish_realtime(
             "pos_invoice_submit_error",
             {"invoice": invoice, "error": error_msg},
