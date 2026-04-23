@@ -147,4 +147,40 @@ describe("qzTray service", () => {
 
 		expect(qzTray.selectedQzPrinter.value).toBe("Printer A");
 	});
+
+	it("seeds the localStorage hint cache from the POS Profile so cache-clear restores the saved printer", async () => {
+		// Cache is empty (simulating a freshly cleared browser); the
+		// POS Profile carries the saved printer.
+		qzMock.posProfile.value = {
+			posa_qz_printer_name: "Profile Printer",
+		};
+
+		const qzTray = await import("../src/posapp/services/qzTray");
+
+		expect(qzTray.selectedQzPrinter.value).toBe("");
+		expect(window.localStorage.getItem("posa_qz_printer_name")).toBeNull();
+
+		qzTray.syncSelectedQzPrinterFromProfile();
+
+		expect(qzTray.selectedQzPrinter.value).toBe("Profile Printer");
+		expect(window.localStorage.getItem("posa_qz_printer_name")).toBe(
+			"Profile Printer",
+		);
+	});
+
+	it("never clobbers an existing per-session override when the profile loads", async () => {
+		window.localStorage.setItem("posa_qz_printer_name", "Override Printer");
+		qzMock.posProfile.value = {
+			posa_qz_printer_name: "Profile Printer",
+		};
+
+		const qzTray = await import("../src/posapp/services/qzTray");
+
+		qzTray.syncSelectedQzPrinterFromProfile();
+
+		expect(qzTray.selectedQzPrinter.value).toBe("Override Printer");
+		expect(window.localStorage.getItem("posa_qz_printer_name")).toBe(
+			"Override Printer",
+		);
+	});
 });

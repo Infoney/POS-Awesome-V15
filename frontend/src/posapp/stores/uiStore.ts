@@ -33,6 +33,7 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { POSProfile } from "../types/models";
+import { syncSelectedQzPrinterFromProfile } from "../services/qzTray";
 
 export const useUIStore = defineStore("ui", () => {
   // Loading Overlay State
@@ -148,6 +149,12 @@ export const useUIStore = defineStore("ui", () => {
 
   function setPosProfile(profile: POSProfile) {
     posProfile.value = profile;
+    // Re-seed the QZ printer selection from the profile's
+    // `posa_qz_printer_name` field so a cleared browser cache restores
+    // the saved printer instead of falling back to the first-discovered
+    // one. The helper is a no-op when localStorage already holds a
+    // value (per-session override).
+    syncSelectedQzPrinterFromProfile();
   }
 
   function setStockSettings(settings: Record<string, any>) {
@@ -163,6 +170,11 @@ export const useUIStore = defineStore("ui", () => {
     if (data.stock_settings) stockSettings.value = data.stock_settings;
     if (data.company) companyDoc.value = data.company;
     if (data.pos_opening_shift) posOpeningShift.value = data.pos_opening_shift;
+    // See note in setPosProfile — same rationale; warm the QZ printer
+    // hint cache from the freshly loaded POS Profile.
+    if (data.pos_profile) {
+      syncSelectedQzPrinterFromProfile();
+    }
   }
 
   const lastInvoiceId = ref<string | null>(null);

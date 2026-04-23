@@ -138,22 +138,71 @@ function setResolvedQzPrinter(name: string) {
 	selectedQzPrinter.value = name || "";
 }
 
-function resolvePreferredPrinter(printers: string[]) {
+type ResolvedSource = "saved" | "profile" | "current" | "first" | "none";
+
+function resolvePreferredPrinter(printers: string[]): {
+	name: string;
+	source: ResolvedSource;
+} {
 	const saved = getSavedPrinterName();
 	if (saved && printers.includes(saved)) {
-		return saved;
+		return { name: saved, source: "saved" };
 	}
 
 	const profileDefault = getProfileDefaultPrinterName();
 	if (profileDefault && printers.includes(profileDefault)) {
-		return profileDefault;
+		return { name: profileDefault, source: "profile" };
 	}
 
 	if (selectedQzPrinter.value && printers.includes(selectedQzPrinter.value)) {
-		return selectedQzPrinter.value;
+		return { name: selectedQzPrinter.value, source: "current" };
 	}
 
-	return printers[0] || "";
+	if (printers[0]) {
+		return { name: printers[0], source: "first" };
+	}
+
+	return { name: "", source: "none" };
+}
+
+/**
+ * Seed `selectedQzPrinter` (and the localStorage warm-cache) from the
+ * POS Profile's `posa_qz_printer_name` field when nothing is cached
+ * locally.
+ *
+ * Why this exists
+ * ---------------
+ * The POS Profile is the durable store for the cashier's preferred
+ * printer — clearing browser cache wipes localStorage but the profile
+ * value survives. This helper runs whenever the POS Profile is loaded
+ * into the UI store and copies the saved printer name back into
+ * localStorage so subsequent prints (and the QZ Tray dialog) see the
+ * "right" printer immediately, without having to wait for a printer
+ * discovery round-trip.
+ *
+ * Behaviour
+ * ---------
+ * - If localStorage already has a value, leave it untouched. That
+ *   represents an explicit per-session override the user set in the
+ *   dialog (without clicking "Save as POS Profile Default").
+ * - If localStorage is empty and the profile has a value, copy the
+ *   profile value into both the ref and localStorage.
+ * - If neither has a value, do nothing.
+ */
+export function syncSelectedQzPrinterFromProfile() {
+	const cached = getSavedPrinterName();
+	if (cached) {
+		// Cache exists — keep the per-session preference.
+		if (!selectedQzPrinter.value) {
+			selectedQzPrinter.value = cached;
+		}
+		return;
+	}
+
+	const profileDefault = getProfileDefaultPrinterName();
+	if (profileDefault) {
+		setSelectedQzPrinter(profileDefault);
+	}
 }
 
 function setupSecurity() {
@@ -332,7 +381,13 @@ export async function findQzPrinters(): Promise<string[]> {
 				: [];
 
 		qzPrinters.value = printers;
-		setResolvedQzPrinter(resolvePreferredPrinter(printers));
+		// Update the in-memory ref only — do NOT write to localStorage
+		// here. Per-session overrides (set via the dialog's v-select)
+		// are the only thing that should hit localStorage; the durable
+		// preference lives on the POS Profile and is seeded into the
+		// hint cache by `syncSelectedQzPrinterFromProfile()` when the
+		// profile is loaded.
+		setResolvedQzPrinter(resolvePreferredPrinter(printers).name);
 
 		return printers;
 	} catch (error) {
