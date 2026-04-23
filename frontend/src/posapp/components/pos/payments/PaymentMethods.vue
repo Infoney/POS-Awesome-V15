@@ -160,7 +160,10 @@ const handlePrimaryAction = (payment) => {
 	padding: 12px;
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	/* Breathing room between the header, the amount row and the
+	   denomination chip row — 10px squeezed the floating "Amount"
+	   label against the green preset chips below. */
+	gap: 14px;
 }
 
 .payment-method-card__header {
@@ -321,12 +324,38 @@ const handlePrimaryAction = (payment) => {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--pos-space-2);
+	/* Center the preset chips so they read as a balanced strip rather
+	   than sliding flush-left under the Amount field. The extra top
+	   margin separates them from the floating "Amount" label which
+	   would otherwise sit right on top of the first chip row. */
+	justify-content: center;
+	margin-top: 6px;
 }
 
 .payment-denominations__btn {
 	border-radius: var(--pos-radius-sm);
 	text-transform: none;
 	font-weight: 600;
+}
+
+/* Solo + density="compact" stacks the floating label and the input
+   value tightly in the top-half of the field, which made "Amount"
+   visually crash into the value text. Push the label slightly up and
+   the value slightly down so they read as two distinct lines. */
+:deep(.payment-method-amount.v-text-field .v-field--variant-solo .v-field__field) {
+	padding-top: 4px;
+}
+
+:deep(.payment-method-amount.v-text-field .v-field--variant-solo .v-label.v-field-label--floating) {
+	transform: translateY(-2px);
+}
+
+:deep(.payment-method-amount.v-text-field .v-field--variant-solo .v-field__input) {
+	padding-top: 18px;
+	padding-bottom: 6px;
+	min-height: 48px;
+	display: flex;
+	align-items: center;
 }
 
 @media (max-width: 768px) {
