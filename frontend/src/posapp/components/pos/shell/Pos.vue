@@ -12,6 +12,7 @@
 		<MpesaPayments></MpesaPayments>
 		<Variants></Variants>
 		<StockConflictDialog></StockConflictDialog>
+		<ProfileRepopulateIndicator />
 		<OpeningDialog
 			v-if="dialog"
 			:dialog="dialog"
@@ -219,6 +220,7 @@ import ItemsSelector from "../items/ItemsSelector.vue";
 import Invoice from "../Invoice.vue";
 import OpeningDialog from "../shift/OpeningDialog.vue";
 import StockConflictDialog from "./StockConflictDialog.vue";
+import ProfileRepopulateIndicator from "../../ui/ProfileRepopulateIndicator.vue";
 import Payments from "../Payments.vue";
 import PosOffers from "../offers/PosOffers.vue";
 import PosCoupons from "../offers/PosCoupons.vue";
@@ -232,6 +234,7 @@ import MpesaPayments from "../payments/Mpesa-Payments.vue";
 import { inject, ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from "vue";
 import { usePosShift } from "../../../composables/pos/shared/usePosShift";
 import { useOffers } from "../../../composables/pos/shared/useOffers";
+import { useProfileRepopulate } from "../../../composables/pos/shared/useProfileRepopulate";
 // Import the cache cleanup function
 import { clearExpiredCustomerBalances } from "../../../../offline/index";
 import { useResponsive } from "../../../composables/core/useResponsive";
@@ -256,6 +259,11 @@ export default {
 			dialog.value = true;
 		});
 		const offers = useOffers();
+		// Auto-repopulate items / batches / stock cache whenever the
+		// cashier switches POS Profile (typically by closing one shift and
+		// opening another). Emits `profile_repopulate_progress` events for
+		// the ProfileRepopulateIndicator chip.
+		useProfileRepopulate();
 		const uiStore = useUIStore();
 		const invoiceStore = useInvoiceStore();
 		const itemsStore = useItemsStore();
@@ -713,6 +721,7 @@ export default {
 		MpesaPayments,
 		SalesOrders,
 		StockConflictDialog,
+		ProfileRepopulateIndicator,
 	},
 
 	methods: {

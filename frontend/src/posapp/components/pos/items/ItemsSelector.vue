@@ -278,6 +278,12 @@ const selected_currency = ref("");
 const selected_exchange_rate = ref(1);
 const selected_conversion_rate = ref(1);
 const isInitialized = ref(false);
+// Tracks which POS Profile the local refs in this component were last
+// configured for. When the cashier closes one shift and opens another with
+// a different profile, this lets us refresh per-profile settings (currency,
+// item settings, item-detail seed) without double-running the heavy items
+// store init that `useProfileRepopulate` already orchestrates centrally.
+const lastInitializedProfileName = ref<string | null>(null);
 const initTimeout = ref(null);
 const initError = ref(null);
 
@@ -1002,48 +1008,77 @@ onMounted(async () => {
 	watch(
 		uiPosProfile,
 		async (newProfile) => {
-			if (newProfile && newProfile.name && !isInitialized.value) {
-				// Safety timeout to prevent infinite loading if memoryInit or store init hangs
-				if (initTimeout.value) clearTimeout(initTimeout.value);
-				// @ts-ignore
-				initTimeout.value = setTimeout(() => {
-					if (!isInitialized.value) {
-						console.warn(
-							"ItemsSelector: Initialization taking too long, forcing isInitialized to true.",
-						);
-						isInitialized.value = true;
-					}
-				}, 10000);
+			if (!newProfile || !newProfile.name) return;
+			const profileName = newProfile.name;
 
+			// ── Profile-change branch ────────────────────────────────
+			// Once we've completed the first init, subsequent profile
+			// switches (close shift → open new profile) re-point the
+			// component-local refs but DELEGATE the heavy items / stock
+			// re-init to `useProfileRepopulate`. That composable owns
+			// the progress-event stream the indicator UI listens to,
+			// so doing the same work here would double-load and race
+			// the indicator's stage transitions.
+			if (isInitialized.value) {
+				if (lastInitializedProfileName.value === profileName) return;
 				try {
-					await memoryInitPromise;
-
-					// Set local currency ref
 					selected_currency.value = newProfile.currency || "";
 					selected_exchange_rate.value = 1;
 					selected_conversion_rate.value = 1;
-
-					await itemsIntegration.initializeStore(
-						newProfile as any,
-						selectedCustomer.value as any,
-						customer_price_list.value as any,
-					);
-
-					isInitialized.value = true;
-					startItemWorker();
+					lastInitializedProfileName.value = profileName;
 					itemsSelectorSettings.loadItemSettings();
-					itemDetailFetcher.update_cur_items_details();
-					itemSync.startBackgroundSyncScheduler();
-				} catch (err: any) {
-					console.error("ItemsSelector: Initialization failed", err);
-					initError.value = err.message || err;
-					// Unblock UI even on error
+				} catch (err) {
+					console.warn(
+						"ItemsSelector: profile-change refresh failed",
+						err,
+					);
+				}
+				return;
+			}
+
+			// ── First-mount branch ───────────────────────────────────
+			// Safety timeout to prevent infinite loading if memoryInit or store init hangs
+			if (initTimeout.value) clearTimeout(initTimeout.value);
+			// @ts-ignore
+			initTimeout.value = setTimeout(() => {
+				if (!isInitialized.value) {
+					console.warn(
+						"ItemsSelector: Initialization taking too long, forcing isInitialized to true.",
+					);
 					isInitialized.value = true;
-				} finally {
-					if (initTimeout.value) {
-						clearTimeout(initTimeout.value);
-						initTimeout.value = null;
-					}
+				}
+			}, 10000);
+
+			try {
+				await memoryInitPromise;
+
+				// Set local currency ref
+				selected_currency.value = newProfile.currency || "";
+				selected_exchange_rate.value = 1;
+				selected_conversion_rate.value = 1;
+
+				await itemsIntegration.initializeStore(
+					newProfile as any,
+					selectedCustomer.value as any,
+					customer_price_list.value as any,
+				);
+
+				isInitialized.value = true;
+				lastInitializedProfileName.value = profileName;
+				startItemWorker();
+				itemsSelectorSettings.loadItemSettings();
+				itemDetailFetcher.update_cur_items_details();
+				itemSync.startBackgroundSyncScheduler();
+			} catch (err: any) {
+				console.error("ItemsSelector: Initialization failed", err);
+				initError.value = err.message || err;
+				// Unblock UI even on error
+				isInitialized.value = true;
+				lastInitializedProfileName.value = profileName;
+			} finally {
+				if (initTimeout.value) {
+					clearTimeout(initTimeout.value);
+					initTimeout.value = null;
 				}
 			}
 		},

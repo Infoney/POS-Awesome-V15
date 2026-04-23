@@ -997,6 +997,57 @@ export const useItemsStore = defineStore("items", () => {
 		await loadItems({ forceServer: true });
 	};
 
+	/**
+	 * Wipe the in-memory item state so the UI stops showing rows from a
+	 * previous profile while we re-fetch the catalogue for the new one.
+	 *
+	 * Called by `useProfileRepopulate` whenever `uiStore.posProfile.name`
+	 * changes (e.g. cashier closes a shift and opens another with a
+	 * different profile). The IndexedDB-backed item store is keyed by
+	 * `<profile>_<warehouse>` so prior-profile rows aren't lost on disk —
+	 * we only clear what's loaded into RAM right now.
+	 *
+	 * Stock cache is *not* profile-keyed (single flat
+	 * `local_stock_cache`), so it must be cleared too — otherwise the new
+	 * profile would inherit stale Bin numbers from the prior warehouse.
+	 * That clear is done by the caller (the orchestrator) via
+	 * `clearLocalStockCache()` so this method stays synchronous and
+	 * Pinia-only.
+	 */
+	const resetForProfile = (nextProfile: POSProfile | null = null) => {
+		// Cancel any in-flight loaders so a pending result for the old
+		// profile doesn't repopulate `items` *after* we've cleared.
+		requestToken.value++;
+		try {
+			abortControllers.value.forEach((controller) => {
+				try {
+					controller.abort();
+				} catch {
+					/* ignore */
+				}
+			});
+		} finally {
+			abortControllers.value.clear();
+		}
+
+		items.value = [];
+		filteredItems.value = [];
+		totalItemCount.value = 0;
+		itemsLoaded.value = false;
+		searchTerm.value = "";
+		lastSearch.value = "";
+		itemGroup.value = "ALL";
+		resetIndexes();
+		resetCachedPagination({ enabled: false, total: 0 });
+		clearSearchCache();
+		isLoading.value = false;
+		isBackgroundLoading.value = false;
+		loadProgress.value = 0;
+		// Drop the old profile reference last so any of the helpers above
+		// that read posProfile see a consistent state during the wipe.
+		posProfile.value = nextProfile;
+	};
+
 	const addScannedItem = async (barcode: string) => {
 		let item = getItemByBarcode(barcode);
 		if (item) return item;
@@ -1190,6 +1241,7 @@ export const useItemsStore = defineStore("items", () => {
 		filterByGroup,
 		updatePriceList,
 		refreshItems,
+		resetForProfile,
 		appendCachedItemsPage,
 		resetCachedItemsForGroup,
 		backgroundSyncItems: triggerBackgroundSync, // mapped
