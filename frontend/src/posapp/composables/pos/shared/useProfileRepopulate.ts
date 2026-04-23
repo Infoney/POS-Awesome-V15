@@ -40,6 +40,7 @@ import { useItemsStore } from "../../../stores/itemsStore.js";
 import { useCustomersStore } from "../../../stores/customersStore.js";
 import {
 	clearLocalStockCache,
+	getLocalStock,
 	initializeStockCache,
 	setStockCacheReady,
 } from "../../../../offline/index";
@@ -155,6 +156,22 @@ export function useProfileRepopulate() {
 				const items = (itemsStore.items as any[]) || [];
 				if (items.length) {
 					await initializeStockCache(items, newProfile);
+					// Push the freshly fetched Bin balances onto the item
+					// rows in memory. Without this the cards would keep
+					// rendering actual_qty = 0 (the default useItemsLoader
+					// forces for items that arrive without a stock field)
+					// even though the flat local_stock_cache is now warm.
+					// The per-item detail fetcher *also* does this sync on
+					// scroll, but waiting for that causes the cashier to
+					// see a page of "0" until they interact.
+					items.forEach((item) => {
+						if (!item || !item.item_code) return;
+						const qty = getLocalStock(item.item_code);
+						if (qty !== null && qty !== undefined) {
+							item.actual_qty = qty;
+							item._base_actual_qty = qty;
+						}
+					});
 				} else {
 					setStockCacheReady(true);
 				}
