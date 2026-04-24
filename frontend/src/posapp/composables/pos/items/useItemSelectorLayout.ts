@@ -32,17 +32,18 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	const cardGap = computed(() => getCardGap(windowWidth.value));
 	const cardPadding = computed(() => getCardPadding(windowWidth.value));
 
-	// Row-style cards (CC card layout). Bumped from 64/68/72 so each card
-	// gets its own slot — the new three-row layout (title, SKU, qty/batch/
-	// price + bottom progress bar) is ~88–92px tall and was visually
-	// overlapping neighbours when the scroller only reserved ≤72px per row.
-	// Each card now lives on its own row with a small visual gap.
+	// Row-style cards (CC "Top-selling items" layout). The card is a
+	// horizontal media object: 60px product thumbnail on the left, body
+	// to the right (title + price row, meta row, inline progress bar).
+	// Card height = padding (24) + thumb (60) = 84–92px depending on
+	// breakpoint. Reserve a couple of extra pixels so neighbours never
+	// touch and the progress bar is never clipped.
 	const cardRowHeight = computed(() => {
 		if (windowWidth.value <= 768) {
-			return 86;
+			return 78;
 		}
 		if (windowWidth.value <= 1200) {
-			return 90;
+			return 84;
 		}
 		return 92;
 	});

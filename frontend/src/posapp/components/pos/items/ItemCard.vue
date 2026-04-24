@@ -1,18 +1,21 @@
 <template>
 	<!--
-		Compact Command Center-style item card.
+		POS item card, modelled on the Command Center "Top-Selling Items"
+		card the user attached. Layout:
 
-		Layout (top → bottom):
-		  1. Header row: product thumbnail + title + (stock-tier)
-		  2. SKU row (barcode removed per request — it only rendered "[object
-		     Object]" because backend barcodes arrive as an array of rows)
-		  3. Stats row: Qty total + stock uom · Batch number + batch qty · price
-		  4. Thin tier-colored progress bar pinned to the bottom edge
+		┌───────────────────────────────────────────────────────────┐
+		│ ┌────┐  Item name                              KWD 12.36 │
+		│ │IMG │  SKU 30643  ·  Qty: 3  ·  Batch: VJ5737 (1)       │
+		│ └────┘  ▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░               │
+		└───────────────────────────────────────────────────────────┘
 
-		A 4px solid tier-colored stripe runs down the left edge. The card is
-		sized to fit inside the virtual-scroller slot (see
-		`useItemSelectorLayout.ts`) — every row lives on its own so no two
-		cards can visually overlap.
+		  · Big product thumbnail on the left (was 28px — now 56/60px so the
+		    image reads first, as in the CC reference card).
+		  · Title + price share a row (price right-aligned in bold white).
+		  · SKU, Qty and Batch collapse into a single inline meta row (was
+		    two separate rows).
+		  · Prominent rounded progress bar sits inside the body flow, not
+		    pinned to the card's bottom edge — mirrors CC's "6 sold" bar.
 	-->
 	<div
 		:class="[
@@ -25,104 +28,101 @@
 		@dragstart="onDragStart"
 		@dragend="onDragEnd"
 	>
-		<div class="pos-cc-card__header">
-			<div class="pos-cc-card__thumb" :class="{ 'pos-cc-card__thumb--fallback': !item.image }">
-				<v-img
-					v-if="item.image"
-					:src="item.image"
-					class="pos-cc-card__image"
-					aspect-ratio="1"
-					:alt="item.item_name"
-					cover
-				>
-					<template #placeholder>
-						<div class="pos-cc-card__fallback">
-							<v-icon size="14" color="white">mdi-image-outline</v-icon>
-						</div>
-					</template>
-				</v-img>
-				<div v-else class="pos-cc-card__fallback" :aria-label="item.item_name">
-					<v-icon size="14" color="white">mdi-cube-outline</v-icon>
-				</div>
+		<div class="pos-cc-card__thumb" :class="{ 'pos-cc-card__thumb--fallback': !item.image }">
+			<v-img
+				v-if="item.image"
+				:src="item.image"
+				class="pos-cc-card__image"
+				aspect-ratio="1"
+				:alt="item.item_name"
+				cover
+			>
+				<template #placeholder>
+					<div class="pos-cc-card__fallback">
+						<v-icon size="20" color="white">mdi-image-outline</v-icon>
+					</div>
+				</template>
+			</v-img>
+			<div v-else class="pos-cc-card__fallback" :aria-label="item.item_name">
+				<v-icon size="22" color="white">mdi-cube-outline</v-icon>
 			</div>
-			<h4 class="pos-cc-card__name" :title="item.item_name">
-				{{ item.item_name }}
-			</h4>
 		</div>
 
-		<div class="pos-cc-card__ids" v-if="item.item_code">
-			<span class="pos-cc-card__id-item" :title="item.item_code">
-				<span class="pos-cc-card__id-label">SKU</span>
-				<span class="pos-cc-card__id-value num">{{ item.item_code }}</span>
-			</span>
-		</div>
-
-		<div class="pos-cc-card__stats">
-			<span class="pos-cc-card__stat" :title="stockTooltip">
-				<span class="pos-cc-card__stat-label">Qty:</span>
-				<span
-					class="pos-cc-card__stat-value pos-cc-card__stat-value--qty num"
-					:class="{ 'pos-cc-card__stat-value--negative': isNegative(item.actual_qty) }"
-				>
-					{{ formattedActualQty }}
-				</span>
-				<span v-if="item.stock_uom" class="pos-cc-card__stat-unit">
-					{{ item.stock_uom }}
-				</span>
-				<ItemStockInfoMenu
-					v-if="showStockInfo"
-					:item="item"
-					:pos-profile="posProfile"
-					:format-number="formatNumber"
-					:hide-qty-decimals="hideQtyDecimals"
-				/>
-			</span>
-
-			<template v-if="batchInlineText">
-				<span class="pos-cc-card__stat-sep">·</span>
-				<span class="pos-cc-card__stat" :title="batchChipTitle">
-					<span class="pos-cc-card__stat-label">Batch:</span>
-					<span class="pos-cc-card__stat-value pos-cc-card__stat-value--batch num">
-						{{ batchInlineText }}
+		<div class="pos-cc-card__body">
+			<div class="pos-cc-card__title-row">
+				<h4 class="pos-cc-card__name" :title="item.item_name">
+					{{ item.item_name }}
+				</h4>
+				<span class="pos-cc-card__price">
+					<span class="pos-cc-card__price-currency">
+						{{ currencySymbol(primaryCurrency) }}
 					</span>
+					<span class="pos-cc-card__price-amount num">
+						{{ formatCurrency(primaryRate, primaryCurrency, primaryPrecision) }}
+					</span>
+					<ItemRateInfoMenu
+						v-if="showRateInfo"
+						:rate-info="rateInfo"
+						:currency-symbol="currencySymbol"
+						:format-currency="formatCurrency"
+						:rate-precision="ratePrecision"
+					/>
+				</span>
+			</div>
+
+			<div class="pos-cc-card__meta">
+				<span v-if="item.item_code" class="pos-cc-card__meta-item" :title="item.item_code">
+					<span class="pos-cc-card__meta-label">SKU</span>
+					<span class="pos-cc-card__meta-value pos-cc-card__meta-value--sku num">
+						{{ item.item_code }}
+					</span>
+				</span>
+
+				<span v-if="item.item_code" class="pos-cc-card__meta-sep">·</span>
+
+				<span class="pos-cc-card__meta-item" :title="stockTooltip">
+					<span class="pos-cc-card__meta-label">Qty:</span>
 					<span
-						v-if="batchInlineQty"
-						class="pos-cc-card__stat-batch-qty num"
+						class="pos-cc-card__meta-value pos-cc-card__meta-value--qty num"
+						:class="{ 'pos-cc-card__meta-value--negative': isNegative(item.actual_qty) }"
 					>
-						({{ batchInlineQty }})
+						{{ formattedActualQty }}
 					</span>
+					<ItemStockInfoMenu
+						v-if="showStockInfo"
+						:item="item"
+						:pos-profile="posProfile"
+						:format-number="formatNumber"
+						:hide-qty-decimals="hideQtyDecimals"
+					/>
 				</span>
-			</template>
 
-			<span class="pos-cc-card__stat-sep">·</span>
-			<span class="pos-cc-card__stat pos-cc-card__stat--price">
-				<span class="pos-cc-card__price-currency">
-					{{ currencySymbol(primaryCurrency) }}
-				</span>
-				<span class="pos-cc-card__stat-value pos-cc-card__stat-value--price num">
-					{{ formatCurrency(primaryRate, primaryCurrency, primaryPrecision) }}
-				</span>
-				<ItemRateInfoMenu
-					v-if="showRateInfo"
-					:rate-info="rateInfo"
-					:currency-symbol="currencySymbol"
-					:format-currency="formatCurrency"
-					:rate-precision="ratePrecision"
-				/>
-			</span>
+				<template v-if="batchInlineText">
+					<span class="pos-cc-card__meta-sep">·</span>
+					<span class="pos-cc-card__meta-item" :title="batchChipTitle">
+						<span class="pos-cc-card__meta-label">Batch:</span>
+						<span class="pos-cc-card__meta-value pos-cc-card__meta-value--batch num">
+							{{ batchInlineText }}
+						</span>
+						<span v-if="batchInlineQty" class="pos-cc-card__meta-batch-qty num">
+							({{ batchInlineQty }})
+						</span>
+					</span>
+				</template>
+			</div>
+
+			<div class="pos-cc-card__track" :title="stockTooltip">
+				<span
+					class="pos-cc-card__track-fill"
+					:style="{ width: stockFillPercent + '%' }"
+				></span>
+			</div>
+
+			<div v-if="showSecondaryPrice" class="pos-cc-card__price-secondary">
+				{{ currencySymbol(secondaryCurrency) }}
+				{{ formatCurrency(item.rate, secondaryCurrency, primaryPrecision) }}
+			</div>
 		</div>
-
-		<div v-if="showSecondaryPrice" class="pos-cc-card__price-secondary">
-			{{ currencySymbol(secondaryCurrency) }}
-			{{ formatCurrency(item.rate, secondaryCurrency, primaryPrecision) }}
-		</div>
-
-		<span class="pos-cc-card__track" :title="stockTooltip">
-			<span
-				class="pos-cc-card__track-fill"
-				:style="{ width: stockFillPercent + '%' }"
-			></span>
-		</span>
 	</div>
 </template>
 
@@ -235,7 +235,6 @@ const sellableBatches = computed(() => {
 	});
 });
 
-// Lead batch = the first sellable batch. Used for the inline label.
 const leadBatch = computed(() => sellableBatches.value[0] || null);
 
 const batchInlineText = computed(() => {
@@ -247,9 +246,6 @@ const batchInlineText = computed(() => {
 	return `${list[0].batch_no} +${list.length - 1}`;
 });
 
-// Qty in the lead batch. Only rendered when we have a finite number — the
-// "Qty:" total already covers the aggregate stock; this gives the cashier
-// the per-batch qty alongside the batch identifier.
 const batchInlineQty = computed(() => {
 	const b = leadBatch.value;
 	if (!b) return "";
@@ -281,14 +277,14 @@ const onDragEnd = (event) => emit("dragend", event);
 .pos-cc-card {
 	position: relative;
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
+	align-items: stretch;
+	gap: 14px;
 	width: 100%;
 	height: 100%;
-	padding: 8px 12px 12px 14px;
+	padding: 12px 16px 12px 14px;
 	background: var(--pos-surface-raised, var(--cc-bg-card, rgba(22, 28, 39, 0.8)));
 	border: 1px solid var(--pos-border-light, var(--cc-border, #252b37));
-	border-radius: 10px;
+	border-radius: 12px;
 	box-shadow: var(--cc-shadow-sm, 0 2px 6px rgba(0, 0, 0, 0.08));
 	cursor: pointer;
 	overflow: hidden;
@@ -299,25 +295,22 @@ const onDragEnd = (event) => emit("dragend", event);
 		box-shadow var(--cc-ease-base, 220ms ease-out);
 }
 
-/* Solid tier-colored stripe on the left edge (reverted from the
-   pink→orange gradient — the user asked to bring back the legacy tier
-   colours so low / critical / out are readable at a glance). */
+/* Slim tier-coloured stripe on the left edge — kept as a stock-health
+   glance cue; doesn't fight the prominent progress bar in the body. */
 .pos-cc-card::before {
 	content: "";
 	position: absolute;
 	top: 0;
 	bottom: 0;
 	left: 0;
-	width: 4px;
+	width: 3px;
 	background: var(--row-accent, #64748b);
-	border-top-left-radius: inherit;
-	border-bottom-left-radius: inherit;
 	pointer-events: none;
 }
 
 .pos-cc-card--ok {
 	--row-accent: #22c55e;
-	--row-bar: linear-gradient(90deg, #22c55e, #4ade80);
+	--row-bar: linear-gradient(90deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25));
 }
 .pos-cc-card--low {
 	--row-accent: #f59e0b;
@@ -346,19 +339,15 @@ const onDragEnd = (event) => emit("dragend", event);
 		var(--cc-shadow-md, 0 10px 22px rgba(var(--v-theme-primary), 0.18));
 }
 
-/* ─── Header (thumb + title) ──────────────────────────────────────────── */
-.pos-cc-card__header {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-width: 0;
-}
-
+/* ─── Product thumbnail ───────────────────────────────────────────────── */
 .pos-cc-card__thumb {
 	flex: 0 0 auto;
-	width: 28px;
-	height: 28px;
-	border-radius: 6px;
+	align-self: center;
+	/* Big thumb, matching the "Complete Hair Revival Set" proportions in
+	   the CC reference. Was 28px before — the image now reads first. */
+	width: 60px;
+	height: 60px;
+	border-radius: 10px;
 	overflow: hidden;
 	background: var(--pos-surface-muted, var(--cc-bg-ter, #1f2533));
 	border: 1px solid var(--pos-border-light, var(--cc-border, #252b37));
@@ -388,13 +377,31 @@ const onDragEnd = (event) => emit("dragend", event);
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
+/* ─── Body (title / meta / bar) ───────────────────────────────────────── */
+.pos-cc-card__body {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 6px;
+}
+
+.pos-cc-card__title-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	min-width: 0;
+}
+
 .pos-cc-card__name {
 	margin: 0;
-	font-size: 0.76rem;
+	font-size: 0.88rem;
 	font-weight: 700;
 	line-height: 1.2;
 	color: var(--pos-text-primary, var(--cc-text, #edf2f7));
-	letter-spacing: -0.005em;
+	letter-spacing: -0.01em;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -402,197 +409,152 @@ const onDragEnd = (event) => emit("dragend", event);
 	flex: 1 1 auto;
 }
 
-/* ─── SKU row ─────────────────────────────────────────────────────────── */
-.pos-cc-card__ids {
-	display: flex;
+/* Price is bold white, sized to pair with the title. Matches the CC
+   reference's "KWD 279" treatment — not orange, not pink, clean white. */
+.pos-cc-card__price {
+	display: inline-flex;
 	align-items: baseline;
-	gap: 10px;
-	min-width: 0;
-	font-size: 0.62rem;
-	line-height: 1.2;
-	color: var(--pos-text-secondary, var(--cc-muted, #7b899d));
-	overflow: hidden;
-	text-overflow: ellipsis;
+	gap: 3px;
+	flex: 0 0 auto;
+	color: var(--pos-text-primary, var(--cc-text, #edf2f7));
+	font-weight: 700;
 	white-space: nowrap;
-	padding-left: 36px; /* align under the title (thumb 28 + gap 8) */
 }
 
-.pos-cc-card__id-item {
+.pos-cc-card__price-currency {
+	font-size: 0.62rem;
+	font-weight: 700;
+	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.pos-cc-card__price-amount {
+	font-size: 0.88rem;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+}
+
+/* ─── Meta row (SKU · Qty · Batch) ────────────────────────────────────── */
+.pos-cc-card__meta {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	flex-wrap: wrap;
+	font-size: 0.68rem;
+	color: var(--pos-text-secondary, var(--cc-muted, #7b899d));
+	min-width: 0;
+}
+
+.pos-cc-card__meta-item {
 	display: inline-flex;
 	align-items: baseline;
 	gap: 4px;
 	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.pos-cc-card__id-label {
-	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
-	font-weight: 500;
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
-}
-
-/* Reverted to muted/secondary — the pink SKU value was overpowering the
-   neutral "SKU ######" treatment the user wanted restored. */
-.pos-cc-card__id-value {
-	color: var(--pos-text-secondary, var(--cc-muted, #7b899d));
-	font-weight: 600;
-	letter-spacing: 0.01em;
-	overflow: hidden;
-	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-/* ─── Qty / Batch / Price stat strip ─────────────────────────────────── */
-.pos-cc-card__stats {
-	display: flex;
-	align-items: baseline;
-	gap: 6px;
-	flex-wrap: nowrap;
-	font-size: 0.66rem;
-	color: var(--pos-text-secondary, var(--cc-muted, #7b899d));
-	min-width: 0;
-	padding-left: 36px;
-	overflow: hidden;
-}
-
-.pos-cc-card__stat {
-	display: inline-flex;
-	align-items: baseline;
-	gap: 3px;
-	min-width: 0;
-	white-space: nowrap;
-}
-
-.pos-cc-card__stat--price {
-	margin-left: auto;
-}
-
-.pos-cc-card__stat-label {
+.pos-cc-card__meta-label {
 	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
 	font-weight: 500;
-	font-size: 0.62rem;
 }
 
-.pos-cc-card__stat-sep {
+.pos-cc-card__meta-sep {
 	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
+	opacity: 0.7;
 	font-weight: 500;
-	opacity: 0.75;
-	font-size: 0.62rem;
 }
 
-.pos-cc-card__stat-value {
+.pos-cc-card__meta-value {
 	font-weight: 700;
-	letter-spacing: -0.01em;
+	letter-spacing: -0.005em;
 }
 
-.pos-cc-card__stat-value--qty {
+.pos-cc-card__meta-value--sku {
+	color: var(--pos-text-secondary, var(--cc-muted, #7b899d));
+	font-weight: 600;
+}
+
+.pos-cc-card__meta-value--qty {
 	color: var(--pos-text-primary, var(--cc-text, #edf2f7));
-	font-size: 0.74rem;
 }
 
-.pos-cc-card__stat-value--negative {
+.pos-cc-card__meta-value--negative {
 	color: rgb(var(--v-theme-error));
 }
 
-.pos-cc-card__stat-unit {
-	font-size: 0.56rem;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.06em;
-	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
-}
-
-/* Batch value — green, consistent with the earlier "batch chip" treatment
-   the user approved ("change the batch color from red to green"). */
-.pos-cc-card__stat-value--batch {
+.pos-cc-card__meta-value--batch {
 	color: var(--cc-green, #34b29d);
-	font-size: 0.7rem;
 }
 
-.pos-cc-card__stat-batch-qty {
+.pos-cc-card__meta-batch-qty {
 	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
 	font-weight: 600;
-	font-size: 0.6rem;
+	font-size: 0.64rem;
 }
 
-/* Price reverted to the brand orange (pos-primary). Earlier iteration
-   briefly used pink to copy the CC reference card's "~Nd left" slot, but
-   the user asked to bring back the original colour treatment. */
-.pos-cc-card__stat-value--price {
-	color: var(--pos-primary, var(--cc-orange, #f46a25));
-	font-size: 0.78rem;
-}
-
-.pos-cc-card__price-currency {
-	font-size: 0.56rem;
-	font-weight: 600;
-	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
-	margin-right: 2px;
-}
-
-.pos-cc-card__price-secondary {
-	font-size: 0.6rem;
-	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
-	text-align: right;
-	font-variant-numeric: tabular-nums;
-	padding-left: 36px;
-}
-
-/* ─── Bottom progress bar ─────────────────────────────────────────────── */
+/* ─── Progress bar (CC "Top-selling items" style) ─────────────────────── */
 .pos-cc-card__track {
-	display: block;
-	position: absolute;
-	left: 4px;
-	right: 0;
-	bottom: 0;
-	height: 3px;
+	position: relative;
+	height: 5px;
+	width: 100%;
 	background: rgba(148, 163, 184, 0.14);
+	border-radius: 999px;
 	overflow: hidden;
-	border-bottom-right-radius: 10px;
 }
 
 .pos-cc-card__track-fill {
 	display: block;
 	height: 100%;
-	background: var(--row-bar, linear-gradient(90deg, #64748b, #94a3b8));
+	background: var(--row-bar, linear-gradient(90deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25)));
 	border-radius: inherit;
-	transition: width 0.25s ease;
+	transition: width 0.3s ease;
 }
 
-/* ─── Compact mobile sizing ───────────────────────────────────────────── */
-@media (max-width: 768px) {
+/* ─── Secondary price (multi-currency) ────────────────────────────────── */
+.pos-cc-card__price-secondary {
+	font-size: 0.62rem;
+	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ─── Breakpoints ─────────────────────────────────────────────────────── */
+@media (max-width: 1200px) {
 	.pos-cc-card {
-		padding: 6px 10px 10px 12px;
-		gap: 3px;
-		border-radius: 8px;
+		padding: 10px 14px 10px 13px;
+		gap: 12px;
 	}
 	.pos-cc-card__thumb {
-		width: 24px;
-		height: 24px;
+		width: 54px;
+		height: 54px;
 	}
-	.pos-cc-card__name {
-		font-size: 0.72rem;
+	.pos-cc-card__name,
+	.pos-cc-card__price-amount {
+		font-size: 0.84rem;
 	}
-	.pos-cc-card__ids,
-	.pos-cc-card__stats,
-	.pos-cc-card__price-secondary {
-		padding-left: 32px;
+}
+
+@media (max-width: 768px) {
+	.pos-cc-card {
+		padding: 8px 12px 8px 11px;
+		gap: 10px;
+		border-radius: 10px;
 	}
-	.pos-cc-card__ids {
-		font-size: 0.58rem;
+	.pos-cc-card__thumb {
+		width: 46px;
+		height: 46px;
+		border-radius: 8px;
 	}
-	.pos-cc-card__stats {
+	.pos-cc-card__name,
+	.pos-cc-card__price-amount {
+		font-size: 0.8rem;
+	}
+	.pos-cc-card__meta {
 		font-size: 0.62rem;
 	}
-	.pos-cc-card__stat-value--qty {
-		font-size: 0.7rem;
-	}
-	.pos-cc-card__stat-value--price {
-		font-size: 0.74rem;
+	.pos-cc-card__track {
+		height: 4px;
 	}
 }
 </style>
