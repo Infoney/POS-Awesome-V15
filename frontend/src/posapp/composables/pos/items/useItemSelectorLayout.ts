@@ -32,18 +32,19 @@ export function useItemSelectorLayout(options: SelectorLayoutOptions = {}) {
 	const cardGap = computed(() => getCardGap(windowWidth.value));
 	const cardPadding = computed(() => getCardPadding(windowWidth.value));
 
-	// Row-style cards (CC Top-Selling-Items layout): slim horizontal rows
-	// instead of tall portrait cards. Heights were trimmed (was 84/92/96)
-	// because the previous values left ~24px of dead air per row; the
-	// thumbnail + two-line text block fits comfortably in ≤72px.
+	// Row-style cards (CC card layout). Bumped from 64/68/72 so each card
+	// gets its own slot — the new three-row layout (title, SKU, qty/batch/
+	// price + bottom progress bar) is ~88–92px tall and was visually
+	// overlapping neighbours when the scroller only reserved ≤72px per row.
+	// Each card now lives on its own row with a small visual gap.
 	const cardRowHeight = computed(() => {
 		if (windowWidth.value <= 768) {
-			return 64;
+			return 86;
 		}
 		if (windowWidth.value <= 1200) {
-			return 68;
+			return 90;
 		}
-		return 72;
+		return 92;
 	});
 
 	const cardSlotHeight = computed(() => cardRowHeight.value + cardGap.value);

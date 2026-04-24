@@ -1,22 +1,18 @@
 <template>
 	<!--
-		Command Center-aligned item card (exact match to the reference card the
-		user attached). Layout:
+		Compact Command Center-style item card.
 
-		  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-		  ┃ Item name …                                                    ┃
-		  ┃ SKU HC-0001   Barcode 4055482236030                            ┃
-		  ┃ Qty: 18   ·   Batch: B-01   ·   $ 25.00                        ┃
-		  ┃ ▬▬▬▬▬▬▬▬▬▬▬▬▬▬                                                  ┃  <- thin progress bar
-		  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-		    ↑ left pink accent stripe (full height)
+		Layout (top → bottom):
+		  1. Header row: product thumbnail + title + (stock-tier)
+		  2. SKU row (barcode removed per request — it only rendered "[object
+		     Object]" because backend barcodes arrive as an array of rows)
+		  3. Stats row: Qty total + stock uom · Batch number + batch qty · price
+		  4. Thin tier-colored progress bar pinned to the bottom edge
 
-		The reference has no product thumbnail and no "forecast" pill. Per the
-		user's most recent message, we drop "Sold 30d", "X/day" and "~Nd left"
-		and reuse that space for the unit price. Batch gets the cyan (blue)
-		position that `/day` occupied in the reference; price takes the pink
-		`~1.8d left` position so the pink brand tone still anchors the end of
-		the stat row.
+		A 4px solid tier-colored stripe runs down the left edge. The card is
+		sized to fit inside the virtual-scroller slot (see
+		`useItemSelectorLayout.ts`) — every row lives on its own so no two
+		cards can visually overlap.
 	-->
 	<div
 		:class="[
@@ -29,22 +25,35 @@
 		@dragstart="onDragStart"
 		@dragend="onDragEnd"
 	>
-		<h4 class="pos-cc-card__name" :title="item.item_name">
-			{{ item.item_name }}
-		</h4>
+		<div class="pos-cc-card__header">
+			<div class="pos-cc-card__thumb" :class="{ 'pos-cc-card__thumb--fallback': !item.image }">
+				<v-img
+					v-if="item.image"
+					:src="item.image"
+					class="pos-cc-card__image"
+					aspect-ratio="1"
+					:alt="item.item_name"
+					cover
+				>
+					<template #placeholder>
+						<div class="pos-cc-card__fallback">
+							<v-icon size="14" color="white">mdi-image-outline</v-icon>
+						</div>
+					</template>
+				</v-img>
+				<div v-else class="pos-cc-card__fallback" :aria-label="item.item_name">
+					<v-icon size="14" color="white">mdi-cube-outline</v-icon>
+				</div>
+			</div>
+			<h4 class="pos-cc-card__name" :title="item.item_name">
+				{{ item.item_name }}
+			</h4>
+		</div>
 
-		<div class="pos-cc-card__ids">
-			<span v-if="item.item_code" class="pos-cc-card__id-item" :title="item.item_code">
+		<div class="pos-cc-card__ids" v-if="item.item_code">
+			<span class="pos-cc-card__id-item" :title="item.item_code">
 				<span class="pos-cc-card__id-label">SKU</span>
-				<span class="pos-cc-card__id-value pos-cc-card__id-value--sku num">
-					{{ item.item_code }}
-				</span>
-			</span>
-			<span v-if="barcodeValue" class="pos-cc-card__id-item" :title="barcodeValue">
-				<span class="pos-cc-card__id-label">Barcode</span>
-				<span class="pos-cc-card__id-value pos-cc-card__id-value--barcode num">
-					{{ barcodeValue }}
-				</span>
+				<span class="pos-cc-card__id-value num">{{ item.item_code }}</span>
 			</span>
 		</div>
 
@@ -57,6 +66,9 @@
 				>
 					{{ formattedActualQty }}
 				</span>
+				<span v-if="item.stock_uom" class="pos-cc-card__stat-unit">
+					{{ item.stock_uom }}
+				</span>
 				<ItemStockInfoMenu
 					v-if="showStockInfo"
 					:item="item"
@@ -66,16 +78,23 @@
 				/>
 			</span>
 
-			<span v-if="batchInline" class="pos-cc-card__stat-sep">·</span>
-			<span v-if="batchInline" class="pos-cc-card__stat" :title="batchChipTitle">
-				<span class="pos-cc-card__stat-label">Batch:</span>
-				<span class="pos-cc-card__stat-value pos-cc-card__stat-value--batch num">
-					{{ batchInline }}
+			<template v-if="batchInlineText">
+				<span class="pos-cc-card__stat-sep">·</span>
+				<span class="pos-cc-card__stat" :title="batchChipTitle">
+					<span class="pos-cc-card__stat-label">Batch:</span>
+					<span class="pos-cc-card__stat-value pos-cc-card__stat-value--batch num">
+						{{ batchInlineText }}
+					</span>
+					<span
+						v-if="batchInlineQty"
+						class="pos-cc-card__stat-batch-qty num"
+					>
+						({{ batchInlineQty }})
+					</span>
 				</span>
-			</span>
+			</template>
 
 			<span class="pos-cc-card__stat-sep">·</span>
-
 			<span class="pos-cc-card__stat pos-cc-card__stat--price">
 				<span class="pos-cc-card__price-currency">
 					{{ currencySymbol(primaryCurrency) }}
@@ -161,22 +180,6 @@ const showSecondaryPrice = computed(() => {
 	);
 });
 
-// Barcode surfaces the first usable value from the item. Different pipelines
-// expose it differently (legacy Frappe: `item_barcode` / `barcode`, newer:
-// an array of `{barcode}` rows), so we try each in turn.
-const barcodeValue = computed(() => {
-	const it = props.item || {};
-	if (it.item_barcode) return String(it.item_barcode);
-	if (it.barcode) return String(it.barcode);
-	if (Array.isArray(it.item_barcodes) && it.item_barcodes.length) {
-		return String(it.item_barcodes[0]?.barcode || "");
-	}
-	if (Array.isArray(it.barcodes) && it.barcodes.length) {
-		return String(it.barcodes[0]?.barcode || "");
-	}
-	return "";
-});
-
 const numericQty = computed(() => {
 	const n = Number(props.item.actual_qty ?? 0);
 	return Number.isFinite(n) ? n : 0;
@@ -189,9 +192,6 @@ const formattedActualQty = computed(() => {
 	return props.formatNumber(numericQty.value, 4);
 });
 
-// Stock tier drives both the accent stripe colour and the progress-bar fill.
-// Thresholds are intentionally conservative: anything at/below 5 reads as
-// "almost out", 5–20 as "low", 20+ as healthy. Negative values are oversold.
 const stockTier = computed(() => {
 	const qty = numericQty.value;
 	if (qty <= 0) return "out";
@@ -202,8 +202,6 @@ const stockTier = computed(() => {
 
 const stockTierClass = computed(() => `pos-cc-card--${stockTier.value}`);
 
-// Log-ish scale so a single warehouse with 2000 units doesn't flatten the
-// bar for everything else in the list. 100+ units reads as ~full.
 const stockFillPercent = computed(() => {
 	const qty = numericQty.value;
 	if (qty <= 0) return 6;
@@ -237,17 +235,30 @@ const sellableBatches = computed(() => {
 	});
 });
 
-// Compact inline batch label for the Qty/Batch/Price stat strip.
-// - 0 batches → empty (the whole Batch segment collapses)
-// - 1 batch   → the batch number
-// - 2+        → first batch number + "+N" tail indicator
-const batchInline = computed(() => {
+// Lead batch = the first sellable batch. Used for the inline label.
+const leadBatch = computed(() => sellableBatches.value[0] || null);
+
+const batchInlineText = computed(() => {
 	const item = props.item;
 	if (!item || !item.has_batch_no) return "";
 	const list = sellableBatches.value;
 	if (!list.length) return "";
 	if (list.length === 1) return list[0].batch_no;
 	return `${list[0].batch_no} +${list.length - 1}`;
+});
+
+// Qty in the lead batch. Only rendered when we have a finite number — the
+// "Qty:" total already covers the aggregate stock; this gives the cashier
+// the per-batch qty alongside the batch identifier.
+const batchInlineQty = computed(() => {
+	const b = leadBatch.value;
+	if (!b) return "";
+	const raw = Number(b.batch_qty);
+	if (!Number.isFinite(raw)) return "";
+	if (props.hideQtyDecimals) {
+		return props.formatNumber(Math.round(raw), 0);
+	}
+	return props.formatNumber(raw, 4);
 });
 
 const batchChipTitle = computed(() => {
@@ -271,16 +282,13 @@ const onDragEnd = (event) => emit("dragend", event);
 	position: relative;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 4px;
 	width: 100%;
 	height: 100%;
-	min-height: 96px;
-	/* Extra left padding reserves space for the pink accent stripe that
-	   runs full-height on the left edge (matches the reference card). */
-	padding: 12px 14px 14px 16px;
+	padding: 8px 12px 12px 14px;
 	background: var(--pos-surface-raised, var(--cc-bg-card, rgba(22, 28, 39, 0.8)));
 	border: 1px solid var(--pos-border-light, var(--cc-border, #252b37));
-	border-radius: 12px;
+	border-radius: 10px;
 	box-shadow: var(--cc-shadow-sm, 0 2px 6px rgba(0, 0, 0, 0.08));
 	cursor: pointer;
 	overflow: hidden;
@@ -291,9 +299,9 @@ const onDragEnd = (event) => emit("dragend", event);
 		box-shadow var(--cc-ease-base, 220ms ease-out);
 }
 
-/* Full-height pink gradient stripe on the left edge — the single dominant
-   accent in the CC reference. Tier variants shift the gradient to orange
-   / muted so the cashier reads stock health at a glance. */
+/* Solid tier-colored stripe on the left edge (reverted from the
+   pink→orange gradient — the user asked to bring back the legacy tier
+   colours so low / critical / out are readable at a glance). */
 .pos-cc-card::before {
 	content: "";
 	position: absolute;
@@ -301,24 +309,27 @@ const onDragEnd = (event) => emit("dragend", event);
 	bottom: 0;
 	left: 0;
 	width: 4px;
-	background: linear-gradient(180deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25));
+	background: var(--row-accent, #64748b);
 	border-top-left-radius: inherit;
 	border-bottom-left-radius: inherit;
 	pointer-events: none;
 }
 
-.pos-cc-card--ok::before {
-	background: linear-gradient(180deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25));
+.pos-cc-card--ok {
+	--row-accent: #22c55e;
+	--row-bar: linear-gradient(90deg, #22c55e, #4ade80);
 }
-.pos-cc-card--low::before {
-	background: linear-gradient(180deg, var(--cc-orange, #f46a25), #fbbf24);
+.pos-cc-card--low {
+	--row-accent: #f59e0b;
+	--row-bar: linear-gradient(90deg, #f59e0b, #fbbf24);
 }
-.pos-cc-card--critical::before {
-	background: linear-gradient(180deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25));
+.pos-cc-card--critical {
+	--row-accent: #ef4444;
+	--row-bar: linear-gradient(90deg, #ef4444, #f97316);
 }
-.pos-cc-card--out::before {
-	background: linear-gradient(180deg, #4a5568, #7b899d);
-	opacity: 0.7;
+.pos-cc-card--out {
+	--row-accent: #64748b;
+	--row-bar: linear-gradient(90deg, #64748b, #94a3b8);
 }
 
 .pos-cc-card:hover {
@@ -335,82 +346,121 @@ const onDragEnd = (event) => emit("dragend", event);
 		var(--cc-shadow-md, 0 10px 22px rgba(var(--v-theme-primary), 0.18));
 }
 
-/* ─── Title ──────────────────────────────────────────────────────────── */
+/* ─── Header (thumb + title) ──────────────────────────────────────────── */
+.pos-cc-card__header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.pos-cc-card__thumb {
+	flex: 0 0 auto;
+	width: 28px;
+	height: 28px;
+	border-radius: 6px;
+	overflow: hidden;
+	background: var(--pos-surface-muted, var(--cc-bg-ter, #1f2533));
+	border: 1px solid var(--pos-border-light, var(--cc-border, #252b37));
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.pos-cc-card__image {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.pos-cc-card__thumb--fallback {
+	border: none;
+}
+
+.pos-cc-card__fallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(135deg, #ec4899 0%, #be185d 55%, #9d174d 100%);
+	color: #ffffff;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
 .pos-cc-card__name {
 	margin: 0;
-	font-size: 0.95rem;
+	font-size: 0.76rem;
 	font-weight: 700;
 	line-height: 1.2;
 	color: var(--pos-text-primary, var(--cc-text, #edf2f7));
-	letter-spacing: -0.01em;
+	letter-spacing: -0.005em;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	min-width: 0;
+	flex: 1 1 auto;
 }
 
-/* ─── SKU / Barcode row ─────────────────────────────────────────────── */
+/* ─── SKU row ─────────────────────────────────────────────────────────── */
 .pos-cc-card__ids {
 	display: flex;
 	align-items: baseline;
-	gap: 14px;
+	gap: 10px;
 	min-width: 0;
-	font-size: 0.72rem;
+	font-size: 0.62rem;
 	line-height: 1.2;
 	color: var(--pos-text-secondary, var(--cc-muted, #7b899d));
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	padding-left: 36px; /* align under the title (thumb 28 + gap 8) */
 }
 
 .pos-cc-card__id-item {
 	display: inline-flex;
 	align-items: baseline;
-	gap: 6px;
+	gap: 4px;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
 .pos-cc-card__id-label {
-	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
+	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
 	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
 }
 
+/* Reverted to muted/secondary — the pink SKU value was overpowering the
+   neutral "SKU ######" treatment the user wanted restored. */
 .pos-cc-card__id-value {
-	font-weight: 700;
+	color: var(--pos-text-secondary, var(--cc-muted, #7b899d));
+	font-weight: 600;
 	letter-spacing: 0.01em;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-/* SKU value gets the pink brand colour — mirrors the reference card's
-   `HC-00002045` treatment. */
-.pos-cc-card__id-value--sku {
-	color: var(--cc-pink, var(--pos-secondary, #e23670));
-}
-
-/* Barcode uses the text-primary colour so it reads as a neutral identifier
-   next to the pink SKU. */
-.pos-cc-card__id-value--barcode {
-	color: var(--pos-text-primary, var(--cc-text, #edf2f7));
-}
-
-/* ─── Qty / Batch / Price stat strip ────────────────────────────────── */
+/* ─── Qty / Batch / Price stat strip ─────────────────────────────────── */
 .pos-cc-card__stats {
 	display: flex;
 	align-items: baseline;
-	gap: 10px;
-	flex-wrap: wrap;
-	font-size: 0.78rem;
+	gap: 6px;
+	flex-wrap: nowrap;
+	font-size: 0.66rem;
 	color: var(--pos-text-secondary, var(--cc-muted, #7b899d));
 	min-width: 0;
+	padding-left: 36px;
+	overflow: hidden;
 }
 
 .pos-cc-card__stat {
 	display: inline-flex;
 	align-items: baseline;
-	gap: 4px;
+	gap: 3px;
 	min-width: 0;
 	white-space: nowrap;
 }
@@ -422,12 +472,14 @@ const onDragEnd = (event) => emit("dragend", event);
 .pos-cc-card__stat-label {
 	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
 	font-weight: 500;
+	font-size: 0.62rem;
 }
 
 .pos-cc-card__stat-sep {
 	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
 	font-weight: 500;
-	opacity: 0.8;
+	opacity: 0.75;
+	font-size: 0.62rem;
 }
 
 .pos-cc-card__stat-value {
@@ -435,32 +487,46 @@ const onDragEnd = (event) => emit("dragend", event);
 	letter-spacing: -0.01em;
 }
 
-/* Qty: bold white numeric — dominant stat, matches the reference "18". */
 .pos-cc-card__stat-value--qty {
 	color: var(--pos-text-primary, var(--cc-text, #edf2f7));
-	font-size: 0.9rem;
+	font-size: 0.74rem;
 }
 
 .pos-cc-card__stat-value--negative {
 	color: rgb(var(--v-theme-error));
 }
 
-/* Batch occupies the cyan slot the reference used for `9.7/day`. Blue is
-   the CC palette's "informational" accent — reads as a neutral metric
-   rather than a warning. */
-.pos-cc-card__stat-value--batch {
-	color: var(--cc-blue, #60a5fa);
+.pos-cc-card__stat-unit {
+	font-size: 0.56rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
 }
 
-/* Price takes the pink accent slot the reference gave to `~1.8d left` so
-   the warm brand tone anchors the right side of the stat strip. */
+/* Batch value — green, consistent with the earlier "batch chip" treatment
+   the user approved ("change the batch color from red to green"). */
+.pos-cc-card__stat-value--batch {
+	color: var(--cc-green, #34b29d);
+	font-size: 0.7rem;
+}
+
+.pos-cc-card__stat-batch-qty {
+	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
+	font-weight: 600;
+	font-size: 0.6rem;
+}
+
+/* Price reverted to the brand orange (pos-primary). Earlier iteration
+   briefly used pink to copy the CC reference card's "~Nd left" slot, but
+   the user asked to bring back the original colour treatment. */
 .pos-cc-card__stat-value--price {
-	color: var(--cc-pink, var(--pos-secondary, #e23670));
-	font-size: 0.92rem;
+	color: var(--pos-primary, var(--cc-orange, #f46a25));
+	font-size: 0.78rem;
 }
 
 .pos-cc-card__price-currency {
-	font-size: 0.62rem;
+	font-size: 0.56rem;
 	font-weight: 600;
 	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
 	letter-spacing: 0.05em;
@@ -469,70 +535,64 @@ const onDragEnd = (event) => emit("dragend", event);
 }
 
 .pos-cc-card__price-secondary {
-	font-size: 0.68rem;
+	font-size: 0.6rem;
 	color: var(--cc-muted, var(--pos-text-secondary, #7b899d));
 	text-align: right;
 	font-variant-numeric: tabular-nums;
+	padding-left: 36px;
 }
 
-/* ─── Bottom progress bar ───────────────────────────────────────────── */
+/* ─── Bottom progress bar ─────────────────────────────────────────────── */
 .pos-cc-card__track {
 	display: block;
 	position: absolute;
-	left: 0;
+	left: 4px;
 	right: 0;
 	bottom: 0;
 	height: 3px;
 	background: rgba(148, 163, 184, 0.14);
 	overflow: hidden;
-	border-bottom-left-radius: 12px;
-	border-bottom-right-radius: 12px;
+	border-bottom-right-radius: 10px;
 }
 
 .pos-cc-card__track-fill {
 	display: block;
 	height: 100%;
+	background: var(--row-bar, linear-gradient(90deg, #64748b, #94a3b8));
 	border-radius: inherit;
 	transition: width 0.25s ease;
 }
 
-.pos-cc-card--ok .pos-cc-card__track-fill {
-	background: linear-gradient(90deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25));
-}
-.pos-cc-card--low .pos-cc-card__track-fill {
-	background: linear-gradient(90deg, var(--cc-orange, #f46a25), #fbbf24);
-}
-.pos-cc-card--critical .pos-cc-card__track-fill {
-	background: linear-gradient(90deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25));
-}
-.pos-cc-card--out .pos-cc-card__track-fill {
-	background: linear-gradient(90deg, #4a5568, #7b899d);
-	opacity: 0.6;
-}
-
-/* ─── Mobile sizing ───────────────────────────────────────────────── */
+/* ─── Compact mobile sizing ───────────────────────────────────────────── */
 @media (max-width: 768px) {
 	.pos-cc-card {
-		padding: 10px 12px 12px 14px;
-		min-height: 92px;
-		gap: 5px;
+		padding: 6px 10px 10px 12px;
+		gap: 3px;
+		border-radius: 8px;
+	}
+	.pos-cc-card__thumb {
+		width: 24px;
+		height: 24px;
 	}
 	.pos-cc-card__name {
-		font-size: 0.88rem;
+		font-size: 0.72rem;
+	}
+	.pos-cc-card__ids,
+	.pos-cc-card__stats,
+	.pos-cc-card__price-secondary {
+		padding-left: 32px;
 	}
 	.pos-cc-card__ids {
-		font-size: 0.68rem;
-		gap: 10px;
+		font-size: 0.58rem;
 	}
 	.pos-cc-card__stats {
-		font-size: 0.74rem;
-		gap: 8px;
+		font-size: 0.62rem;
 	}
 	.pos-cc-card__stat-value--qty {
-		font-size: 0.84rem;
+		font-size: 0.7rem;
 	}
 	.pos-cc-card__stat-value--price {
-		font-size: 0.88rem;
+		font-size: 0.74rem;
 	}
 }
 </style>
