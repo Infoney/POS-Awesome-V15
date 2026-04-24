@@ -503,5 +503,3 @@ body.employee-switch-overlay-open {
 	overflow: hidden;
 }
 </style>
-</content>
-</invoke>
