@@ -97,15 +97,32 @@
 					/>
 				</span>
 
-				<template v-if="batchInlineText">
+				<template v-if="batchEntries.length">
 					<span class="pos-cc-card__meta-sep">·</span>
-					<span class="pos-cc-card__meta-item" :title="batchChipTitle">
+					<span class="pos-cc-card__meta-item pos-cc-card__meta-item--batches" :title="batchChipTitle">
 						<span class="pos-cc-card__meta-label">Batch:</span>
-						<span class="pos-cc-card__meta-value pos-cc-card__meta-value--batch num">
-							{{ batchInlineText }}
-						</span>
-						<span v-if="batchInlineQty" class="pos-cc-card__meta-batch-qty num">
-							({{ batchInlineQty }})
+						<template v-for="(batch, idx) in batchEntries" :key="batch.batch_no">
+							<span
+								v-if="idx > 0"
+								class="pos-cc-card__meta-batch-sep"
+								aria-hidden="true"
+								>,</span
+							>
+							<span class="pos-cc-card__meta-batch">
+								<span class="pos-cc-card__meta-value pos-cc-card__meta-value--batch num">
+									{{ batch.batch_no }}
+								</span>
+								<span v-if="batch.qtyLabel" class="pos-cc-card__meta-batch-qty num">
+									({{ batch.qtyLabel }})
+								</span>
+							</span>
+						</template>
+						<span
+							v-if="batchOverflowCount > 0"
+							class="pos-cc-card__meta-batch-more num"
+							:title="batchChipTitle"
+						>
+							+{{ batchOverflowCount }}
 						</span>
 					</span>
 				</template>
@@ -240,35 +257,44 @@ const sellableBatches = computed(() => {
 	});
 });
 
-const leadBatch = computed(() => sellableBatches.value[0] || null);
+// Show up to this many batches inline on the card. Anything beyond
+// shows as "+N" and the full list lives in the tooltip. Two batches
+// read comfortably even on the 180 px narrow breakpoint; three starts
+// crowding the SKU/Qty row so we cap there.
+const MAX_INLINE_BATCHES = 3;
 
-const batchInlineText = computed(() => {
-	const item = props.item;
-	if (!item || !item.has_batch_no) return "";
+const formatBatchQty = (raw) => {
+	const num = Number(raw);
+	if (!Number.isFinite(num)) return "";
+	if (props.hideQtyDecimals) {
+		return props.formatNumber(Math.round(num), 0);
+	}
+	return props.formatNumber(num, 4);
+};
+
+// Each entry is { batch_no, qtyLabel } already formatted for display.
+// Sorted by sellableBatches (the existing filter keeps only non-expired
+// rows with qty > 0). The user's request: show all batches with their
+// qty, not just "VJ5737 +1 (1)".
+const batchEntries = computed(() => {
 	const list = sellableBatches.value;
-	if (!list.length) return "";
-	if (list.length === 1) return list[0].batch_no;
-	return `${list[0].batch_no} +${list.length - 1}`;
+	if (!list.length) return [];
+	return list.slice(0, MAX_INLINE_BATCHES).map((b) => ({
+		batch_no: b.batch_no,
+		qtyLabel: formatBatchQty(b.batch_qty),
+	}));
 });
 
-const batchInlineQty = computed(() => {
-	const b = leadBatch.value;
-	if (!b) return "";
-	const raw = Number(b.batch_qty);
-	if (!Number.isFinite(raw)) return "";
-	if (props.hideQtyDecimals) {
-		return props.formatNumber(Math.round(raw), 0);
-	}
-	return props.formatNumber(raw, 4);
+const batchOverflowCount = computed(() => {
+	const total = sellableBatches.value.length;
+	return total > MAX_INLINE_BATCHES ? total - MAX_INLINE_BATCHES : 0;
 });
 
 const batchChipTitle = computed(() => {
 	const list = sellableBatches.value;
 	if (!list.length) return "";
 	return list
-		.slice(0, 6)
-		.map((b) => `${b.batch_no} (${b.batch_qty || 0})`)
-		.concat(list.length > 6 ? [`+${list.length - 6} more`] : [])
+		.map((b) => `${b.batch_no} (${formatBatchQty(b.batch_qty) || 0})`)
 		.join(", ");
 });
 
@@ -282,7 +308,7 @@ const onDragEnd = (event) => emit("dragend", event);
 .pos-cc-card {
 	position: relative;
 	display: flex;
-	align-items: stretch;
+	align-items: center; /* was stretch — kept body from over-clipping the bar */
 	gap: 14px;
 	width: 100%;
 	height: 100%;
@@ -421,7 +447,27 @@ const onDragEnd = (event) => emit("dragend", event);
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	gap: 6px;
+	gap: 5px;
+}
+
+/* The info-menu triggers inside the meta row default to Vuetify's
+   x-small button size, which is ~24–28 px tall and was inflating the
+   meta row enough to push the progress bar out of the card's visible
+   area on items that carry a batch. Constrain them to the baseline of
+   the surrounding text so the row height is governed by the label. */
+.pos-cc-card :deep(.item-stock-info-trigger),
+.pos-cc-card :deep(.item-rate-info-trigger) {
+	width: 18px !important;
+	height: 18px !important;
+	min-width: 18px !important;
+	min-height: 18px !important;
+	padding: 0 !important;
+	margin: 0 0 0 2px !important;
+}
+
+.pos-cc-card :deep(.item-stock-info-trigger .v-icon),
+.pos-cc-card :deep(.item-rate-info-trigger .v-icon) {
+	font-size: 14px !important;
 }
 
 .pos-cc-card__title-row {
@@ -528,6 +574,37 @@ const onDragEnd = (event) => emit("dragend", event);
 	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
 	font-weight: 600;
 	font-size: 0.64rem;
+}
+
+/* Multiple batches flow inline, each as "CODE (qty)" separated by a
+   thin comma. Wrap allowed so a 3-batch row can stretch onto a second
+   line rather than clipping the last entry. */
+.pos-cc-card__meta-item--batches {
+	flex-wrap: wrap;
+	row-gap: 2px;
+}
+
+.pos-cc-card__meta-batch {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 3px;
+}
+
+.pos-cc-card__meta-batch-sep {
+	color: var(--cc-subtle, var(--pos-text-disabled, #4a5568));
+	opacity: 0.7;
+	margin: 0 1px 0 -1px;
+}
+
+.pos-cc-card__meta-batch-more {
+	color: var(--cc-orange, #f46a25);
+	font-weight: 700;
+	font-size: 0.62rem;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: rgba(244, 106, 37, 0.12);
+	border: 1px solid rgba(244, 106, 37, 0.25);
+	margin-left: 2px;
 }
 
 /* ─── Progress bar (CC "Top-selling items" style) ─────────────────────── */

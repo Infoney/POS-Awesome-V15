@@ -181,10 +181,24 @@ const isExpiredBatch = (batch: BatchRow) => Boolean(batch.is_expired);
 	min-width: 280px;
 	max-width: min(360px, calc(100vw - 24px));
 	padding: 12px 14px;
-	background: var(--pos-surface-raised);
-	border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+	/* Solid opaque background so the popup is readable over the items
+	   table underneath — `--pos-surface-raised` was translucent and the
+	   row text behind bled through (user flagged this as "hard to read"). */
+	background: var(--pos-popover-bg, #1c2334);
+	border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
 	border-radius: 12px;
-	box-shadow: 0 16px 32px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 16px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+	backdrop-filter: blur(14px) saturate(140%);
+	-webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+/* Light-theme override — a lighter opaque surface so the popup remains
+   readable when the app is on the light palette. */
+:global(.v-theme--light) .item-stock-info-menu,
+:global(:root:not(.v-theme--dark)) .item-stock-info-menu {
+	background: var(--pos-popover-bg, #ffffff);
+	border-color: rgba(15, 23, 42, 0.08);
+	box-shadow: 0 16px 32px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 .item-stock-info-header {
@@ -300,5 +314,20 @@ const isExpiredBatch = (batch: BatchRow) => Boolean(batch.is_expired);
 	color: var(--pos-text-secondary);
 	font-size: 0.78rem;
 	line-height: 1.35;
+}
+</style>
+
+<!--
+  Non-scoped rules: the v-menu's overlay wrapper (`content-class`) lives
+  outside this component's scoped attribute and can carry its own
+  translucent background. Force it transparent so only the inner
+  `.item-stock-info-menu` surface paints — keeping the popup opaque.
+-->
+<style>
+.item-stock-info-menu-content {
+	background: transparent !important;
+	box-shadow: none !important;
+	border: none !important;
+	overflow: visible !important;
 }
 </style>

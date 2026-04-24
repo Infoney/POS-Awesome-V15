@@ -103,10 +103,20 @@ const formatMeta = (info: ItemRateInfoEntry) => {
 	min-width: 220px;
 	max-width: min(280px, calc(100vw - 24px));
 	padding: 10px 12px;
-	background: var(--pos-surface-raised);
-	border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+	/* Solid opaque background — sibling popup fix (see ItemStockInfoMenu). */
+	background: var(--pos-popover-bg, #1c2334);
+	border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
 	border-radius: 12px;
-	box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
+	box-shadow: 0 16px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+	backdrop-filter: blur(14px) saturate(140%);
+	-webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+:global(.v-theme--light) .item-rate-info-menu,
+:global(:root:not(.v-theme--dark)) .item-rate-info-menu {
+	background: var(--pos-popover-bg, #ffffff);
+	border-color: rgba(15, 23, 42, 0.08);
+	box-shadow: 0 16px 32px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 .item-rate-info-row + .item-rate-info-row {
@@ -139,5 +149,14 @@ const formatMeta = (info: ItemRateInfoEntry) => {
 	margin-top: 2px;
 	font-size: 0.72rem;
 	line-height: 1.35;
+}
+</style>
+
+<style>
+.item-rate-info-menu-content {
+	background: transparent !important;
+	box-shadow: none !important;
+	border: none !important;
+	overflow: visible !important;
 }
 </style>
