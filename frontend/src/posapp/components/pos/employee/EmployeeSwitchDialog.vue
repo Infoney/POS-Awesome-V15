@@ -78,6 +78,13 @@
 						hide-details="auto"
 						:label="relabel(__('Cashier PIN'))"
 						:data-test="'cashier-pin-input'"
+						:name="pinFieldName"
+						autocomplete="one-time-code"
+						inputmode="numeric"
+						data-lpignore="true"
+						data-1p-ignore="true"
+						data-form-type="other"
+						spellcheck="false"
 						@click:append-inner="showPin = !showPin"
 						@keyup.enter="submitSwitch"
 					/>
@@ -161,6 +168,13 @@
 						density="comfortable"
 						hide-details="auto"
 						:label="relabel(__('Cashier PIN'))"
+						:name="pinFieldName"
+						autocomplete="one-time-code"
+						inputmode="numeric"
+						data-lpignore="true"
+						data-1p-ignore="true"
+						data-form-type="other"
+						spellcheck="false"
 						@click:append-inner="showPin = !showPin"
 						@keyup.enter="submitUnlock"
 					/>
@@ -210,6 +224,15 @@ const cashierPin = ref("");
 const pinError = ref("");
 const isSubmitting = ref(false);
 const showPin = ref(false);
+
+// Randomised, non-semantic field name so browser password managers
+// (and Chrome's autofill heuristics) can't recognise this as a
+// "password" field for the current site and prompt to save it. The
+// `autocomplete="one-time-code"` + `data-lpignore` / `data-1p-ignore`
+// attributes do most of the work, but giving the field an unstable
+// name on every mount is the most reliable way to keep the saved-
+// passwords prompt suppressed across Chrome / Firefox / Safari.
+const pinFieldName = `pos-cashier-pin-${Math.random().toString(36).slice(2, 10)}`;
 const posProfileName = computed(
 	() => uiStore.posProfile?.name || window.frappe?.boot?.pos_profile?.name || "",
 );
