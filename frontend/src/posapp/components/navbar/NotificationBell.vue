@@ -147,31 +147,66 @@ function formatTimestamp(ts: string | number | Date) {
 	box-shadow: 0 4px 12px var(--pos-shadow, rgba(0, 0, 0, 0.18)) !important;
 }
 
+/* Solid opaque card so the dropdown is readable over whatever sits
+   behind it (the previous translucent surface bled the page through —
+   user flagged it as "fix notification visuals"). The CC theme tokens
+   are used so the popup stays on-brand in both light and dark modes. */
 .notification-card {
-	min-width: 320px;
-	max-width: 400px;
+	min-width: 360px;
+	max-width: 420px;
+	background: var(--pos-popover-bg, #161c27) !important;
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 16px !important;
+	box-shadow:
+		0 24px 48px rgba(0, 0, 0, 0.55),
+		0 4px 12px rgba(0, 0, 0, 0.32),
+		0 0 0 1px rgba(244, 106, 37, 0.06) !important;
+	overflow: hidden;
 }
 
 .notification-card__header {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	justify-content: space-between;
-	padding: 12px 16px;
+	gap: 12px;
+	padding: 14px 16px 12px;
+	background: linear-gradient(
+		180deg,
+		rgba(244, 106, 37, 0.08) 0%,
+		rgba(244, 106, 37, 0) 100%
+	);
 }
 
 .header-text .notification-heading {
 	font-weight: 700;
 	font-size: 1rem;
+	color: var(--pos-text-primary, #edf2f7);
+	letter-spacing: -0.01em;
 }
 
 .header-text .subtitle {
-	font-size: 0.85rem;
-	color: var(--pos-text-secondary);
+	font-size: 0.78rem;
+	color: var(--pos-text-secondary, #7b899d);
+	margin-top: 2px;
 }
 
 .clear-btn {
 	text-transform: none;
 	font-weight: 600;
+	border-radius: 10px;
+	color: var(--cc-orange, #f46a25) !important;
+	background: rgba(244, 106, 37, 0.08) !important;
+	border: 1px solid rgba(244, 106, 37, 0.18);
+	padding: 0 10px !important;
+	min-width: auto !important;
+	height: 30px !important;
+	font-size: 0.76rem !important;
+	letter-spacing: 0;
+}
+
+.clear-btn:hover {
+	background: rgba(244, 106, 37, 0.16) !important;
+	border-color: rgba(244, 106, 37, 0.32);
 }
 
 .notification-list {
@@ -181,50 +216,95 @@ function formatTimestamp(ts: string | number | Date) {
 
 .notification-items {
 	padding: 0;
+	background: transparent !important;
 }
 
 .notification-item {
-	border-bottom: 1px solid var(--pos-border);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+	padding: 10px 16px !important;
+	min-height: auto !important;
+	transition: background-color 0.18s ease;
+}
+
+.notification-item:hover {
+	background: rgba(255, 255, 255, 0.025);
 }
 
 .notification-item:last-child {
 	border-bottom: none;
 }
 
+/* Icon badge — softer red gradient with inset highlight so it doesn't
+   read as a "danger" pure-red marker. Matches the CC chip aesthetic. */
 .notification-icon {
-	width: 36px;
-	height: 36px;
-	border-radius: 12px;
+	width: 32px;
+	height: 32px;
+	border-radius: 10px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	color: white;
+	flex-shrink: 0;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.15),
+		0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
 .notification-icon.error {
-	background: linear-gradient(135deg, #e53935, #e57373);
+	background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.18),
+		0 4px 10px rgba(220, 38, 38, 0.32);
+}
+
+.notification-icon.warning {
+	background: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.18),
+		0 4px 10px rgba(244, 106, 37, 0.32);
+}
+
+.notification-icon.info {
+	background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.18),
+		0 4px 10px rgba(37, 99, 235, 0.32);
+}
+
+.notification-icon.success {
+	background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.18),
+		0 4px 10px rgba(34, 197, 94, 0.32);
 }
 
 .notification-content {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 2px;
+	min-width: 0;
 }
 
 .notification-title {
-	font-weight: 700;
-	color: var(--pos-text-primary);
+	font-weight: 600;
+	font-size: 0.84rem;
+	line-height: 1.3;
+	color: var(--pos-text-primary, #edf2f7);
 }
 
 .notification-detail {
-	font-size: 0.9rem;
-	color: var(--pos-text-secondary);
+	font-size: 0.78rem;
+	color: var(--pos-text-secondary, #7b899d);
 	white-space: pre-wrap;
+	line-height: 1.4;
 }
 
 .notification-time {
-	font-size: 0.75rem;
-	color: var(--pos-text-secondary);
+	font-size: 0.7rem;
+	color: var(--cc-subtle, #4a5568);
+	font-weight: 500;
+	margin-top: 2px;
+	letter-spacing: 0.01em;
 }
 
 .empty-state {
@@ -232,23 +312,42 @@ function formatTimestamp(ts: string | number | Date) {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	padding: 24px 12px;
+	padding: 32px 16px;
 	text-align: center;
-	color: var(--pos-text-secondary);
+	color: var(--pos-text-secondary, #7b899d);
+	gap: 4px;
 }
 
 .empty-icon {
-	color: var(--pos-text-secondary);
+	color: var(--cc-muted, #7b899d);
 	margin-bottom: 8px;
+	opacity: 0.6;
 }
 
 .empty-title {
 	font-weight: 700;
-	color: var(--pos-text-primary);
+	color: var(--pos-text-primary, #edf2f7);
 	margin-bottom: 4px;
+	font-size: 0.92rem;
 }
 
 .empty-subtitle {
-	font-size: 0.9rem;
+	font-size: 0.8rem;
+	line-height: 1.4;
+}
+
+/* Light-theme override — keep the popup readable on the light palette. */
+:global(.v-theme--light) .notification-card,
+:global(:root:not(.v-theme--dark)) .notification-card {
+	background: #ffffff !important;
+	border-color: rgba(15, 23, 42, 0.08);
+	box-shadow:
+		0 24px 48px rgba(15, 23, 42, 0.18),
+		0 4px 12px rgba(15, 23, 42, 0.08) !important;
+}
+
+:global(.v-theme--light) .notification-item,
+:global(:root:not(.v-theme--dark)) .notification-item {
+	border-bottom-color: rgba(15, 23, 42, 0.06);
 }
 </style>
