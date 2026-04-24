@@ -234,7 +234,15 @@ const batchChipText = computed(() => {
 	if (list.length === 1) {
 		return `Batch ${list[0].batch_no}`;
 	}
-	return `${list.length} batches`;
+	// Spell out batch numbers when there's enough room (the row has the
+	// width). Cap at 4 names so really long batch lists don't push the
+	// NOS / price off the row — the rest are surfaced via the title
+	// tooltip + the existing ItemStockInfoMenu dropdown.
+	const names = list.map((b) => b.batch_no);
+	if (names.length <= 4) {
+		return `Batches: ${names.join(", ")}`;
+	}
+	return `Batches: ${names.slice(0, 4).join(", ")} +${names.length - 4}`;
 });
 
 const batchChipTitle = computed(() => {
@@ -256,8 +264,10 @@ const onDragEnd = (event) => emit("dragend", event);
 .pos-row-card {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 6px 12px 6px 10px;
+	gap: 12px;
+	/* Bumped padding so the item name no longer butts up against the card
+	   edge — the previous 6/12 felt cramped especially next to the thumb. */
+	padding: 10px 16px 10px 14px;
 	background: var(--pos-surface-raised);
 	border: 1px solid var(--pos-border-light);
 	border-radius: 12px;
@@ -265,7 +275,7 @@ const onDragEnd = (event) => emit("dragend", event);
 	cursor: pointer;
 	width: 100%;
 	height: 100%;
-	min-height: 56px;
+	min-height: 60px;
 	position: relative;
 	overflow: hidden;
 	transition:
@@ -364,9 +374,12 @@ const onDragEnd = (event) => emit("dragend", event);
 
 .pos-row-card__name {
 	margin: 0;
-	font-size: 0.82rem;
-	font-weight: 700;
-	line-height: 1.25;
+	/* Reduced from 0.82rem/700 — the old size dominated the card and
+	   pushed the price/qty visually back. 0.74rem with a 600 weight
+	   reads as a confident label without shouting. */
+	font-size: 0.74rem;
+	font-weight: 600;
+	line-height: 1.3;
 	color: var(--pos-text-primary);
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -451,14 +464,17 @@ const onDragEnd = (event) => emit("dragend", event);
 }
 
 .pos-row-card__price-currency {
-	font-size: 0.7rem;
+	font-size: 0.62rem;
 	font-weight: 600;
 	color: var(--pos-text-secondary);
 	letter-spacing: 0.04em;
 }
 
 .pos-row-card__price-amount {
-	font-size: 0.95rem;
+	/* Trimmed from 0.95rem — the price was reading bigger than the item
+	   name after the name was reduced. 0.82rem keeps the orange accent
+	   prominent without dominating. */
+	font-size: 0.82rem;
 	font-variant-numeric: tabular-nums;
 }
 
@@ -484,10 +500,13 @@ const onDragEnd = (event) => emit("dragend", event);
 	max-width: 100%;
 	padding: 2px 8px;
 	border-radius: 999px;
-	background: rgba(226, 54, 112, 0.12);
-	color: var(--cc-pink, #e23670);
-	border: 1px solid rgba(226, 54, 112, 0.25);
-	font-size: 0.68rem;
+	/* CC green palette — green reads as "available batch info" and stops
+	   competing visually with the red/pink "warning" badges elsewhere
+	   in the dialog (e.g. shortage cards). */
+	background: rgba(52, 178, 157, 0.14);
+	color: var(--cc-green, #34b29d);
+	border: 1px solid rgba(52, 178, 157, 0.3);
+	font-size: 0.65rem;
 	font-weight: 600;
 	letter-spacing: 0.02em;
 	line-height: 1.2;
@@ -507,18 +526,20 @@ const onDragEnd = (event) => emit("dragend", event);
 
 @media (max-width: 768px) {
 	.pos-row-card {
-		gap: 8px;
-		padding: 6px 10px 6px 8px;
+		gap: 10px;
+		padding: 8px 12px 8px 10px;
 	}
 	.pos-row-card__thumb {
 		width: 40px;
 		height: 40px;
 	}
 	.pos-row-card__name {
-		font-size: 0.88rem;
+		/* Slightly larger on touch devices so the tap target reads
+		   clearly, but still well below the old 0.88rem. */
+		font-size: 0.78rem;
 	}
 	.pos-row-card__price-amount {
-		font-size: 0.92rem;
+		font-size: 0.84rem;
 	}
 	.pos-row-card__code {
 		display: none;
