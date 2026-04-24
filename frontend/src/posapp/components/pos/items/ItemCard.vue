@@ -265,9 +265,11 @@ const onDragEnd = (event) => emit("dragend", event);
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	/* Bumped padding so the item name no longer butts up against the card
-	   edge — the previous 6/12 felt cramped especially next to the thumb. */
-	padding: 10px 16px 10px 14px;
+	/* Extra vertical padding so the title has breathing room from the top
+	   border and the content column reads as centred against the product
+	   image. Horizontal padding stays moderate to preserve the stock-bar
+	   width. */
+	padding: 14px 16px 14px 14px;
 	background: var(--pos-surface-raised);
 	border: 1px solid var(--pos-border-light);
 	border-radius: 12px;
@@ -275,7 +277,7 @@ const onDragEnd = (event) => emit("dragend", event);
 	cursor: pointer;
 	width: 100%;
 	height: 100%;
-	min-height: 60px;
+	min-height: 72px;
 	position: relative;
 	overflow: hidden;
 	transition:
@@ -328,8 +330,10 @@ const onDragEnd = (event) => emit("dragend", event);
 
 .pos-row-card__thumb {
 	flex: 0 0 auto;
-	width: 44px;
-	height: 44px;
+	/* Slightly larger thumb (was 44px) so it matches the taller content
+	   column and anchors the left edge of the card visually. */
+	width: 48px;
+	height: 48px;
 	border-radius: 8px;
 	overflow: hidden;
 	background: var(--pos-surface-muted);
@@ -362,7 +366,12 @@ const onDragEnd = (event) => emit("dragend", event);
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	/* Center the title / batch / meta rows inside the card so the block
+	   reads as balanced against the product image. */
+	justify-content: center;
+	/* Slightly more air between rows — 3px pushed them into one dense
+	   block; 6px lets each row breathe. */
+	gap: 6px;
 }
 
 .pos-row-card__title-row {
@@ -527,11 +536,12 @@ const onDragEnd = (event) => emit("dragend", event);
 @media (max-width: 768px) {
 	.pos-row-card {
 		gap: 10px;
-		padding: 8px 12px 8px 10px;
+		padding: 12px 12px 12px 10px;
+		min-height: 68px;
 	}
 	.pos-row-card__thumb {
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 	}
 	.pos-row-card__name {
 		/* Slightly larger on touch devices so the tap target reads
