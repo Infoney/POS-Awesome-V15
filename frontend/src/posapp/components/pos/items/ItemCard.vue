@@ -202,13 +202,18 @@ const stockTier = computed(() => {
 
 const stockTierClass = computed(() => `pos-cc-card--${stockTier.value}`);
 
+// Progress bar width. Floored at 8% so the bar is always visible — a
+// qty of 1 or an edge case still renders a readable sliver rather than
+// "no bar at all" (the user called this out on the 37-qty card).
 const stockFillPercent = computed(() => {
 	const qty = numericQty.value;
-	if (qty <= 0) return 6;
-	if (qty >= 100) return 100;
-	if (qty >= 20) return 70 + Math.min(30, (qty - 20) * 0.375);
-	if (qty >= 5) return 35 + (qty - 5) * (35 / 15);
-	return 12 + qty * (22 / 5);
+	let pct;
+	if (qty <= 0) pct = 8;
+	else if (qty >= 100) pct = 100;
+	else if (qty >= 20) pct = 70 + Math.min(30, (qty - 20) * 0.375);
+	else if (qty >= 5) pct = 35 + (qty - 5) * (35 / 15);
+	else pct = 12 + qty * (22 / 5);
+	return Math.max(8, Math.min(100, pct));
 });
 
 const stockTooltip = computed(() => {
@@ -281,11 +286,17 @@ const onDragEnd = (event) => emit("dragend", event);
 	gap: 14px;
 	width: 100%;
 	height: 100%;
-	padding: 12px 16px 12px 14px;
-	background: var(--pos-surface-raised, var(--cc-bg-card, rgba(22, 28, 39, 0.8)));
-	border: 1px solid var(--pos-border-light, var(--cc-border, #252b37));
+	padding: 12px 16px 12px 16px;
+	/* Lifted surface — solid gradient so the card sits visibly above the
+	   panel (panel is --cc-bg ≈ #0e121b; card top is ~#1c2334 so the
+	   delta is clearly readable, matching the "Veriality"-style visual
+	   separation the user asked for). */
+	background: linear-gradient(180deg, #1c2334 0%, #161d2c 100%);
+	border: 1px solid rgba(255, 255, 255, 0.04);
 	border-radius: 12px;
-	box-shadow: var(--cc-shadow-sm, 0 2px 6px rgba(0, 0, 0, 0.08));
+	box-shadow:
+		0 1px 0 rgba(255, 255, 255, 0.02) inset,
+		0 2px 8px rgba(0, 0, 0, 0.35);
 	cursor: pointer;
 	overflow: hidden;
 	transition:
@@ -295,34 +306,57 @@ const onDragEnd = (event) => emit("dragend", event);
 		box-shadow var(--cc-ease-base, 220ms ease-out);
 }
 
-/* Slim tier-coloured stripe on the left edge — kept as a stock-health
-   glance cue; doesn't fight the prominent progress bar in the body. */
+/* Light theme: flip the lifted surface to a soft off-white so the card
+   pops from the light panel the same way it does on dark. */
+:deep([data-theme="light"]) .pos-cc-card,
+:deep(.v-theme--light) .pos-cc-card,
+[data-theme="light"] .pos-cc-card,
+.v-theme--light .pos-cc-card {
+	background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
+	border-color: rgba(15, 23, 42, 0.08);
+	box-shadow:
+		0 1px 0 rgba(255, 255, 255, 1) inset,
+		0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+/* Tier-coloured left stripe. Widened from 3 → 5 px so the rounded top/
+   bottom-left corners (clipped by the card's overflow + border-radius)
+   actually read as rounded. Shares its gradient with the progress bar
+   via the paired tier-start / tier-end custom props so the stripe and
+   bar always carry the same tier colour. */
 .pos-cc-card::before {
 	content: "";
 	position: absolute;
 	top: 0;
 	bottom: 0;
 	left: 0;
-	width: 3px;
-	background: var(--row-accent, #64748b);
+	width: 5px;
+	background: linear-gradient(
+		180deg,
+		var(--tier-start, #64748b),
+		var(--tier-end, #94a3b8)
+	);
 	pointer-events: none;
 }
 
+/* Tier palette — user requested: green=good, orange=mid, red=low.
+   The same (start, end) pair feeds the left stripe (vertical) and the
+   body progress bar (horizontal) so they read as one unit. */
 .pos-cc-card--ok {
-	--row-accent: #22c55e;
-	--row-bar: linear-gradient(90deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25));
+	--tier-start: #16a34a;
+	--tier-end: #22c55e;
 }
 .pos-cc-card--low {
-	--row-accent: #f59e0b;
-	--row-bar: linear-gradient(90deg, #f59e0b, #fbbf24);
+	--tier-start: #ea580c;
+	--tier-end: #f97316;
 }
 .pos-cc-card--critical {
-	--row-accent: #ef4444;
-	--row-bar: linear-gradient(90deg, #ef4444, #f97316);
+	--tier-start: #dc2626;
+	--tier-end: #ef4444;
 }
 .pos-cc-card--out {
-	--row-accent: #64748b;
-	--row-bar: linear-gradient(90deg, #64748b, #94a3b8);
+	--tier-start: #475569;
+	--tier-end: #64748b;
 }
 
 .pos-cc-card:hover {
@@ -372,9 +406,12 @@ const onDragEnd = (event) => emit("dragend", event);
 	justify-content: center;
 	width: 100%;
 	height: 100%;
-	background: linear-gradient(135deg, #ec4899 0%, #be185d 55%, #9d174d 100%);
-	color: #ffffff;
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+	/* Muted slate gradient — the previous bright pink thumbnail screen
+	   was fatiguing across a long items list. Dark slate is neutral and
+	   eye-relaxing while still giving the icon enough contrast. */
+	background: linear-gradient(135deg, #3b4763 0%, #2a3550 55%, #1e2740 100%);
+	color: rgba(255, 255, 255, 0.78);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 /* ─── Body (title / meta / bar) ───────────────────────────────────────── */
@@ -496,9 +533,9 @@ const onDragEnd = (event) => emit("dragend", event);
 /* ─── Progress bar (CC "Top-selling items" style) ─────────────────────── */
 .pos-cc-card__track {
 	position: relative;
-	height: 5px;
+	height: 6px;
 	width: 100%;
-	background: rgba(148, 163, 184, 0.14);
+	background: rgba(148, 163, 184, 0.16);
 	border-radius: 999px;
 	overflow: hidden;
 }
@@ -506,9 +543,18 @@ const onDragEnd = (event) => emit("dragend", event);
 .pos-cc-card__track-fill {
 	display: block;
 	height: 100%;
-	background: var(--row-bar, linear-gradient(90deg, var(--cc-pink, #e23670), var(--cc-orange, #f46a25)));
+	/* Shares the tier-start/end pair with the left stripe so the two
+	   always match (green / orange / red / grey). Minimum width of 4%
+	   is enforced at the computed level so the bar is always visible,
+	   even for 1-qty items. */
+	background: linear-gradient(
+		90deg,
+		var(--tier-start, #64748b),
+		var(--tier-end, #94a3b8)
+	);
 	border-radius: inherit;
 	transition: width 0.3s ease;
+	box-shadow: 0 0 10px rgba(var(--cc-pink-rgb, 226, 54, 112), 0.05);
 }
 
 /* ─── Secondary price (multi-currency) ────────────────────────────────── */
