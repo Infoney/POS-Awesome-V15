@@ -233,9 +233,32 @@ def create_purchase_receipt(data):
 
     posting_date = payload.get("posting_date") or nowdate()
 
-    cost_center = payload.get("cost_center") or None
+    # Cost Center — resolve in priority order:
+    #   1. payload (explicit cashier choice in the dialog)
+    #   2. POS Profile default (`cost_center` or POSAwesome's `posa_cost_center`)
+    #   3. Company default cost centre
+    # Then validate it exists. We also stamp the resolved value on the
+    # **parent** Purchase Receipt doc below, not just the line items —
+    # ERPNext's accounting submit pipeline (Stock Received But Not Billed
+    # GL, expense postings) reads parent.cost_center and throws the
+    # cryptic "[Purchase Receipt, ...]: cost_center" mandatory-field error
+    # at submit time when it's blank, even if every line item has one.
+    cost_center = (
+        payload.get("cost_center")
+        or profile.get("cost_center")
+        or profile.get("posa_cost_center")
+        or frappe.get_cached_value("Company", company, "cost_center")
+        or None
+    )
     if cost_center and not frappe.db.exists("Cost Center", cost_center):
         frappe.throw(_("Cost Center {0} was not found.").format(cost_center))
+    if not cost_center:
+        frappe.throw(
+            _(
+                "No Cost Center could be resolved for this Purchase Receipt. "
+                "Pick one in the dialog or set a default on the POS Profile / Company."
+            )
+        )
 
     supplier_doc = frappe.get_doc("Supplier", supplier)
     supplier_currency = (
@@ -261,6 +284,7 @@ def create_purchase_receipt(data):
             "posting_date": posting_date,
             "currency": supplier_currency,
             "buying_price_list": buying_price_list,
+            "cost_center": cost_center,
             "ignore_pricing_rule": 1,
         }
     )
