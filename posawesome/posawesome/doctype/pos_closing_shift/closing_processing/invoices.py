@@ -1,8 +1,41 @@
+from contextlib import contextmanager
+
 import frappe
 from frappe import _, DoesNotExistError
 from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import (
     consolidate_pos_invoices,
 )
+
+
+@contextmanager
+def _negative_stock_consolidation_guard():
+    """Allow transient negative batch positions during POS consolidation.
+
+    Each individual POS Invoice in this shift already passed POSAwesome's
+    own stock preflight (``_validate_stock_on_invoice``) at submit time, so
+    the underlying batch movements are valid as recorded. ERPNext's
+    ``consolidate_pos_invoices`` re-aggregates those movements into a
+    Consolidated Sales Invoice and reposts the resulting SLEs; if a
+    return, stock recon, or out-of-order timestamp pushed any single batch
+    transiently negative *between* the original POS Invoice submit and the
+    close-shift moment, the reposting tripped ERPNext's per-batch validator
+    and blocked the entire close (e.g.
+    "Batch No 42524365 of an Item 22929 has negative stock of quantity
+    -1.0 in the warehouse AL-KHANSA PHARMACY - PPC").
+
+    The actual stock impact is unchanged — consolidation is a financial
+    roll-up, not a fresh deduction — so we suppress the validator only for
+    the duration of the consolidation call and restore the previous flag
+    afterwards (try/finally so a thrown error inside ERPNext doesn't leak
+    the relaxed flag to subsequent requests).
+    """
+
+    previous = getattr(frappe.flags, "allow_negative_stock", False)
+    frappe.flags.allow_negative_stock = True
+    try:
+        yield
+    finally:
+        frappe.flags.allow_negative_stock = previous
 
 def _set_closing_entry_invoices(closing_shift_doc):
     """Set `pos_closing_entry` on linked invoices."""
@@ -175,5 +208,9 @@ def consolidate_closing_shift_invoices(closing_shift_doc):
             for invoice in pos_invoices:
                 invoices_by_currency.setdefault(invoice.currency, []).append(invoice)
 
-            for invoices in invoices_by_currency.values():
-                consolidate_pos_invoices(pos_invoices=invoices)
+            # Suppress ERPNext's per-batch negative-stock validator only for
+            # the consolidation reposting — see _negative_stock_consolidation_guard
+            # for the full rationale.
+            with _negative_stock_consolidation_guard():
+                for invoices in invoices_by_currency.values():
+                    consolidate_pos_invoices(pos_invoices=invoices)
