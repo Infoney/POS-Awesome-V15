@@ -9,144 +9,37 @@ from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import
 
 @contextmanager
 def _negative_stock_close_shift_guard():
-    """Allow transient negative batch positions during close-shift writes.
+    """Best-effort relaxation of ERPNext's bin-level negative stock check.
 
-    Used in two places along the close-shift flow:
+    The earlier iteration of this guard tried to monkey-patch every
+    batch-stock validator in ``SerialandBatchBundle`` and
+    ``stock_ledger.is_negative_stock_allowed`` so close-shift could
+    swallow stale-batch issues silently. That played whack-a-mole with
+    ERPNext's validation surface (a new throw site appeared every
+    iteration) and the right answer per the cashier was to **stop
+    bypassing validators and surface the offending invoices instead**.
 
-    1. ``submit_printed_invoices`` — auto-submits any POS Invoice that was
-       printed during the shift but never reached ``submit()`` (e.g. the
-       cashier handed over goods + collected cash, the receipt printed,
-       but the network blip prevented the docstatus=1 commit). If any
-       batch on a printed-but-unsubmitted line has gone negative since
-       the print (returns, recons, sales on a parallel terminal),
-       ERPNext's per-batch validator throws and blocks the cashier from
-       even *opening* the close dialog. Refusing the submit is worse than
-       allowing it — the goods are already gone — so we relax the
-       validator here.
+    What we keep here is just ``frappe.flags.allow_negative_stock = True``
+    so the bin-level path that *does* honour the flag (
+    ``stock_ledger.make_sl_entries`` accepting an ``allow_negative_stock``
+    kwarg, callers that fall back to the flag for legacy reasons) gets
+    the relaxed behaviour. Anything stricter — batch-level validators,
+    POSAwesome's own batch quantity check, etc. — is intentionally
+    allowed to throw. ``submit_printed_invoices`` now catches those per
+    invoice and returns them as ``blocking_errors`` for the frontend to
+    surface, giving the cashier an explicit "delete and retry" choice
+    instead of an opaque close-shift failure.
 
-    2. ``consolidate_closing_shift_invoices`` — ERPNext's
-       ``consolidate_pos_invoices`` re-aggregates the shift's POS Invoice
-       movements into a Consolidated Sales Invoice and reposts the
-       resulting SLEs. If between original submit and consolidation any
-       batch went transiently negative, the reposting trips the same
-       validator and blocks the close (e.g.
-       "Batch No 42524365 of an Item 22929 has negative stock of quantity
-       -1.0 in the warehouse AL-KHANSA PHARMACY - PPC"). Consolidation is
-       a financial roll-up — the actual stock impact already happened at
-       individual POS Invoice submit time — so suppressing the validator
-       here is also safe.
-
-    POSAwesome's own preflight (``_validate_stock_on_invoice``) still
-    enforces no-negative-stock at the cashier's *initial* submit, so this
-    guard only relaxes the after-the-fact close-shift rewrites — not the
-    live sale path.
-
-    Implementation note — *why a monkey-patch and not just*
-    ``frappe.flags.allow_negative_stock``:
-
-    ERPNext has TWO independent negative-stock validators on the batch
-    submit path:
-
-      a) ``stock_ledger.update_qty_in_future_sle`` — bin-level. Reads
-         ``Stock Settings.allow_negative_stock`` and respects the
-         standard ``frappe.flags.allow_negative_stock`` flag. We set
-         this flag for backwards compatibility / belt-and-braces.
-      b) ``SerialAndBatchBundle.validate_negative_batch`` (in
-         ``erpnext/stock/doctype/serial_and_batch_bundle/serial_and_batch_bundle.py``)
-         — batch-level. Throws ``BatchNegativeStockError`` if a single
-         batch row would go negative. This validator does **not**
-         consult ``frappe.flags.allow_negative_stock``; the only
-         bypass is the ``allow_negative_stock`` argument to
-         ``set_incoming_rate``, and the SBB chain wired into invoice
-         submit calls it without that arg.
-
-    Our cashier's error is path (b). The pragmatic, surgical fix is to
-    swap ``validate_negative_batch`` for a no-op for the duration of the
-    guard and restore the original method in ``finally`` (which runs
-    even if ERPNext throws somewhere else). The patch is per-class — not
-    per-instance — but the close-shift run is single-threaded inside one
-    request, and we always restore, so workers don't leak the patched
-    method.
+    The flag is restored in ``finally`` so it can't leak to subsequent
+    requests on the same worker.
     """
 
     previous_flag = getattr(frappe.flags, "allow_negative_stock", False)
     frappe.flags.allow_negative_stock = True
-
-    # Lazy imports to avoid creating an erpnext import dependency at
-    # module load time (matches the rest of this module's import style).
-    try:
-        from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
-            SerialandBatchBundle as _SBB,
-        )
-    except Exception:  # pragma: no cover — defensive, ERPNext should always be present
-        _SBB = None
-
-    try:
-        from erpnext.stock import stock_ledger as _stock_ledger_module
-    except Exception:  # pragma: no cover
-        _stock_ledger_module = None
-
-    # Methods on `SerialandBatchBundle` that throw on negative-batch
-    # conditions during invoice submit. Each is bypassed by a different
-    # opt-in (function arg, Stock Settings single, or unconditional
-    # error), so the only reliable way to clear the close-shift path is
-    # to swap each one for a no-op for the duration of the guard. The
-    # cashier already handed over goods on these invoices — the submit
-    # is a record-keeping step, not a fresh validation.
-    _SBB_PATCH_TARGETS = (
-        "validate_negative_batch",
-        "validate_batch_inventory",
-        "validate_batch_quantity",
-        "throw_negative_batch",
-    )
-    sbb_originals = {}
-    if _SBB is not None:
-        for name in _SBB_PATCH_TARGETS:
-            if hasattr(_SBB, name):
-                sbb_originals[name] = getattr(_SBB, name)
-                setattr(_SBB, name, _make_close_shift_noop(name))
-
-    # Bin-level negative stock (NegativeStockError "Insufficient Stock —
-    # X units of Item Y needed in Warehouse Z to complete this
-    # transaction") is gated by `is_negative_stock_allowed` in
-    # erpnext.stock.stock_ledger. ERPNext's `update_entries_after`
-    # constructor reads it (line 477) and `validate_negative_qty_in_future_sle`
-    # short-circuits on it (line 2206). Patching the module attribute is
-    # picked up by both call sites because in-module references are
-    # resolved through the module's globals dict at call time. This is
-    # the right primitive to bypass — it's exactly the function ERPNext
-    # itself consults when deciding whether to allow negative stock.
-    stock_ledger_original = None
-    if _stock_ledger_module is not None and hasattr(
-        _stock_ledger_module, "is_negative_stock_allowed"
-    ):
-        stock_ledger_original = _stock_ledger_module.is_negative_stock_allowed
-        _stock_ledger_module.is_negative_stock_allowed = (
-            lambda *args, **kwargs: True
-        )
-
     try:
         yield
     finally:
         frappe.flags.allow_negative_stock = previous_flag
-        if _SBB is not None:
-            for name, original in sbb_originals.items():
-                setattr(_SBB, name, original)
-        if (
-            _stock_ledger_module is not None
-            and stock_ledger_original is not None
-        ):
-            _stock_ledger_module.is_negative_stock_allowed = stock_ledger_original
-
-
-def _make_close_shift_noop(method_name):
-    """Build a per-method no-op that accepts ``self`` + any args/kwargs."""
-
-    def _noop(self, *args, **kwargs):  # noqa: ARG001 — signature must match
-        return None
-
-    _noop.__name__ = f"_close_shift_noop__{method_name}"
-    return _noop
 
 
 # Back-compat alias for any external import that grabbed the old name.
@@ -306,32 +199,64 @@ def get_open_draft_invoices(pos_opening_shift, pos_profile):
 
 
 @frappe.whitelist()
-def delete_open_draft_invoices(pos_opening_shift, pos_profile):
-    """Delete every unprinted draft invoice in the shift.
+def delete_open_draft_invoices(pos_opening_shift, pos_profile, names=None):
+    """Delete draft invoices in the shift.
 
-    Sister endpoint to :func:`get_open_draft_invoices`. Only touches
-    ``posa_is_printed = 0`` rows — printed drafts are left alone because
-    the cashier already handed over goods on those (deleting them would
-    erase the audit trail).
+    Two modes:
+
+    - **No ``names`` list** (default) — wipes every ``posa_is_printed=0``
+      draft in the shift. Safe because no goods left the counter on
+      those.
+    - **Explicit ``names`` list** — deletes exactly those invoice IDs,
+      regardless of ``posa_is_printed``. Used by the close-shift
+      "blocked by draft submit" recovery flow when the cashier needs to
+      remove a printed-but-unsubmittable draft to unblock close.
+      Caller is expected to gate this with explicit user confirmation
+      since deleting a printed draft erases an audit trail entry.
 
     Returns ``{"deleted": [names], "skipped": [names]}`` so the UI can
-    show what was actually cleaned up vs. what stayed for the cashier to
-    handle.
+    show what was actually cleaned up vs. what stayed for the cashier
+    to handle.
     """
 
     if not pos_opening_shift or not pos_profile:
         return {"deleted": [], "skipped": []}
 
     doctype = _resolve_pos_invoice_doctype(pos_profile)
-    rows = frappe.get_all(
-        doctype,
-        filters={
-            "posa_pos_opening_shift": pos_opening_shift,
-            "docstatus": 0,
-            "posa_is_printed": 0,
-        },
-        pluck="name",
-    )
+
+    # Normalise `names` — Frappe whitelisted methods receive JSON-serialized
+    # lists as strings, so accept both list and JSON-string forms.
+    if isinstance(names, str):
+        try:
+            names = frappe.parse_json(names)
+        except Exception:
+            names = [names]
+
+    if names:
+        # Targeted delete — confirm each invoice belongs to this shift to
+        # prevent the endpoint from being abused to wipe arbitrary docs.
+        names = [n for n in names if n]
+        if not names:
+            return {"deleted": [], "skipped": []}
+        rows = frappe.get_all(
+            doctype,
+            filters={
+                "posa_pos_opening_shift": pos_opening_shift,
+                "docstatus": 0,
+                "name": ["in", names],
+            },
+            pluck="name",
+        )
+    else:
+        rows = frappe.get_all(
+            doctype,
+            filters={
+                "posa_pos_opening_shift": pos_opening_shift,
+                "docstatus": 0,
+                "posa_is_printed": 0,
+            },
+            pluck="name",
+        )
 
     deleted = []
     skipped = []
@@ -364,7 +289,27 @@ def _get_cancelled_return_against(invoice_doc, doctype):
     return None
 
 def submit_printed_invoices(pos_opening_shift, doctype):
+    """Auto-submit printed-but-unsubmitted invoices for close-shift.
+
+    Returns a dict with two buckets so callers can react instead of
+    propagating an opaque exception::
+
+        {
+            "skipped":         [<rows whose `return_against` is cancelled>],
+            "blocking_errors": [<rows whose .submit() raised>],
+        }
+
+    On the *first* submit failure we abort the loop and roll the
+    transaction back. That keeps the close-shift atomic (no half-
+    submitted shift state) and lets the cashier review the offending
+    invoice via the new "Close-shift blocked" dialog: they can delete
+    the blocking draft and retry, or cancel the close. See
+    ``creation.make_closing_shift_from_opening`` for the response
+    shape and ``CloseShiftBlockingErrorsDialog.vue`` for the UI.
+    """
+
     skipped_invoices = []
+    blocking_errors = []
     invoices_list = frappe.get_all(
         doctype,
         filters={
@@ -373,13 +318,7 @@ def submit_printed_invoices(pos_opening_shift, doctype):
             "posa_is_printed": 1,
         },
     )
-    # Wrap the whole loop in the close-shift negative-stock guard. The
-    # cashier already printed the receipt and handed over goods on each
-    # printed-but-unsubmitted invoice; refusing the docstatus=1 commit at
-    # close-shift just leaves an inconsistent system-of-record vs.
-    # reality (and worse — it blocks the cashier from even *opening* the
-    # close-shift dialog, since this runs inside
-    # ``make_closing_shift_from_opening``). See the guard's docstring.
+
     with _negative_stock_close_shift_guard():
         for invoice in invoices_list:
             invoice_doc = frappe.get_doc(doctype, invoice.name)
@@ -401,8 +340,49 @@ def submit_printed_invoices(pos_opening_shift, doctype):
                     ).format(invoice_doc.name, cancelled_return_against),
                 )
                 continue
-            invoice_doc.submit()
-    return skipped_invoices
+
+            try:
+                invoice_doc.submit()
+            except Exception as error:
+                # Abort the close-shift submit chain on first failure so
+                # the cashier doesn't end up with a half-submitted shift
+                # (rolling back undoes any earlier successful submits in
+                # this loop, which is what we want — the close-shift
+                # response will let them delete the blocking draft and
+                # retry, at which point all printed drafts get re-tried
+                # cleanly).
+                frappe.db.rollback()
+                blocking_errors.append(
+                    frappe._dict(
+                        {
+                            "invoice": invoice_doc.name,
+                            "doctype": doctype,
+                            "customer": invoice_doc.get("customer") or "",
+                            "grand_total": flt(invoice_doc.get("grand_total") or 0),
+                            "message": frappe.utils.cstr(error)[:2000],
+                        }
+                    )
+                )
+                frappe.log_error(
+                    title="POS Closing Shift Blocked By Draft Submit",
+                    message=_(
+                        "Submit of printed draft invoice {0} failed during close shift: {1}"
+                    ).format(invoice_doc.name, frappe.get_traceback() or str(error)),
+                )
+                break
+
+    return {"skipped": skipped_invoices, "blocking_errors": blocking_errors}
+
+
+def _normalize_submit_printed_result(result):
+    """Backwards-compat shim for callers that handed us the legacy list."""
+
+    if isinstance(result, dict):
+        return result
+    if result is None:
+        return {"skipped": [], "blocking_errors": []}
+    # Legacy: a list of skipped rows.
+    return {"skipped": list(result or []), "blocking_errors": []}
 
 def consolidate_closing_shift_invoices(closing_shift_doc):
     if frappe.db.get_value(

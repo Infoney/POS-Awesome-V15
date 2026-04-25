@@ -8,6 +8,7 @@ from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.data imp
 )
 from posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices import (
     submit_printed_invoices,
+    _normalize_submit_printed_result,
 )
 
 @frappe.whitelist()
@@ -19,7 +20,24 @@ def make_closing_shift_from_opening(opening_shift):
         "create_pos_invoice_instead_of_sales_invoice",
     )
     doctype = "POS Invoice" if use_pos_invoice else "Sales Invoice"
-    skipped_printed_invoices = submit_printed_invoices(opening_shift.get("name"), doctype)
+
+    submit_result = _normalize_submit_printed_result(
+        submit_printed_invoices(opening_shift.get("name"), doctype),
+    )
+    blocking_errors = submit_result.get("blocking_errors") or []
+    if blocking_errors:
+        # Don't fall through to building the closing shift — the cashier
+        # needs to resolve the failing draft(s) first. The frontend shows
+        # CloseShiftBlockingErrorsDialog with a "Delete and retry" button
+        # that hits delete_open_draft_invoices(names=...) and then re-calls
+        # this endpoint.
+        return {
+            "blocking_errors": blocking_errors,
+            "doctype": doctype,
+            "opening_shift": opening_shift.get("name"),
+            "pos_profile": opening_shift.get("pos_profile"),
+        }
+    skipped_printed_invoices = submit_result.get("skipped") or []
     closing_shift = frappe.new_doc("POS Closing Shift")
     closing_shift.pos_opening_shift = opening_shift.get("name")
     closing_shift.period_start_date = opening_shift.get("period_start_date")

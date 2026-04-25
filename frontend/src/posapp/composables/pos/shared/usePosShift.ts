@@ -232,35 +232,68 @@ export function usePosShift(openDialog?: () => void) {
 			}
 		}
 
-		// Step 2 — original close-shift call.
-		return frappe
-			.call(
+		// Step 2 — original close-shift call. Now also handles the
+		// `blocking_errors` response shape: when `submit_printed_invoices`
+		// can't push a printed draft to docstatus=1, the backend returns
+		// the offending rows + error messages instead of throwing. We
+		// open CloseShiftBlockingErrorsDialog so the cashier can choose
+		// to delete the blocking drafts and retry, or cancel the close.
+		const callMakeClosingShift = (): Promise<any> =>
+			frappe.call(
 				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.make_closing_shift_from_opening",
 				{ opening_shift: pos_opening_shift.value },
-			)
-			.then((r: any) => {
-				if (r.message) {
-					const response = normalizeClosingShiftPreparationResponse(r.message);
-					const closingShift = response.closing_shift;
-					const skippedPrintedInvoices = Array.isArray(response.skipped_printed_invoices)
-						? response.skipped_printed_invoices
-						: [];
-					if (!closingShift) {
-						return;
-					}
+			);
 
-					if (skippedPrintedInvoices.length) {
-						const confirmed = window.confirm(
-							buildSkippedClosingInvoicesPrompt(skippedPrintedInvoices),
-						);
-						if (!confirmed) {
-							return;
-						}
-					}
+		const handleClosingShiftResponse = async (r: any): Promise<void> => {
+			if (!r?.message) return;
 
-					eventBus?.emit("open_ClosingDialog", closingShift);
+			const message = r.message;
+
+			// Branch A — backend says "I couldn't submit one of your
+			// printed drafts; here's the row(s) and the error(s)".
+			if (Array.isArray(message.blocking_errors) && message.blocking_errors.length) {
+				const decision = await new Promise<"retry" | "cancel">((resolve) => {
+					eventBus?.emit("open_CloseShiftBlockingErrorsDialog", {
+						blocking_errors: message.blocking_errors,
+						opening_shift: message.opening_shift || pos_opening_shift.value,
+						pos_profile: message.pos_profile || profileName,
+						onResolve: (next: "retry" | "cancel") => resolve(next),
+					});
+				});
+				if (decision === "retry") {
+					// User confirmed deletion of the blocking drafts.
+					// Re-call the close endpoint — the printed-draft
+					// submit loop runs cleanly now.
+					const retryResp = await callMakeClosingShift();
+					await handleClosingShiftResponse(retryResp);
 				}
-			});
+				return;
+			}
+
+			// Branch B — normal happy / skipped-printed-invoices path.
+			const response = normalizeClosingShiftPreparationResponse(message);
+			const closingShift = response.closing_shift;
+			const skippedPrintedInvoices = Array.isArray(response.skipped_printed_invoices)
+				? response.skipped_printed_invoices
+				: [];
+			if (!closingShift) {
+				return;
+			}
+
+			if (skippedPrintedInvoices.length) {
+				const confirmed = window.confirm(
+					buildSkippedClosingInvoicesPrompt(skippedPrintedInvoices),
+				);
+				if (!confirmed) {
+					return;
+				}
+			}
+
+			eventBus?.emit("open_ClosingDialog", closingShift);
+		};
+
+		const initialResp = await callMakeClosingShift();
+		await handleClosingShiftResponse(initialResp);
 	}
 
 	function submit_closing_pos(data: any) {

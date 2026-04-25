@@ -5,6 +5,7 @@
 		<v-main class="main-content">
 			<ClosingDialog />
 			<PreCloseDraftsDialog />
+			<CloseShiftBlockingErrorsDialog />
 			<OfflineDiagnosticsDialog
 				v-model="diagnosticsDialogOpen"
 				:cache-usage="cacheUsage"
@@ -100,6 +101,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, getCurrentInstance } 
 import Navbar from "../components/Navbar.vue";
 import ClosingDialog from "../components/pos/shell/ClosingDialog.vue";
 import PreCloseDraftsDialog from "../components/pos/shell/PreCloseDraftsDialog.vue";
+import CloseShiftBlockingErrorsDialog from "../components/pos/shell/CloseShiftBlockingErrorsDialog.vue";
 import OfflineDiagnosticsDialog from "../components/navbar/OfflineDiagnosticsDialog.vue";
 import AppLoadingOverlay from "../components/ui/LoadingOverlay.vue";
 import UpdatePrompt from "../components/ui/UpdatePrompt.vue";
