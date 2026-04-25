@@ -209,13 +209,18 @@ function closeDrawer() {
 	border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
-/* Styling for the company name text within the drawer header */
+/* Styling for the company name text within the drawer header.
+   The legacy `#0097a7` teal pre-dated the CC theme migration and
+   clashed with the rest of the navbar (orange/pink accents on a deep
+   slate background). Switched to the CC text token so it reads as a
+   first-class label and inherits the light/dark theme automatically. */
 .drawer-company {
 	margin-left: 12px;
 	flex: 1;
-	font-weight: 500;
+	font-weight: 600;
 	font-size: 1rem;
-	color: #0097a7;
+	color: var(--pos-text-primary, var(--cc-text, #edf2f7));
+	letter-spacing: -0.01em;
 	font-family: inherit;
 }
 
@@ -329,8 +334,10 @@ function closeDrawer() {
 
 :deep([data-theme="dark"]) .drawer-company,
 :deep(.v-theme--dark) .drawer-company {
-	color: var(--text-primary, #ffffff) !important;
-	font-weight: 500;
+	/* Neutral on-brand white for dark mode — beats the teal that was
+	   bleeding through from the legacy default. */
+	color: var(--pos-text-primary, var(--cc-text, #edf2f7)) !important;
+	font-weight: 600;
 	font-size: 1rem;
 	font-family: inherit;
 }
