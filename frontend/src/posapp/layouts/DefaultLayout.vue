@@ -4,6 +4,17 @@
 		<UpdatePrompt />
 		<v-main class="main-content">
 			<ClosingDialog />
+			<OfflineDiagnosticsDialog
+				v-model="diagnosticsDialogOpen"
+				:cache-usage="cacheUsage"
+				:cache-usage-details="cacheUsageDetails"
+				:pending-invoices-count="pendingInvoicesCount || 0"
+				:network-online="networkOnline"
+				:server-online="serverOnline"
+				:manual-offline="manualOffline"
+				:last-sync="diagnosticsLastSync"
+				@refresh-cache-usage="handleRefreshCacheUsage"
+			/>
 			<Navbar
 				:pos-profile="posProfile"
 				:pending-invoices="pendingInvoicesCount"
@@ -87,6 +98,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, getCurrentInstance } 
 // Note paths updated to be relative to layouts/ directory
 import Navbar from "../components/Navbar.vue";
 import ClosingDialog from "../components/pos/shell/ClosingDialog.vue";
+import OfflineDiagnosticsDialog from "../components/navbar/OfflineDiagnosticsDialog.vue";
 import AppLoadingOverlay from "../components/ui/LoadingOverlay.vue";
 import UpdatePrompt from "../components/ui/UpdatePrompt.vue";
 import { useLoading } from "../composables/core/useLoading.js";
@@ -112,6 +124,7 @@ import {
 	checkDbHealth,
 	queueHealthCheck,
 	purgeOldQueueEntries,
+	clearDerivedOfflineCaches,
 	initPromise,
 	memoryInitPromise,
 	ensureOfflineQueueReady,
@@ -144,6 +157,7 @@ import {
 	manualNetworkRetry,
 } from "../composables/core/useNetwork";
 import { useRtl } from "../composables/core/useRtl";
+import { useTheme } from "../composables/core/useTheme";
 import authService from "../services/authService.js";
 import { getValidCachedOpeningForCurrentUser } from "../utils/openingCache";
 import {
@@ -181,7 +195,11 @@ const { rtlClasses } = useRtl();
 // We'll use getCurrentInstance().proxy to access globals if needed, but ideally we should refactor theme to a store/composable.
 // For now, let's use a proxy helper.
 const instance = getCurrentInstance();
-const $theme = instance?.proxy?.$theme || { toggle: () => {}, isDark: false }; // Fallback
+// `useTheme` returns the singleton — same instance the theme plugin attaches
+// to `app.config.globalProperties.$theme`. Importing it directly removes the
+// silent no-op fallback that left the Settings → "Toggle Theme" button doing
+// nothing when this file ran before the plugin had wired `$theme`.
+const $theme = instance?.proxy?.$theme || useTheme();
 const __ = instance?.proxy?.__ || ((value) => value);
 const BUILD_VERSION =
 	typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;
@@ -1062,49 +1080,101 @@ const handleRefreshOfflineData = async () => {
 	});
 };
 
+const rebuildInProgress = ref(false);
+
 const handleRebuildOfflineData = async () => {
-	handleRefreshCacheUsage();
-	evaluateBootstrapSnapshot({
-		allowPrompt: true,
-	});
-	if (canRunOfflineSync()) {
-		await triggerOperatorRefreshSync({ includeBootSync: true });
-		evaluateBootstrapSnapshot({ allowPrompt: false });
+	if (rebuildInProgress.value) {
+		return;
 	}
+	rebuildInProgress.value = true;
+
+	// Show "in progress" toast immediately so the cashier knows the rebuild
+	// kicked off — the destructive cache wipe + re-fetch can take a few
+	// seconds on a large catalogue and the previous handler returned without
+	// any visible work being done.
 	toastStore.show({
-		title: __("Offline rebuild guidance"),
-		detail: __("If stale data remains, open Status > Clear Cache and reload this terminal online."),
-		color: "warning",
+		title: __("Rebuilding offline cache…"),
+		detail: __("Clearing derived caches and re-syncing reference data."),
+		color: "info",
 	});
+
+	let cleared = false;
+	try {
+		// Drop derived offline caches (items, prices, customers, stock,
+		// pricing rules, translations, bootstrap snapshot, etc.). The
+		// pending offline queues (offline_invoices / payments / customers /
+		// cash_movements) are intentionally preserved so unsynced sales
+		// aren't lost — see DERIVED_OFFLINE_TABLES_TO_CLEAR in offline/db.ts.
+		await clearDerivedOfflineCaches();
+		cleared = true;
+	} catch (error) {
+		console.error("Failed to clear derived offline caches", error);
+		toastStore.show({
+			title: __("Rebuild failed"),
+			detail: __("Could not clear cached offline data. Try Clear Cache instead."),
+			color: "error",
+		});
+		rebuildInProgress.value = false;
+		return;
+	}
+
+	// Surface the snapshot status now that the cache is empty so the
+	// downstream sync has somewhere to write into.
+	bootstrapStatus.value = getBootstrapSnapshotStatus();
+	bootstrapLimitedMode.value = getBootstrapLimitedMode();
+
+	let synced = false;
+	if (canRunOfflineSync()) {
+		try {
+			await triggerOperatorRefreshSync({ includeBootSync: true });
+			synced = true;
+		} catch (error) {
+			console.error("Failed to re-sync after rebuild", error);
+		}
+	}
+
+	handleRefreshCacheUsage();
+	evaluateBootstrapSnapshot({ allowPrompt: !synced });
+
+	if (synced) {
+		toastStore.show({
+			title: __("Offline cache rebuilt"),
+			detail: __("Reference data was cleared and re-fetched from the server."),
+			color: "success",
+		});
+	} else if (cleared) {
+		toastStore.show({
+			title: __("Cache cleared — reconnect to finish rebuild"),
+			detail: __("The terminal must be online to refetch reference data."),
+			color: "warning",
+		});
+	}
+
+	rebuildInProgress.value = false;
 };
+
+const diagnosticsDialogOpen = ref(false);
+const diagnosticsLastSync = ref(null);
 
 const handleOpenOfflineDiagnostics = () => {
 	handleRefreshCacheUsage();
-	const lastRunSummary = syncCoordinator.getLastRunSummary();
-	const syncSummary =
-		lastRunSummary && lastRunSummary.resourcesTotal
-			? __("Last sync: {0} | ok: {1} | failed: {2} | skipped: {3}", [
-					lastRunSummary.trigger,
-					lastRunSummary.succeeded,
-					lastRunSummary.failed,
-					lastRunSummary.skipped,
-			  ])
-			: __("No sync trigger has run yet in this session.");
-	toastStore.show({
-		title: __("Offline diagnostics"),
-		detail: `${__(
-			"Pending sales: {0} | Cache usage: {1}%",
-			[
-			pendingInvoicesCount.value || 0,
-			Math.round(cacheUsage.value || 0),
-			],
-		)}\n${syncSummary}`,
-		color: visibleBootstrapWarningActive.value ? "warning" : "info",
-	});
+	diagnosticsLastSync.value = syncCoordinator.getLastRunSummary() || null;
+	diagnosticsDialogOpen.value = true;
 };
 
 const handleToggleTheme = () => {
-	$theme?.toggle();
+	if (!$theme || typeof $theme.toggle !== "function") {
+		// Should be unreachable now that we import `useTheme` directly, but
+		// keep a friendly toast so a future refactor that breaks the wiring
+		// surfaces immediately instead of failing silently.
+		toastStore.show({
+			title: __("Theme toggle unavailable"),
+			detail: __("The theme plugin is not initialised on this page."),
+			color: "warning",
+		});
+		return;
+	}
+	$theme.toggle();
 };
 
 const handleLogout = () => {
