@@ -16,14 +16,13 @@ def _negative_stock_close_shift_guard():
     1. ``submit_printed_invoices`` — auto-submits any POS Invoice that was
        printed during the shift but never reached ``submit()`` (e.g. the
        cashier handed over goods + collected cash, the receipt printed,
-       but the network blip prevented the docstatus=1 commit). At
-       close-shift the close-shift dialog opens by calling
-       ``make_closing_shift_from_opening``, which runs this auto-submit;
-       if any batch on a printed-but-unsubmitted line has gone negative
-       since the print (returns, recons, sales on a parallel terminal),
+       but the network blip prevented the docstatus=1 commit). If any
+       batch on a printed-but-unsubmitted line has gone negative since
+       the print (returns, recons, sales on a parallel terminal),
        ERPNext's per-batch validator throws and blocks the cashier from
        even *opening* the close dialog. Refusing the submit is worse than
-       allowing it — the goods are already gone — so we relax the flag.
+       allowing it — the goods are already gone — so we relax the
+       validator here.
 
     2. ``consolidate_closing_shift_invoices`` — ERPNext's
        ``consolidate_pos_invoices`` re-aggregates the shift's POS Invoice
@@ -42,16 +41,57 @@ def _negative_stock_close_shift_guard():
     guard only relaxes the after-the-fact close-shift rewrites — not the
     live sale path.
 
-    Restored in ``finally`` so a thrown error inside ERPNext can't leak
-    the relaxed flag to subsequent requests on the same worker.
+    Implementation note — *why a monkey-patch and not just*
+    ``frappe.flags.allow_negative_stock``:
+
+    ERPNext has TWO independent negative-stock validators on the batch
+    submit path:
+
+      a) ``stock_ledger.update_qty_in_future_sle`` — bin-level. Reads
+         ``Stock Settings.allow_negative_stock`` and respects the
+         standard ``frappe.flags.allow_negative_stock`` flag. We set
+         this flag for backwards compatibility / belt-and-braces.
+      b) ``SerialAndBatchBundle.validate_negative_batch`` (in
+         ``erpnext/stock/doctype/serial_and_batch_bundle/serial_and_batch_bundle.py``)
+         — batch-level. Throws ``BatchNegativeStockError`` if a single
+         batch row would go negative. This validator does **not**
+         consult ``frappe.flags.allow_negative_stock``; the only
+         bypass is the ``allow_negative_stock`` argument to
+         ``set_incoming_rate``, and the SBB chain wired into invoice
+         submit calls it without that arg.
+
+    Our cashier's error is path (b). The pragmatic, surgical fix is to
+    swap ``validate_negative_batch`` for a no-op for the duration of the
+    guard and restore the original method in ``finally`` (which runs
+    even if ERPNext throws somewhere else). The patch is per-class — not
+    per-instance — but the close-shift run is single-threaded inside one
+    request, and we always restore, so workers don't leak the patched
+    method.
     """
 
-    previous = getattr(frappe.flags, "allow_negative_stock", False)
+    previous_flag = getattr(frappe.flags, "allow_negative_stock", False)
     frappe.flags.allow_negative_stock = True
+
+    # Lazy import to avoid creating an erpnext import dependency at module
+    # load time (matches the rest of this module's import style).
+    try:
+        from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
+            SerialandBatchBundle as _SBB,
+        )
+    except Exception:  # pragma: no cover — defensive, ERPNext should always be present
+        _SBB = None
+
+    original_validate_negative_batch = None
+    if _SBB is not None and hasattr(_SBB, "validate_negative_batch"):
+        original_validate_negative_batch = _SBB.validate_negative_batch
+        _SBB.validate_negative_batch = lambda self, batch_no, available_qty: None
+
     try:
         yield
     finally:
-        frappe.flags.allow_negative_stock = previous
+        frappe.flags.allow_negative_stock = previous_flag
+        if _SBB is not None and original_validate_negative_batch is not None:
+            _SBB.validate_negative_batch = original_validate_negative_batch
 
 
 # Back-compat alias for any external import that grabbed the old name.
