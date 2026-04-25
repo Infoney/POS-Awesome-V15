@@ -72,14 +72,19 @@ def _negative_stock_close_shift_guard():
     previous_flag = getattr(frappe.flags, "allow_negative_stock", False)
     frappe.flags.allow_negative_stock = True
 
-    # Lazy import to avoid creating an erpnext import dependency at module
-    # load time (matches the rest of this module's import style).
+    # Lazy imports to avoid creating an erpnext import dependency at
+    # module load time (matches the rest of this module's import style).
     try:
         from erpnext.stock.doctype.serial_and_batch_bundle.serial_and_batch_bundle import (
             SerialandBatchBundle as _SBB,
         )
     except Exception:  # pragma: no cover — defensive, ERPNext should always be present
         _SBB = None
+
+    try:
+        from erpnext.stock import stock_ledger as _stock_ledger_module
+    except Exception:  # pragma: no cover
+        _stock_ledger_module = None
 
     # Methods on `SerialandBatchBundle` that throw on negative-batch
     # conditions during invoice submit. Each is bypassed by a different
@@ -88,26 +93,50 @@ def _negative_stock_close_shift_guard():
     # to swap each one for a no-op for the duration of the guard. The
     # cashier already handed over goods on these invoices — the submit
     # is a record-keeping step, not a fresh validation.
-    _PATCH_TARGETS = (
+    _SBB_PATCH_TARGETS = (
         "validate_negative_batch",
         "validate_batch_inventory",
         "validate_batch_quantity",
         "throw_negative_batch",
     )
-    originals = {}
+    sbb_originals = {}
     if _SBB is not None:
-        for name in _PATCH_TARGETS:
+        for name in _SBB_PATCH_TARGETS:
             if hasattr(_SBB, name):
-                originals[name] = getattr(_SBB, name)
+                sbb_originals[name] = getattr(_SBB, name)
                 setattr(_SBB, name, _make_close_shift_noop(name))
+
+    # Bin-level negative stock (NegativeStockError "Insufficient Stock —
+    # X units of Item Y needed in Warehouse Z to complete this
+    # transaction") is gated by `is_negative_stock_allowed` in
+    # erpnext.stock.stock_ledger. ERPNext's `update_entries_after`
+    # constructor reads it (line 477) and `validate_negative_qty_in_future_sle`
+    # short-circuits on it (line 2206). Patching the module attribute is
+    # picked up by both call sites because in-module references are
+    # resolved through the module's globals dict at call time. This is
+    # the right primitive to bypass — it's exactly the function ERPNext
+    # itself consults when deciding whether to allow negative stock.
+    stock_ledger_original = None
+    if _stock_ledger_module is not None and hasattr(
+        _stock_ledger_module, "is_negative_stock_allowed"
+    ):
+        stock_ledger_original = _stock_ledger_module.is_negative_stock_allowed
+        _stock_ledger_module.is_negative_stock_allowed = (
+            lambda *args, **kwargs: True
+        )
 
     try:
         yield
     finally:
         frappe.flags.allow_negative_stock = previous_flag
         if _SBB is not None:
-            for name, original in originals.items():
+            for name, original in sbb_originals.items():
                 setattr(_SBB, name, original)
+        if (
+            _stock_ledger_module is not None
+            and stock_ledger_original is not None
+        ):
+            _stock_ledger_module.is_negative_stock_allowed = stock_ledger_original
 
 
 def _make_close_shift_noop(method_name):
