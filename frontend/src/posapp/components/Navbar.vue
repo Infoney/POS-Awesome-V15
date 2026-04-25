@@ -324,10 +324,13 @@ export default {
 			drawer: false,
 			mini: true,
 			item: 0,
+			// Purchase Order intentionally dropped from the menu — Purchase
+			// Receipt (added conditionally in updateNavigationItems()) is the
+			// flow we keep; cashiers asked to stop seeing the Order page.
 			baseItems: [
 				{ text: "POS", icon: "mdi-network-pos", to: "/pos" },
+				{ text: "Dashboard", icon: "mdi-view-dashboard-outline", to: "/dashboard" },
 				{ text: "Payments", icon: "mdi-credit-card", to: "/payments" },
-				{ text: "Purchase Order", icon: "mdi-cart-plus", to: "/orders" },
 				{ text: "Barcode Printing", icon: "mdi-barcode", to: "/barcode" },
 			],
 			items: [],
@@ -573,8 +576,10 @@ export default {
 		updateNavigationItems() {
 			const items = [...this.baseItems];
 			if (this.posProfile?.posa_allow_purchase_receipt) {
-				const poIdx = items.findIndex((entry) => entry.to === "/orders");
-				const insertAt = poIdx >= 0 ? poIdx + 1 : items.length;
+				// Anchor next to Barcode Printing now that Purchase Order is
+				// gone (otherwise Purchase Receipt would jump to the end).
+				const anchorIdx = items.findIndex((entry) => entry.to === "/barcode");
+				const insertAt = anchorIdx >= 0 ? anchorIdx : items.length;
 				items.splice(insertAt, 0, {
 					text: "Purchase Receipt",
 					icon: "mdi-package-variant-closed-plus",
@@ -586,13 +591,6 @@ export default {
 					text: "Gift Cards",
 					icon: "mdi-card-account-details-outline",
 					to: "/gift-cards",
-				});
-			}
-			if (this.currentCashier?.is_supervisor) {
-				items.splice(1, 0, {
-					text: "Awesome Dashboard",
-					icon: "mdi-view-dashboard-outline",
-					to: "/dashboard",
 				});
 			}
 			if (this.posProfile?.posa_enable_cash_movement) {

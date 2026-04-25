@@ -4,6 +4,7 @@
 		<UpdatePrompt />
 		<v-main class="main-content">
 			<ClosingDialog />
+			<PreCloseDraftsDialog />
 			<OfflineDiagnosticsDialog
 				v-model="diagnosticsDialogOpen"
 				:cache-usage="cacheUsage"
@@ -98,6 +99,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, getCurrentInstance } 
 // Note paths updated to be relative to layouts/ directory
 import Navbar from "../components/Navbar.vue";
 import ClosingDialog from "../components/pos/shell/ClosingDialog.vue";
+import PreCloseDraftsDialog from "../components/pos/shell/PreCloseDraftsDialog.vue";
 import OfflineDiagnosticsDialog from "../components/navbar/OfflineDiagnosticsDialog.vue";
 import AppLoadingOverlay from "../components/ui/LoadingOverlay.vue";
 import UpdatePrompt from "../components/ui/UpdatePrompt.vue";

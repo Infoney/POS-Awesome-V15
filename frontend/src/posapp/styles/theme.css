@@ -717,3 +717,45 @@ body[data-page-route="posapp"] #body {
 body[data-page-route="posapp"] .desk-container {
     padding-left: 0 !important;
 }
+
+/* ─── Frappe msgprint dialog — close button visibility ────────────────────
+   Frappe renders its own modal (`.msgprint-dialog`, `.modal.msg-dialog`)
+   for `frappe.throw()` / `frappe.msgprint()`. Its default close glyph is a
+   thin grey "×" that disappears against our dark POS surface (cashiers
+   reported they could see "Message" but not the X). Force a visible
+   colour, slightly larger hit-area, and a hover affordance so it reads on
+   both light and dark themes.
+   --------------------------------------------------------------------- */
+body[data-page-route="posapp"] .modal .modal-header .btn-modal-close,
+body[data-page-route="posapp"] .modal-dialog .modal-header .btn-modal-close,
+body[data-page-route="posapp"] .modal .modal-header button.close,
+body[data-page-route="posapp"] .msgprint-dialog .modal-header .btn-modal-close,
+body[data-page-route="posapp"] .msg-dialog .modal-header .btn-modal-close {
+    color: var(--pos-text-primary, #edf2f7) !important;
+    opacity: 0.85 !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-radius: 8px !important;
+    width: 32px !important;
+    height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+body[data-page-route="posapp"] .modal .modal-header .btn-modal-close:hover,
+body[data-page-route="posapp"] .modal-dialog .modal-header .btn-modal-close:hover,
+body[data-page-route="posapp"] .msgprint-dialog .modal-header .btn-modal-close:hover,
+body[data-page-route="posapp"] .msg-dialog .modal-header .btn-modal-close:hover {
+    background: rgba(244, 106, 37, 0.18) !important;
+    opacity: 1 !important;
+    color: var(--cc-orange, #f46a25) !important;
+}
+body[data-page-route="posapp"] .modal .modal-header .btn-modal-close svg,
+body[data-page-route="posapp"] .modal .modal-header .btn-modal-close .icon,
+body[data-page-route="posapp"] .modal-dialog .modal-header .btn-modal-close svg,
+body[data-page-route="posapp"] .msgprint-dialog .modal-header .btn-modal-close svg {
+    fill: currentColor !important;
+    stroke: currentColor !important;
+    color: currentColor !important;
+    width: 18px !important;
+    height: 18px !important;
+}

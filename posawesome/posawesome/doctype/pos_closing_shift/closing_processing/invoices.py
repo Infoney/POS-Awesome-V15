@@ -125,17 +125,20 @@ def _is_consolidated_sales_invoice(sales_invoice):
 
     return bool(frappe.db.exists("POS Invoice Merge Log", {"consolidated_credit_note": sales_invoice}))
 
+def _resolve_pos_invoice_doctype(pos_profile):
+    """POS Invoice or Sales Invoice depending on profile config."""
+
+    use_pos_invoice = frappe.db.get_value(
+        "POS Profile",
+        pos_profile,
+        "create_pos_invoice_instead_of_sales_invoice",
+    )
+    return "POS Invoice" if use_pos_invoice else "Sales Invoice"
+
+
 def delete_draft_invoices(pos_opening_shift, pos_profile):
     if frappe.get_value("POS Profile", pos_profile, "posa_allow_delete"):
-        doctype = (
-            "POS Invoice"
-            if frappe.db.get_value(
-                "POS Profile",
-                pos_profile,
-                "create_pos_invoice_instead_of_sales_invoice",
-            )
-            else "Sales Invoice"
-        )
+        doctype = _resolve_pos_invoice_doctype(pos_profile)
         data = frappe.db.sql(
             f"""
         select
@@ -151,6 +154,106 @@ def delete_draft_invoices(pos_opening_shift, pos_profile):
 
         for invoice in data:
             frappe.delete_doc(doctype, invoice.name, force=1)
+
+
+@frappe.whitelist()
+def get_open_draft_invoices(pos_opening_shift, pos_profile):
+    """List unsubmitted (draft) invoices in the opening shift.
+
+    Used by the close-shift dialog so the cashier can review + clean up
+    drafts *before* triggering the close (which would otherwise leave the
+    drafts hanging or auto-delete them silently when ``posa_allow_delete``
+    is on).
+
+    Two buckets are returned:
+      - ``unprinted`` — drafts the cashier never printed; safe to delete
+        because no goods left the counter and no money was collected on
+        them.
+      - ``printed``  — drafts that hit the printer (``posa_is_printed=1``)
+        but never reached docstatus=1; the cashier likely handed over goods
+        and collected payment for these. Listed so the cashier can see
+        what's about to be auto-submitted on close — NOT offered for
+        deletion via the cleanup endpoint (see ``delete_open_draft_invoices``).
+    """
+
+    if not pos_opening_shift or not pos_profile:
+        return {"unprinted": [], "printed": [], "doctype": None}
+
+    doctype = _resolve_pos_invoice_doctype(pos_profile)
+    rows = frappe.get_all(
+        doctype,
+        filters={
+            "posa_pos_opening_shift": pos_opening_shift,
+            "docstatus": 0,
+        },
+        fields=["name", "customer", "grand_total", "posting_date", "posa_is_printed"],
+        order_by="posting_date desc, modified desc",
+    )
+
+    unprinted = []
+    printed = []
+    for row in rows:
+        bucket = printed if row.get("posa_is_printed") else unprinted
+        bucket.append(
+            {
+                "name": row.get("name"),
+                "customer": row.get("customer") or "",
+                "grand_total": row.get("grand_total") or 0,
+                "posting_date": row.get("posting_date"),
+            }
+        )
+
+    return {
+        "unprinted": unprinted,
+        "printed": printed,
+        "doctype": doctype,
+    }
+
+
+@frappe.whitelist()
+def delete_open_draft_invoices(pos_opening_shift, pos_profile):
+    """Delete every unprinted draft invoice in the shift.
+
+    Sister endpoint to :func:`get_open_draft_invoices`. Only touches
+    ``posa_is_printed = 0`` rows — printed drafts are left alone because
+    the cashier already handed over goods on those (deleting them would
+    erase the audit trail).
+
+    Returns ``{"deleted": [names], "skipped": [names]}`` so the UI can
+    show what was actually cleaned up vs. what stayed for the cashier to
+    handle.
+    """
+
+    if not pos_opening_shift or not pos_profile:
+        return {"deleted": [], "skipped": []}
+
+    doctype = _resolve_pos_invoice_doctype(pos_profile)
+    rows = frappe.get_all(
+        doctype,
+        filters={
+            "posa_pos_opening_shift": pos_opening_shift,
+            "docstatus": 0,
+            "posa_is_printed": 0,
+        },
+        pluck="name",
+    )
+
+    deleted = []
+    skipped = []
+    for invoice_name in rows:
+        try:
+            frappe.delete_doc(doctype, invoice_name, force=1)
+            deleted.append(invoice_name)
+        except Exception as error:
+            skipped.append(invoice_name)
+            frappe.log_error(
+                title="POS Close-Shift Draft Cleanup Skipped",
+                message=_("Could not delete draft {0}: {1}").format(
+                    invoice_name, frappe.get_traceback() or str(error)
+                ),
+            )
+
+    return {"deleted": deleted, "skipped": skipped}
 
 def _get_cancelled_return_against(invoice_doc, doctype):
     if not invoice_doc.get("is_return"):

@@ -13,21 +13,31 @@
 
 			<!-- Right Column: Barcode Printing -->
 			<v-col cols="12" md="7" class="h-100 pa-0">
-				<v-card class="h-100 d-flex flex-column pos-themed-card" flat>
-					<v-card-title class="py-2 px-4 bg-primary text-white d-flex align-center">
-						<span class="text-h6">{{ __("Barcode Label Printing") }}</span>
-						<v-spacer></v-spacer>
+				<v-card class="h-100 d-flex flex-column pos-themed-card barcode-print-card" flat>
+					<div class="barcode-print-header">
+						<div class="barcode-print-header__icon">
+							<v-icon size="22">mdi-barcode</v-icon>
+						</div>
+						<div class="barcode-print-header__text">
+							<h3 class="barcode-print-header__title">
+								{{ __("Barcode Label Printing") }}
+							</h3>
+							<p class="barcode-print-header__subtitle">
+								{{ __("Build a label sheet — pick items on the left, configure the layout below.") }}
+							</p>
+						</div>
 						<v-btn
-							icon="mdi-delete"
+							icon="mdi-broom"
 							variant="text"
-							color="white"
+							class="barcode-print-header__clear"
+							:disabled="!items.length"
 							@click="clearAll"
 							:title="__('Clear All')"
 							:aria-label="__('Clear all barcode items')"
 						></v-btn>
-					</v-card-title>
+					</div>
 
-					<v-card-text class="flex-grow-1 overflow-y-auto pa-4">
+					<v-card-text class="flex-grow-1 overflow-y-auto pa-4 barcode-print-body">
 						<!-- Configuration -->
 						<v-row dense class="mb-2 align-center">
 							<v-col cols="12" md="3">
@@ -1773,5 +1783,107 @@ export default {
 	padding: 0;
 	min-height: 24px;
 	font-size: 0.75rem;
+}
+
+/* ─── Barcode Label Printing — CC themed header + body ─────────────────
+   Was a flat orange `bg-primary` banner that stood out as the only
+   un-themed surface in the POS shell. Replaced with a CC-style header
+   (gradient stripe + iconified title + subtitle) so it sits flush with
+   AboutDialog / OfflineDiagnosticsDialog / ShiftOverview, plus body
+   tweaks to align the form row + table with the dark surface tokens.
+   --------------------------------------------------------------------- */
+.barcode-print-card {
+	background: var(--pos-card-bg) !important;
+	color: var(--pos-text-primary);
+	border: 1px solid var(--pos-border);
+	border-radius: 14px;
+	overflow: hidden;
+}
+
+.barcode-print-header {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 14px 18px;
+	background: var(--pos-card-bg);
+	border-bottom: 1px solid var(--pos-border);
+}
+
+.barcode-print-header::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 3px;
+	background: linear-gradient(90deg, #f46a25 0%, #ffb380 100%);
+}
+
+.barcode-print-header__icon {
+	width: 42px;
+	height: 42px;
+	border-radius: 12px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: #fff;
+	background: linear-gradient(135deg, #f46a25 0%, #c75418 100%);
+	flex-shrink: 0;
+	box-shadow: 0 4px 10px rgba(244, 106, 37, 0.32);
+}
+
+.barcode-print-header__text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
+
+.barcode-print-header__title {
+	margin: 0;
+	font-size: 1.05rem;
+	font-weight: 700;
+	color: var(--pos-text-primary);
+	letter-spacing: -0.01em;
+}
+
+.barcode-print-header__subtitle {
+	margin: 2px 0 0;
+	font-size: 0.78rem;
+	color: var(--pos-text-secondary);
+	line-height: 1.35;
+}
+
+.barcode-print-header__clear {
+	color: var(--pos-text-secondary) !important;
+	background: rgba(244, 106, 37, 0.08) !important;
+	border-radius: 10px !important;
+}
+
+.barcode-print-header__clear:hover {
+	color: var(--cc-orange, #f46a25) !important;
+	background: rgba(244, 106, 37, 0.16) !important;
+}
+
+.barcode-print-body {
+	background: var(--pos-card-bg);
+	color: var(--pos-text-primary);
+}
+
+.barcode-print-body :deep(.v-data-table) {
+	background: transparent !important;
+	color: var(--pos-text-primary) !important;
+}
+
+.barcode-print-body :deep(.v-data-table__th),
+.barcode-print-body :deep(.v-data-table__td) {
+	background: transparent !important;
+	border-bottom-color: var(--pos-border) !important;
+	color: var(--pos-text-primary) !important;
+}
+
+.barcode-print-body :deep(.v-checkbox .v-label) {
+	color: var(--pos-text-primary) !important;
 }
 </style>

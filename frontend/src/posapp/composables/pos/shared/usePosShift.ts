@@ -176,15 +176,63 @@ export function usePosShift(openDialog?: () => void) {
 			});
 	}
 
-	function get_closing_data() {
+	async function get_closing_data() {
 		const cachedOpeningShift = (getOpeningStorage() as any)
 			?.pos_opening_shift;
 		if (!pos_opening_shift.value && cachedOpeningShift) {
 			pos_opening_shift.value = cachedOpeningShift;
 		}
 		if (!pos_opening_shift.value) {
-			return Promise.resolve();
+			return;
 		}
+
+		// Step 1 — give the cashier a chance to clean up draft invoices
+		// BEFORE we hit `make_closing_shift_from_opening` (which auto-
+		// submits printed drafts and can throw negative-stock errors on
+		// stale batches). Surfacing the drafts up front lets the cashier
+		// delete the unprinted ones and decide what to do about printed
+		// ones, instead of getting blocked by a cryptic error.
+		const profileName =
+			(typeof pos_profile.value === "object" && pos_profile.value?.name) ||
+			(typeof pos_profile.value === "string" ? pos_profile.value : null);
+		if (profileName) {
+			try {
+				const draftsResp = await frappe.call(
+					"posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices.get_open_draft_invoices",
+					{
+						pos_opening_shift: pos_opening_shift.value,
+						pos_profile: profileName,
+					},
+				);
+				const drafts = draftsResp?.message || {};
+				const unprinted = Array.isArray(drafts.unprinted) ? drafts.unprinted : [];
+				const printed = Array.isArray(drafts.printed) ? drafts.printed : [];
+
+				if (unprinted.length || printed.length) {
+					const proceed = await new Promise<boolean>((resolve) => {
+						const handlerToken = `pre-close-drafts-${Date.now()}`;
+						eventBus?.emit("open_PreCloseDraftsDialog", {
+							token: handlerToken,
+							unprinted,
+							printed,
+							opening_shift: pos_opening_shift.value,
+							pos_profile: profileName,
+							onResolve: (decision: "continue" | "cancel") => {
+								resolve(decision === "continue");
+							},
+						});
+					});
+					if (!proceed) {
+						return;
+					}
+				}
+			} catch (error) {
+				console.error("Failed to fetch open draft invoices", error);
+				// Non-fatal — fall through to the regular close flow.
+			}
+		}
+
+		// Step 2 — original close-shift call.
 		return frappe
 			.call(
 				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.make_closing_shift_from_opening",
