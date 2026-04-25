@@ -313,16 +313,25 @@ export function useDiscounts() {
 		}
 
 		if (maxDiscount > 0 && Math.abs(value) > maxDiscount) {
-			value = value < 0 ? -maxDiscount : maxDiscount;
-			context.additional_discount_percentage = value;
+			// Surface the cap as a warning but DON'T silently clamp the
+			// typed value. The cashier needs to see what they actually
+			// entered (and the resulting larger discount in the meta
+			// line) so they can correct it themselves. Submission is
+			// gated separately in `show_payment` — that's where the
+			// blocking msgprint dialog fires if they try to proceed
+			// over the cap. Previously the clamp here meant cashiers
+			// typed "10", saw nothing change, and the invoice quietly
+			// submitted at 5% without their consent.
 			toastStore.show({
-				title: __("Discount limited by POS Profile"),
+				title: __("Discount over the allowed limit"),
 				detail:
 					__("The maximum discount allowed is") +
 					" " +
 					maxDiscount +
-					"%",
+					"% — " +
+					__("you'll be blocked at Pay if this isn't reduced."),
 				color: "warning",
+				timeout: 4500,
 			});
 		}
 

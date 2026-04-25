@@ -32,6 +32,48 @@ export async function show_payment(context: any) {
 			return;
 		}
 
+		// Block submission when the additional discount % exceeds the
+		// cashier's POS-Profile cap. Surface as a Frappe msgprint modal
+		// so it has the same "must dismiss" UX as ERPNext's stock
+		// errors — previously the cap was silently clamped during
+		// typing (cashier types 10%, the field flips to 5%, invoice
+		// submits at 5% without their notice). Now they keep their
+		// typed value, see a warning toast as they type, and get
+		// outright blocked here if they try to push it through.
+		const flt = (context.flt || ((value: any) => Number(value) || 0));
+		const maxDiscount = flt(context.pos_profile?.posa_max_discount_allowed || 0);
+		const enteredDiscount = Math.abs(flt(context.additional_discount_percentage || 0));
+		const epsilon = 0.001;
+		if (maxDiscount > 0 && enteredDiscount > maxDiscount + epsilon) {
+			try {
+				if (typeof frappe !== "undefined" && frappe?.msgprint) {
+					frappe.msgprint({
+						title: __("Discount Limit Exceeded"),
+						indicator: "red",
+						message: __(
+							"The current discount {0}% exceeds the maximum allowed limit ({1}%). Reduce the discount before continuing.",
+							[flt(enteredDiscount, 3), flt(maxDiscount, 3)],
+						),
+					});
+				} else {
+					// Fallback if `frappe` global isn't available — keep
+					// the cashier informed via toast at least.
+					context.toastStore.show({
+						title: __("Discount Limit Exceeded"),
+						detail: __(
+							"The current discount {0}% exceeds the maximum allowed limit ({1}%).",
+							[enteredDiscount, maxDiscount],
+						),
+						color: "error",
+						timeout: 6000,
+					});
+				}
+			} catch (err) {
+				console.error("Failed to surface discount-cap modal", err);
+			}
+			return;
+		}
+
 		const isValid = context.validate ? await context.validate() : true;
 
 		if (!isValid) {

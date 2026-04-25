@@ -32,7 +32,7 @@
 				<div class="summary-hero__meta">
 					<span>{{ formatFloat(total_qty, hide_qty_decimals ? 0 : undefined) }} {{ __("qty") }}</span>
 					<span>
-						{{ currencySymbol(displayCurrency) }} {{ formatCurrency(total_items_discount_amount) }}
+						{{ currencySymbol(displayCurrency) }} {{ formatCurrency(combinedDiscountAmount) }}
 						{{ __("discount") }}
 					</span>
 				</div>
@@ -233,6 +233,18 @@ const useCompactSaleDock = computed(() => responsive.windowWidth.value < 1100);
 const hasActiveSaleValue = computed(() => {
 	const n = Number(props.subtotal);
 	return Number.isFinite(n) && Math.abs(n) > 0;
+});
+
+// "KWD X discount" line under the Active Sale hero — combines per-item
+// discounts (`total_items_discount_amount`) with the invoice-level
+// additional discount so the cashier sees the full reduction at a
+// glance. Previously only line-level discounts were shown, so typing
+// "5%" in the additional-discount pill left the meta line stuck at
+// "KWD 0.000 discount" while the subtotal had clearly dropped.
+const combinedDiscountAmount = computed(() => {
+	const items = Number(props.total_items_discount_amount) || 0;
+	const additional = Math.abs(Number(props.additional_discount) || 0);
+	return items + additional;
 });
 const showDesktopDrafts = computed(() => Boolean(responsive.isDesktop.value));
 const showReturnDiscountAlert = computed(
