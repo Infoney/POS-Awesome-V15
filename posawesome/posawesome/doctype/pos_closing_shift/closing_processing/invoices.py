@@ -8,26 +8,42 @@ from erpnext.accounts.doctype.pos_invoice_merge_log.pos_invoice_merge_log import
 
 
 @contextmanager
-def _negative_stock_consolidation_guard():
-    """Allow transient negative batch positions during POS consolidation.
+def _negative_stock_close_shift_guard():
+    """Allow transient negative batch positions during close-shift writes.
 
-    Each individual POS Invoice in this shift already passed POSAwesome's
-    own stock preflight (``_validate_stock_on_invoice``) at submit time, so
-    the underlying batch movements are valid as recorded. ERPNext's
-    ``consolidate_pos_invoices`` re-aggregates those movements into a
-    Consolidated Sales Invoice and reposts the resulting SLEs; if a
-    return, stock recon, or out-of-order timestamp pushed any single batch
-    transiently negative *between* the original POS Invoice submit and the
-    close-shift moment, the reposting tripped ERPNext's per-batch validator
-    and blocked the entire close (e.g.
-    "Batch No 42524365 of an Item 22929 has negative stock of quantity
-    -1.0 in the warehouse AL-KHANSA PHARMACY - PPC").
+    Used in two places along the close-shift flow:
 
-    The actual stock impact is unchanged — consolidation is a financial
-    roll-up, not a fresh deduction — so we suppress the validator only for
-    the duration of the consolidation call and restore the previous flag
-    afterwards (try/finally so a thrown error inside ERPNext doesn't leak
-    the relaxed flag to subsequent requests).
+    1. ``submit_printed_invoices`` — auto-submits any POS Invoice that was
+       printed during the shift but never reached ``submit()`` (e.g. the
+       cashier handed over goods + collected cash, the receipt printed,
+       but the network blip prevented the docstatus=1 commit). At
+       close-shift the close-shift dialog opens by calling
+       ``make_closing_shift_from_opening``, which runs this auto-submit;
+       if any batch on a printed-but-unsubmitted line has gone negative
+       since the print (returns, recons, sales on a parallel terminal),
+       ERPNext's per-batch validator throws and blocks the cashier from
+       even *opening* the close dialog. Refusing the submit is worse than
+       allowing it — the goods are already gone — so we relax the flag.
+
+    2. ``consolidate_closing_shift_invoices`` — ERPNext's
+       ``consolidate_pos_invoices`` re-aggregates the shift's POS Invoice
+       movements into a Consolidated Sales Invoice and reposts the
+       resulting SLEs. If between original submit and consolidation any
+       batch went transiently negative, the reposting trips the same
+       validator and blocks the close (e.g.
+       "Batch No 42524365 of an Item 22929 has negative stock of quantity
+       -1.0 in the warehouse AL-KHANSA PHARMACY - PPC"). Consolidation is
+       a financial roll-up — the actual stock impact already happened at
+       individual POS Invoice submit time — so suppressing the validator
+       here is also safe.
+
+    POSAwesome's own preflight (``_validate_stock_on_invoice``) still
+    enforces no-negative-stock at the cashier's *initial* submit, so this
+    guard only relaxes the after-the-fact close-shift rewrites — not the
+    live sale path.
+
+    Restored in ``finally`` so a thrown error inside ERPNext can't leak
+    the relaxed flag to subsequent requests on the same worker.
     """
 
     previous = getattr(frappe.flags, "allow_negative_stock", False)
@@ -36,6 +52,10 @@ def _negative_stock_consolidation_guard():
         yield
     finally:
         frappe.flags.allow_negative_stock = previous
+
+
+# Back-compat alias for any external import that grabbed the old name.
+_negative_stock_consolidation_guard = _negative_stock_close_shift_guard
 
 def _set_closing_entry_invoices(closing_shift_doc):
     """Set `pos_closing_entry` on linked invoices."""
@@ -155,27 +175,35 @@ def submit_printed_invoices(pos_opening_shift, doctype):
             "posa_is_printed": 1,
         },
     )
-    for invoice in invoices_list:
-        invoice_doc = frappe.get_doc(doctype, invoice.name)
-        cancelled_return_against = _get_cancelled_return_against(invoice_doc, doctype)
-        if cancelled_return_against:
-            skipped_invoices.append(
-                frappe._dict(
-                    {
-                        "invoice": invoice_doc.name,
-                        "doctype": doctype,
-                        "return_against": cancelled_return_against,
-                    }
+    # Wrap the whole loop in the close-shift negative-stock guard. The
+    # cashier already printed the receipt and handed over goods on each
+    # printed-but-unsubmitted invoice; refusing the docstatus=1 commit at
+    # close-shift just leaves an inconsistent system-of-record vs.
+    # reality (and worse — it blocks the cashier from even *opening* the
+    # close-shift dialog, since this runs inside
+    # ``make_closing_shift_from_opening``). See the guard's docstring.
+    with _negative_stock_close_shift_guard():
+        for invoice in invoices_list:
+            invoice_doc = frappe.get_doc(doctype, invoice.name)
+            cancelled_return_against = _get_cancelled_return_against(invoice_doc, doctype)
+            if cancelled_return_against:
+                skipped_invoices.append(
+                    frappe._dict(
+                        {
+                            "invoice": invoice_doc.name,
+                            "doctype": doctype,
+                            "return_against": cancelled_return_against,
+                        }
+                    )
                 )
-            )
-            frappe.log_error(
-                title="POS Closing Shift Skipped Invalid Return Draft",
-                message=_(
-                    "Skipped printed draft invoice {0} during close shift because Return Against {1} is cancelled."
-                ).format(invoice_doc.name, cancelled_return_against),
-            )
-            continue
-        invoice_doc.submit()
+                frappe.log_error(
+                    title="POS Closing Shift Skipped Invalid Return Draft",
+                    message=_(
+                        "Skipped printed draft invoice {0} during close shift because Return Against {1} is cancelled."
+                    ).format(invoice_doc.name, cancelled_return_against),
+                )
+                continue
+            invoice_doc.submit()
     return skipped_invoices
 
 def consolidate_closing_shift_invoices(closing_shift_doc):
@@ -209,8 +237,8 @@ def consolidate_closing_shift_invoices(closing_shift_doc):
                 invoices_by_currency.setdefault(invoice.currency, []).append(invoice)
 
             # Suppress ERPNext's per-batch negative-stock validator only for
-            # the consolidation reposting — see _negative_stock_consolidation_guard
+            # the consolidation reposting — see _negative_stock_close_shift_guard
             # for the full rationale.
-            with _negative_stock_consolidation_guard():
+            with _negative_stock_close_shift_guard():
                 for invoices in invoices_by_currency.values():
                     consolidate_pos_invoices(pos_invoices=invoices)
