@@ -85,6 +85,14 @@ export function useInvoiceStock(
 
 	const emitCartQuantities = () => {
 		const totals: Record<string, number> = {};
+		// `batchTotals` mirrors `totals` but split by chosen batch:
+		// `{ item_code: { batch_no: stockQty } }`. Drives the per-batch
+		// chip deduction in the items selector so the cashier sees
+		// batches go down as they pick them — previously only the
+		// headline qty deducted, the batch chips stayed at their
+		// original snapshot regardless of cart state.
+		const batchTotals: Record<string, Record<string, number>> = {};
+		const seenItemCodes = new Set<string>();
 		const normalizeNumber = (value: unknown) => {
 			const num = Number(value);
 			return Number.isFinite(num) ? num : null;
@@ -122,6 +130,18 @@ export function useInvoiceStock(
 			}
 
 			totals[code] = (totals[code] || 0) + positiveQty;
+			seenItemCodes.add(code);
+
+			const batchNo = line.batch_no
+				? String(line.batch_no).trim()
+				: "";
+			if (batchNo) {
+				if (!batchTotals[code]) {
+					batchTotals[code] = {};
+				}
+				batchTotals[code][batchNo] =
+					(batchTotals[code][batchNo] || 0) + positiveQty;
+			}
 		};
 
 		(Array.isArray(items.value) ? items.value : []).forEach(accumulate);
@@ -132,8 +152,22 @@ export function useInvoiceStock(
 		const impacted = stockCoordinator.updateReservations(totals, {
 			source: "invoice",
 		});
-		if (impacted.length) {
-			applyStockStateToInvoiceItems(impacted);
+
+		// Push an empty batch map for any item that's in the cart but
+		// has no batch chosen — clears stale per-batch reservations
+		// when a row's batch is removed/changed.
+		seenItemCodes.forEach((code) => {
+			if (!batchTotals[code]) {
+				batchTotals[code] = {};
+			}
+		});
+		const batchImpacted = stockCoordinator.updateBatchReservations(batchTotals, {
+			source: "invoice",
+		});
+
+		const allImpacted = Array.from(new Set([...impacted, ...batchImpacted]));
+		if (allImpacted.length) {
+			applyStockStateToInvoiceItems(allImpacted);
 		}
 
 		if (eventBus) {
@@ -153,7 +187,17 @@ export function useInvoiceStock(
 			return;
 		}
 
-		stockCoordinator.primeFromItems(baseItems, { silent: true, source });
+		// `ifMissing: true` so the invoice-side prime can only seed
+		// codes the items selector hasn't already cached. Stops a
+		// loaded draft (whose lines carry a stale `actual_qty`
+		// snapshot from when the draft was saved) from clobbering
+		// the live server qty in stockCoordinator and inflating the
+		// left-panel display.
+		stockCoordinator.primeFromItems(baseItems, {
+			silent: true,
+			source,
+			ifMissing: true,
+		});
 		const codes = baseItems
 			.map((item) =>
 				item && item.item_code !== undefined

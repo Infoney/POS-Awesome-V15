@@ -39,6 +39,15 @@ export interface StockUpdateOptions {
 	updateBaseAvailable?: boolean;
 	updateActual?: boolean;
 	updateAvailable?: boolean;
+	/**
+	 * Only set the base quantity when no value exists yet for that
+	 * code. Used by the invoice/cart priming path so a stale
+	 * `actual_qty` snapshotted on a draft can't overwrite the fresh
+	 * server qty already cached by the items selector. Without this,
+	 * loading a draft visibly inflates the left-panel display because
+	 * the draft's older snapshot becomes the new base.
+	 */
+	ifMissing?: boolean;
 }
 
 /**
@@ -62,6 +71,11 @@ const listeners = new Set<StockListener>();
 const baseQuantities = new Map<string, number>();
 const reservedQuantities = new Map<string, number>();
 const availabilityMap = new Map<string, number>();
+// Per-batch cart reservations — `item_code → batch_no → qty`. Drives
+// the left-panel batch chip display so cashiers see batches deduct
+// as items move into the cart, not just the headline qty. Cleared on
+// `clearAll` like the other maps.
+const batchReservedQuantities = new Map<string, Map<string, number>>();
 
 const normalizeCode = (code: any): string | null => {
 	if (code === undefined || code === null) {
@@ -142,7 +156,7 @@ export const updateBaseQuantities = (
 	entries: StockEntry[] = [],
 	options: StockUpdateOptions = {},
 ): string[] => {
-	const { silent = false, pruneMissing = false } = options;
+	const { silent = false, pruneMissing = false, ifMissing = false } = options;
 	const changed = new Set<string>();
 	const seen = new Set<string>();
 
@@ -168,6 +182,13 @@ export const updateBaseQuantities = (
 			return;
 		}
 		const current = baseQuantities.get(code);
+		// `ifMissing` lets callers (the invoice/cart priming path)
+		// seed the base only when the items selector hasn't yet
+		// captured a fresh server qty. Stops a draft's snapshotted
+		// `actual_qty` from overwriting the live cache.
+		if (ifMissing && current !== undefined) {
+			return;
+		}
 		if (current === undefined || current !== baseCandidate) {
 			baseQuantities.set(code, baseCandidate);
 			changed.add(code);
@@ -245,17 +266,103 @@ export const updateReservations = (
 	return affected;
 };
 
+/**
+ * Update per-batch cart reservations.
+ *
+ * `batchTotals` is shaped as `{ item_code: { batch_no: qty } }`. Any
+ * batch absent from the map for a code is cleared (that's how cart
+ * removals propagate). Items absent entirely keep whatever batch
+ * reservations they had — pass an explicit empty object for an item
+ * to drop all of its batch reservations.
+ *
+ * Returns the list of item codes whose batch reservations changed, so
+ * callers can decide whether to re-render the items panel.
+ */
+export const updateBatchReservations = (
+	batchTotals: Record<string, Record<string, any>> = {},
+	options: StockUpdateOptions = {},
+): string[] => {
+	const { silent = false } = options;
+	const changed = new Set<string>();
+
+	if (batchTotals && typeof batchTotals === "object") {
+		Object.entries(batchTotals).forEach(([codeValue, batchMap]) => {
+			const code = normalizeCode(codeValue);
+			if (!code) return;
+
+			const incoming = new Map<string, number>();
+			if (batchMap && typeof batchMap === "object") {
+				Object.entries(batchMap).forEach(([batchValue, qtyValue]) => {
+					const batch = normalizeCode(batchValue);
+					const qty = toNumber(qtyValue);
+					if (!batch || qty === null) return;
+					if (qty > 0) {
+						incoming.set(batch, qty);
+					}
+				});
+			}
+
+			const previous = batchReservedQuantities.get(code);
+			let differs = false;
+			if (!previous) {
+				differs = incoming.size > 0;
+			} else if (previous.size !== incoming.size) {
+				differs = true;
+			} else {
+				for (const [b, q] of incoming.entries()) {
+					if (previous.get(b) !== q) {
+						differs = true;
+						break;
+					}
+				}
+			}
+
+			if (incoming.size === 0) {
+				if (previous && previous.size > 0) {
+					batchReservedQuantities.delete(code);
+					changed.add(code);
+				}
+			} else {
+				batchReservedQuantities.set(code, incoming);
+				if (differs) changed.add(code);
+			}
+		});
+	}
+
+	const affected = Array.from(changed);
+	if (!silent && affected.length) {
+		notifyListeners("batch-reservation", affected, {
+			source: options.source,
+		});
+	}
+	return affected;
+};
+
+export const getBatchReservation = (
+	code: any,
+	batchNo: any,
+): number => {
+	const normalizedCode = normalizeCode(code);
+	const normalizedBatch = normalizeCode(batchNo);
+	if (!normalizedCode || !normalizedBatch) return 0;
+	const map = batchReservedQuantities.get(normalizedCode);
+	if (!map) return 0;
+	return map.get(normalizedBatch) || 0;
+};
+
 export const clearAll = (): string[] => {
 	const affected = Array.from(
 		new Set([
 			...baseQuantities.keys(),
 			...reservedQuantities.keys(),
 			...availabilityMap.keys(),
+			...batchReservedQuantities.keys(),
 		]),
 	);
 	baseQuantities.clear();
 	reservedQuantities.clear();
 	availabilityMap.clear();
+	batchReservedQuantities.clear();
 	if (affected.length) {
 		notifyListeners("reset", affected, {});
 	}
@@ -353,6 +460,30 @@ export const applyAvailabilityToItem = (
 	} else if (base !== null && options.updateActual !== false) {
 		item.actual_qty = base;
 	}
+
+	// Per-batch deduction. The cashier sees the batch chips in the
+	// left panel reflect what's actually still in the warehouse after
+	// they've added items to the cart — not the original snapshot
+	// from boot. Stash the original on `_base_batch_qty` once so
+	// repeated re-applies stay idempotent (otherwise we'd subtract
+	// the reservation again every time the cart fires an update).
+	if (Array.isArray(item.batch_no_data) && item.batch_no_data.length) {
+		const batchMap = batchReservedQuantities.get(code);
+		item.batch_no_data.forEach((row: any) => {
+			if (!row || !row.batch_no) return;
+			if (
+				row._base_batch_qty === undefined ||
+				row._base_batch_qty === null
+			) {
+				const original = toNumber(row.batch_qty);
+				row._base_batch_qty = original !== null ? original : 0;
+			}
+			const reserved = batchMap
+				? batchMap.get(String(row.batch_no).trim()) || 0
+				: 0;
+			row.batch_qty = (row._base_batch_qty || 0) - reserved;
+		});
+	}
 };
 
 export const applyAvailabilityToCollection = (
@@ -409,6 +540,10 @@ export const primeFromItems = (
 	return updateBaseQuantities(entries, {
 		silent: options.silent !== false,
 		source: options.source,
+		// Pass through `ifMissing` so the invoice/cart priming path can
+		// avoid clobbering the items selector's fresh server-side base
+		// with a draft's stale snapshot.
+		ifMissing: options.ifMissing === true,
 	});
 };
 
@@ -472,6 +607,8 @@ export const subscribe = (listener: StockListener): (() => void) => {
 export default {
 	updateBaseQuantities,
 	updateReservations,
+	updateBatchReservations,
+	getBatchReservation,
 	clearAll,
 	getAvailability,
 	getReserved,

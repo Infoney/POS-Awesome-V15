@@ -197,8 +197,33 @@ const showSecondaryPrice = computed(() => {
 	);
 });
 
+// Headline qty in the card.
+//
+// For batched items we prefer the **sum of non-expired, non-negative
+// batches** over the bin-level `actual_qty`. The two sources can drift
+// server-side (Bin running total vs Batch.batch_qty) — e.g. item 10105
+// shows -3 in the Bin column but the Batch table reports a single
+// non-expired batch with qty 3. The number that actually matters at
+// sale time is per-batch (each invoice line picks one and ERPNext
+// validates that batch on submit), so the bin total is misleading.
+// Showing the sum of batches matches the tooltip's "Available stock"
+// figure and aligns the table A.QTY with what cashiers can actually
+// sell. Falls back to `actual_qty` for non-batched items.
 const numericQty = computed(() => {
-	const n = Number(props.item.actual_qty ?? 0);
+	const item = props.item;
+	const batches = Array.isArray(item?.batch_no_data) ? item.batch_no_data : [];
+	if (batches.length) {
+		let sum = 0;
+		batches.forEach((batch) => {
+			if (!batch || batch.is_expired) return;
+			const qty = Number(batch.batch_qty ?? 0);
+			if (Number.isFinite(qty) && qty > 0) {
+				sum += qty;
+			}
+		});
+		return sum;
+	}
+	const n = Number(item?.actual_qty ?? 0);
 	return Number.isFinite(n) ? n : 0;
 });
 
