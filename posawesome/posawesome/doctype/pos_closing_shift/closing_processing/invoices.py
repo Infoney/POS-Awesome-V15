@@ -81,17 +81,43 @@ def _negative_stock_close_shift_guard():
     except Exception:  # pragma: no cover — defensive, ERPNext should always be present
         _SBB = None
 
-    original_validate_negative_batch = None
-    if _SBB is not None and hasattr(_SBB, "validate_negative_batch"):
-        original_validate_negative_batch = _SBB.validate_negative_batch
-        _SBB.validate_negative_batch = lambda self, batch_no, available_qty: None
+    # Methods on `SerialandBatchBundle` that throw on negative-batch
+    # conditions during invoice submit. Each is bypassed by a different
+    # opt-in (function arg, Stock Settings single, or unconditional
+    # error), so the only reliable way to clear the close-shift path is
+    # to swap each one for a no-op for the duration of the guard. The
+    # cashier already handed over goods on these invoices — the submit
+    # is a record-keeping step, not a fresh validation.
+    _PATCH_TARGETS = (
+        "validate_negative_batch",
+        "validate_batch_inventory",
+        "validate_batch_quantity",
+        "throw_negative_batch",
+    )
+    originals = {}
+    if _SBB is not None:
+        for name in _PATCH_TARGETS:
+            if hasattr(_SBB, name):
+                originals[name] = getattr(_SBB, name)
+                setattr(_SBB, name, _make_close_shift_noop(name))
 
     try:
         yield
     finally:
         frappe.flags.allow_negative_stock = previous_flag
-        if _SBB is not None and original_validate_negative_batch is not None:
-            _SBB.validate_negative_batch = original_validate_negative_batch
+        if _SBB is not None:
+            for name, original in originals.items():
+                setattr(_SBB, name, original)
+
+
+def _make_close_shift_noop(method_name):
+    """Build a per-method no-op that accepts ``self`` + any args/kwargs."""
+
+    def _noop(self, *args, **kwargs):  # noqa: ARG001 — signature must match
+        return None
+
+    _noop.__name__ = f"_close_shift_noop__{method_name}"
+    return _noop
 
 
 # Back-compat alias for any external import that grabbed the old name.
