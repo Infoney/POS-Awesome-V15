@@ -226,6 +226,19 @@ function formatTimestamp(ts: string | number | Date) {
 	transition: background-color 0.18s ease;
 }
 
+/* Vuetify's compact v-list-item collapses the prepend slot's
+   margin-inline-end to ~8 px which left the bell badge crowding the
+   "Invoice Submitted" title. Bump the gap so the badge breathes. */
+.notification-item :deep(.v-list-item__prepend) {
+	margin-inline-end: 14px !important;
+}
+
+/* And give the prepend wrapper a guaranteed inline gap regardless of
+   how Vuetify versions tweak the slot internals. */
+.notification-item :deep(.v-list-item__spacer) {
+	width: 14px !important;
+}
+
 .notification-item:hover {
 	background: rgba(255, 255, 255, 0.025);
 }
