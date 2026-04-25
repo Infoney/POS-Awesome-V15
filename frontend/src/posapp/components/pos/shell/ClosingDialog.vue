@@ -9,48 +9,11 @@
 
 			<!-- ─────────────── Pre-submit / form view ─────────────── -->
 			<template v-if="!shiftSubmitted">
-				<v-card-text class="pa-0 white-background">
-					<v-container class="pa-6">
-						<v-row class="mb-6">
-							<v-col cols="12" class="pa-1">
-								<ShiftOverview
-									:loading="overviewLoading"
-									:primary-insights="primaryInsights"
-									:secondary-insights="secondaryInsights"
-									:multi-currency-totals="multiCurrencyTotals"
-									:credit-invoices-by-currency="creditInvoicesByCurrency"
-									:returns-by-currency="returnsByCurrency"
-									:change-returned-rows="changeReturnedRows"
-									:cash-expected-by-currency="cashExpectedByCurrency"
-									:cash-movement-summary="cashMovementSummary"
-									:payments-by-mode="paymentsByMode"
-									:overview-company-currency="overviewCompanyCurrency"
-									:format-currency-with-symbol="formatCurrencyWithSymbol"
-									:should-show-company-equivalent="shouldShowCompanyEquivalent"
-									:show-exchange-rates="showExchangeRates"
-									:format-exchange-rates="formatExchangeRates"
-									:is-cash-mode="isCashMode"
-									:overpayment-deduction-for-currency="overpaymentDeductionForCurrency"
-								/>
-							</v-col>
-						</v-row>
-						<v-row>
-							<v-col cols="12" class="pa-1">
-								<PaymentReconciliation
-									:payments="dialog_data.payment_reconciliation"
-									:headers="headers"
-									:items-per-page="itemsPerPage"
-									:company-currency-symbol="companyCurrencySymbol"
-									:format-currency="formatCurrency"
-									:format-float="formatFloat"
-								/>
-							</v-col>
-						</v-row>
-					</v-container>
-				</v-card-text>
-
-				<v-divider></v-divider>
-				<v-card-actions class="dialog-actions-container">
+				<!-- Action bar pinned right under the header so the cashier
+				     never has to scroll past Payment Reconciliation /
+				     Shift Overview to hit Submit. The detailed sections
+				     stay below for reference. -->
+				<v-card-actions class="dialog-actions-container dialog-actions-container--top">
 					<v-btn
 						theme="dark"
 						@click="printReceipt"
@@ -97,6 +60,53 @@
 						<span>{{ __("Submit") }}</span>
 					</v-btn>
 				</v-card-actions>
+
+				<v-divider></v-divider>
+
+				<v-card-text class="pa-0 white-background">
+					<v-container class="pa-6">
+						<!-- Payment Reconciliation moved above Shift Overview —
+						     it's the active input the cashier needs to fill in
+						     to close, so it should be the first thing they see
+						     after the action bar. Shift Overview is reference
+						     data and lives below. -->
+						<v-row class="mb-6">
+							<v-col cols="12" class="pa-1">
+								<PaymentReconciliation
+									:payments="dialog_data.payment_reconciliation"
+									:headers="headers"
+									:items-per-page="itemsPerPage"
+									:company-currency-symbol="companyCurrencySymbol"
+									:format-currency="formatCurrency"
+									:format-float="formatFloat"
+								/>
+							</v-col>
+						</v-row>
+						<v-row>
+							<v-col cols="12" class="pa-1">
+								<ShiftOverview
+									:loading="overviewLoading"
+									:primary-insights="primaryInsights"
+									:secondary-insights="secondaryInsights"
+									:multi-currency-totals="multiCurrencyTotals"
+									:credit-invoices-by-currency="creditInvoicesByCurrency"
+									:returns-by-currency="returnsByCurrency"
+									:change-returned-rows="changeReturnedRows"
+									:cash-expected-by-currency="cashExpectedByCurrency"
+									:cash-movement-summary="cashMovementSummary"
+									:payments-by-mode="paymentsByMode"
+									:overview-company-currency="overviewCompanyCurrency"
+									:format-currency-with-symbol="formatCurrencyWithSymbol"
+									:should-show-company-equivalent="shouldShowCompanyEquivalent"
+									:show-exchange-rates="showExchangeRates"
+									:format-exchange-rates="formatExchangeRates"
+									:is-cash-mode="isCashMode"
+									:overpayment-deduction-for-currency="overpaymentDeductionForCurrency"
+								/>
+							</v-col>
+						</v-row>
+					</v-container>
+				</v-card-text>
 			</template>
 
 			<!-- ────────────── Post-submit prompt view ────────────── -->
@@ -565,6 +575,21 @@ export default {
 .dialog-actions-container {
 	padding: 16px 24px;
 	border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+/* When the action bar is pinned to the top of the dialog (right under
+   the header) instead of floating at the bottom, the border-top above
+   reads as a stray line between the header and the buttons. Drop it
+   and let the existing <v-divider> below the bar handle the separator
+   into the form area. */
+.dialog-actions-container--top {
+	border-top: none;
+	padding-top: 12px;
+	padding-bottom: 12px;
+	background: var(--pos-card-bg);
+	position: sticky;
+	top: 0;
+	z-index: 2;
 }
 
 .pos-action-btn {
