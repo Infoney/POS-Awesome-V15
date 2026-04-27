@@ -60,18 +60,83 @@ def get_opening_dialog_data():
 def create_opening_voucher(pos_profile, company, balance_details):
     balance_details = json.loads(balance_details)
 
+    # Resolve the foreign / company currency split for each opening row.
+    #
+    # Before this fix the child rows only stored `amount` and the field was
+    # marked `options: "company:company_currency"`, so an opening balance
+    # entered in a foreign currency (e.g. POS Profile in SAR while the
+    # company is in KWD) was rendered as if it were in the company currency
+    # — "500 SAR" was saved and shown as "KWD 500.000". The closing shift
+    # then compared that foreign-amount-as-company against the per-payment
+    # base totals (which are in actual company currency) and the variance
+    # was meaningless.
+    #
+    # We now persist three things per row:
+    #   - `currency`         : the row's own currency (POS Profile currency,
+    #                          falling back to the payment-method default
+    #                          and finally the company currency).
+    #   - `conversion_rate`  : foreign-to-company (1.0 when the currencies
+    #                          match, otherwise erpnext.get_exchange_rate
+    #                          on today's posting date).
+    #   - `base_amount`      : the opening amount expressed in company
+    #                          currency, ready to be consumed by the
+    #                          closing-shift reconciliation.
+    company_currency = frappe.get_cached_value("Company", company, "default_currency") or ""
+    profile_currency = (
+        frappe.get_cached_value("POS Profile", pos_profile, "currency") or company_currency
+    )
+    today = frappe.utils.getdate()
+
+    def _resolve_rate(source_currency: str) -> float:
+        if not source_currency or source_currency == company_currency:
+            return 1.0
+        try:
+            from erpnext.setup.utils import get_exchange_rate
+
+            rate = get_exchange_rate(source_currency, company_currency, today)
+        except Exception:
+            rate = None
+        try:
+            rate = float(rate or 0)
+        except (TypeError, ValueError):
+            rate = 0.0
+        # Fall back to 1.0 only when the user genuinely hasn't configured
+        # an exchange rate — otherwise we'd silently inflate the company
+        # equivalent. The opening-shift screen surfaces the rate in the
+        # form so cashiers can spot the missing config.
+        return rate or 1.0
+
+    rate_cache: dict[str, float] = {}
+    normalised_details = []
+    for row in balance_details or []:
+        currency = (row.get("currency") or profile_currency or company_currency or "").strip()
+        amount = float(row.get("amount") or 0)
+        if currency not in rate_cache:
+            rate_cache[currency] = _resolve_rate(currency)
+        conversion_rate = rate_cache[currency]
+        base_amount = round(amount * conversion_rate, 6) if amount else 0.0
+        normalised_details.append(
+            {
+                "mode_of_payment": row.get("mode_of_payment"),
+                "currency": currency or company_currency,
+                "amount": amount,
+                "conversion_rate": conversion_rate,
+                "base_amount": base_amount,
+            }
+        )
+
     new_pos_opening = frappe.get_doc(
         {
             "doctype": "POS Opening Shift",
             "period_start_date": frappe.utils.get_datetime(),
-            "posting_date": frappe.utils.getdate(),
+            "posting_date": today,
             "user": frappe.session.user,
             "pos_profile": pos_profile,
             "company": company,
             "docstatus": 1,
         }
     )
-    new_pos_opening.set("balance_details", balance_details)
+    new_pos_opening.set("balance_details", normalised_details)
     new_pos_opening.insert(ignore_permissions=True)
 
     data = {}

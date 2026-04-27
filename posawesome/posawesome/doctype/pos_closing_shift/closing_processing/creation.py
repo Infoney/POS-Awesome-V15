@@ -63,12 +63,26 @@ def make_closing_shift_from_opening(opening_shift):
     payments = []
     pos_payments_table = []
     for detail in opening_shift.get("balance_details"):
+        # `opening_amount` and `expected_amount` are tracked in COMPANY
+        # currency by the closing reconciliation (every later append below
+        # piles `get_base_value(...)` on top of these). When the POS Profile
+        # uses a foreign currency, the row's foreign `amount` would skew
+        # the variance — e.g. opening 500 SAR vs. expected ~41 KWD.
+        # Prefer the persisted `base_amount`, fall back to amount * rate
+        # for legacy rows, and finally to amount itself when neither is set
+        # (single-currency tenants).
+        detail_amount = flt(detail.get("amount") or 0)
+        detail_base = detail.get("base_amount")
+        if detail_base in (None, ""):
+            rate = flt(detail.get("conversion_rate") or 0)
+            detail_base = detail_amount * (rate if rate else 1)
+        opening_in_company_currency = flt(detail_base)
         payments.append(
             frappe._dict(
                 {
                     "mode_of_payment": detail.get("mode_of_payment"),
-                    "opening_amount": detail.get("amount") or 0,
-                    "expected_amount": detail.get("amount") or 0,
+                    "opening_amount": opening_in_company_currency,
+                    "expected_amount": opening_in_company_currency,
                 }
             )
         )
