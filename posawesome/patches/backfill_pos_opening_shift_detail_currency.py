@@ -29,6 +29,22 @@ def execute():
     if not frappe.db.exists("DocType", "POS Opening Shift Detail"):
         return
 
+    # Pre-`run_schema_updates` patches execute BEFORE Frappe syncs DocType
+    # JSON definitions, so the new `currency` / `conversion_rate` /
+    # `base_amount` columns aren't on `tabPOS Opening Shift Detail` yet at
+    # this point. Reload the child + parent JSON ourselves so the schema
+    # sync runs in time and the SELECT below doesn't 1054 with
+    # "Unknown column 'd.currency'".
+    frappe.reload_doc("posawesome", "doctype", "pos_opening_shift_detail")
+    frappe.reload_doc("posawesome", "doctype", "pos_opening_shift")
+
+    # Defensive guard: if the reload didn't add the column for any reason
+    # (older Frappe builds, cached metadata, etc.), bail rather than crash
+    # the migration. The next bench migrate after a clean sync will pick
+    # up the rows.
+    if not frappe.db.has_column("POS Opening Shift Detail", "currency"):
+        return
+
     # Pull every legacy detail row missing the new metadata, joined to its
     # parent so we can resolve the company currency without a per-row
     # `frappe.get_cached_value` round trip.
