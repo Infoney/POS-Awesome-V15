@@ -149,19 +149,6 @@ export function useInvoiceCurrency() {
 			(company.value && company.value.default_currency) ||
 			pos_profile.value.currency;
 		const plCurrency = price_list_currency.value || companyCurrency;
-		const profileCurrency = pos_profile.value.currency || companyCurrency;
-		// "Native-currency" POS profiles (POS Profile currency != company
-		// currency, but every invoice account on the profile is denominated
-		// in the profile's currency — e.g. KSA expo profile in SAR booking to
-		// SAR-currency accounts on a KWD-base company) should NOT auto-pull
-		// the SAR→KWD rate into `conversion_rate`. The cashier sees the
-		// dialog show "Conversion Rate: 0.0823" when they expect 1, and once
-		// committed it skews `base_*` totals against accounts that are
-		// already in SAR. Treat the POS Profile currency as a second
-		// "no-conversion-needed" anchor alongside the company currency.
-		const noConversionNeeded =
-			selected_currency.value === companyCurrency ||
-			selected_currency.value === profileCurrency;
 
 		try {
 			// Price list currency to selected currency rate
@@ -188,8 +175,16 @@ export function useInvoiceCurrency() {
 				}
 			}
 
-			// Selected currency to company currency rate
-			if (noConversionNeeded) {
+			// Selected currency to company currency rate.
+			//
+			// Stays at 1 only when the cashier picked the literal company
+			// currency (KWD on a KWD company). For any other selection,
+			// including the POS Profile's foreign currency (e.g. SAR on a
+			// KWD company), pull the real ERPNext Currency Exchange rate
+			// — base_grand_total has to convert SAR to KWD with the actual
+			// FX rate, otherwise the invoice posts SAR amounts as if they
+			// were KWD and Total (KWD) ends up equal to Total (SAR).
+			if (selected_currency.value === companyCurrency) {
 				conversion_rate.value = 1;
 				exchange_rate_date.value = frappe.datetime.get_today();
 			} else {
@@ -232,14 +227,17 @@ export function useInvoiceCurrency() {
 			if (cachedDisplayRate?.exchange_rate) {
 				exchange_rate.value = cachedDisplayRate.exchange_rate;
 			}
-			if (noConversionNeeded) {
+			if (selected_currency.value === companyCurrency) {
 				conversion_rate.value = 1;
 			} else if (cachedConversionRate?.exchange_rate) {
 				conversion_rate.value = cachedConversionRate.exchange_rate;
 			}
 			if (
 				!cachedDisplayRate?.exchange_rate &&
-				!(noConversionNeeded || cachedConversionRate?.exchange_rate)
+				!(
+					selected_currency.value === companyCurrency ||
+					cachedConversionRate?.exchange_rate
+				)
 			) {
 				toastStore.show({
 					title: __("Error updating currency"),
