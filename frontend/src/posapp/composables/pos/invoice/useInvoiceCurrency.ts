@@ -94,6 +94,14 @@ export function useInvoiceCurrency() {
 	const fetch_available_currencies = async () => {
 		if (!pos_profile.value) return [];
 		const profileName = pos_profile.value.name;
+		// Track whether we just defaulted selected_currency from the POS
+		// Profile currency. When that happens we still need to populate
+		// `conversion_rate` (selected -> company) before the cashier saves
+		// — otherwise a SAR-on-KWD profile creates an invoice with
+		// `conversion_rate = 1` and ERPNext throws
+		// "Conversion rate is 1.00, but document currency is different
+		//  from company currency".
+		let initialisedFromProfile = false;
 		try {
 			const r = await frappe.call({
 				method: "posawesome.posawesome.api.invoices.get_available_currencies",
@@ -114,8 +122,12 @@ export function useInvoiceCurrency() {
 
 				if (!selected_currency.value) {
 					selected_currency.value = baseCurrency;
+					initialisedFromProfile = true;
 				}
 				saveCurrencyOptionsCache(profileName, available_currencies.value);
+				if (initialisedFromProfile) {
+					await update_currency_and_rate();
+				}
 				return available_currencies.value;
 			}
 			return [];
@@ -126,6 +138,10 @@ export function useInvoiceCurrency() {
 				available_currencies.value = cachedCurrencies;
 				if (!selected_currency.value) {
 					selected_currency.value = pos_profile.value.currency;
+					initialisedFromProfile = true;
+				}
+				if (initialisedFromProfile) {
+					await update_currency_and_rate();
 				}
 				return available_currencies.value;
 			}
@@ -134,6 +150,7 @@ export function useInvoiceCurrency() {
 				{ value: defaultCurrency, title: defaultCurrency },
 			];
 			selected_currency.value = defaultCurrency;
+			await update_currency_and_rate();
 			return available_currencies.value;
 		}
 	};

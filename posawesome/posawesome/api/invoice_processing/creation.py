@@ -691,6 +691,36 @@ def update_invoice(data):
 
     _deduplicate_free_items(invoice_doc)
 
+    # Pre-seed `conversion_rate` / `plc_conversion_rate` BEFORE
+    # `set_missing_values_quietly` so the ERPNext validate path doesn't
+    # trip on "Conversion rate is 1.00, but document currency is different
+    # from company currency" when the cashier created a foreign-currency
+    # draft (selected SAR on a KWD company) but the frontend hadn't yet
+    # populated a non-1 conversion_rate. The full reconciliation below
+    # (after set_missing_values) still re-fetches and re-applies item /
+    # tax base totals, but seeding the rate here keeps the validation
+    # green even when the payload arrives with conversion_rate=1.
+    pre_company_currency = (
+        frappe.get_cached_value("Company", invoice_doc.company, "default_currency")
+        if invoice_doc.company
+        else None
+    ) or invoice_doc.currency
+    pre_invoice_currency = invoice_doc.currency or pre_company_currency
+    pre_payload_rate = flt(data.get("conversion_rate") or 0)
+    if (
+        pre_invoice_currency
+        and pre_company_currency
+        and pre_invoice_currency != pre_company_currency
+        and pre_payload_rate <= 0
+    ):
+        seeded_rate, _seeded_date = get_latest_rate(
+            pre_invoice_currency,
+            pre_company_currency,
+            cache=currency_cache,
+        )
+        if seeded_rate:
+            invoice_doc.conversion_rate = seeded_rate
+
     # Set missing values first.
     # `set_missing_values_quietly` strips ERPNext's spurious "Payment methods
     # refreshed. Please review before proceeding." toast that fires from
