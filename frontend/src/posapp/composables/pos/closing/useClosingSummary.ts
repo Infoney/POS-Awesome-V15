@@ -275,50 +275,108 @@ export function useClosingSummary(
 		);
 	});
 
+	// When every shift invoice was billed in a single non-company currency
+	// (e.g. SAR transactions on a KWD company), the "Net Sales / Gross Sales /
+	// Avg Ticket" insight cards should lead with the invoice-currency figure
+	// (`total` / `net_total`) and surface the company-currency equivalent
+	// (`base_total` / `base_net_total`) in the caption — that's what the
+	// cashier counted at the till. The backend's sales_summary aggregates only
+	// company currency, so we derive the invoice-currency totals from
+	// `multi_currency_totals`. If multiple invoice currencies are present we
+	// can't pick one, so we keep the company-currency-only display.
+	const dominantInvoiceCurrency = computed(() => {
+		const rows = multiCurrencyTotals.value;
+		if (!Array.isArray(rows) || rows.length !== 1) return null;
+		const row = rows[0];
+		const currency = row?.currency;
+		if (!currency || currency === overviewCompanyCurrency.value) return null;
+		return row;
+	});
+
 	const primaryInsights = computed(() => {
-		const netSales = formatCurrencyWithSymbol(
-			salesSummary.value.net_company_currency_total,
-			overviewCompanyCurrency.value,
-		);
-		const grossSales = formatCurrencyWithSymbol(
-			salesSummary.value.gross_company_currency_total,
-			overviewCompanyCurrency.value,
-		);
-		const avgInvoice = formatCurrencyWithSymbol(
-			salesSummary.value.average_invoice_value,
-			overviewCompanyCurrency.value,
-		);
+		const companyCurrency = overviewCompanyCurrency.value;
+		const dominantRow: any = dominantInvoiceCurrency.value;
+		const netCompany = salesSummary.value.net_company_currency_total || 0;
+		const grossCompany = salesSummary.value.gross_company_currency_total || 0;
+		const avgCompany = salesSummary.value.average_invoice_value || 0;
+		const saleCount = salesSummary.value.sale_invoices_count || 0;
+
+		const formatCompany = (value: number) =>
+			formatCurrencyWithSymbol(value, companyCurrency);
+
+		let netSalesValue = formatCompany(netCompany);
+		let grossSalesValue = formatCompany(grossCompany);
+		let avgInvoiceValue = formatCompany(avgCompany);
+
+		const netCaptionPrefix = __("After returns");
+		const grossCaptionPrefix = __("Before returns");
+		const avgCaptionPrefix = __("Across");
+
+		let netCaption = `${netCaptionPrefix}: ${formatCompany(netCompany)}`;
+		let grossCaption = `${grossCaptionPrefix}`;
+		let avgCaption = `${avgCaptionPrefix}: ${formatCount(saleCount)} ${__("sales")}`;
+
+		if (dominantRow) {
+			// When all shift invoices share one foreign currency, derive the
+			// net/gross totals in that invoice currency from the per-currency
+			// row (`total` is the invoice-currency rounded total). Returns
+			// reduce net but not gross, so net_total ≈ company_currency_total *
+			// (invoice_total / company_currency_total) — keep the ratio so the
+			// card reflects what the cashier saw on the printed invoice.
+			const invoiceTotal = Number(dominantRow.total) || 0;
+			const invoiceCompanyTotal = Number(dominantRow.company_currency_total) || 0;
+			const ratio =
+				invoiceCompanyTotal && Number.isFinite(invoiceCompanyTotal)
+					? invoiceTotal / invoiceCompanyTotal
+					: 0;
+			const dominantCurrency = dominantRow.currency;
+
+			const grossInvoice = invoiceTotal;
+			const netInvoice = ratio ? netCompany * ratio : grossInvoice;
+			const avgInvoiceInvoiceCurrency = saleCount ? grossInvoice / saleCount : 0;
+
+			netSalesValue = formatCurrencyWithSymbol(netInvoice, dominantCurrency);
+			grossSalesValue = formatCurrencyWithSymbol(grossInvoice, dominantCurrency);
+			avgInvoiceValue = formatCurrencyWithSymbol(
+				avgInvoiceInvoiceCurrency,
+				dominantCurrency,
+			);
+
+			netCaption = `${netCaptionPrefix} • ${formatCompany(netCompany)}`;
+			grossCaption = `${grossCaptionPrefix} • ${formatCompany(grossCompany)}`;
+			avgCaption = `${avgCaptionPrefix} ${formatCount(saleCount)} ${__("sales")} • ${formatCompany(avgCompany)}`;
+		}
 
 		return [
 			{
 				key: "total-invoices",
 				label: __("Total Invoices"),
 				value: formatCount(unref(overview)?.total_invoices || 0),
-				caption: `${__("Sales processed")}: ${formatCount(salesSummary.value.sale_invoices_count || 0)}`,
+				caption: `${__("Sales processed")}: ${formatCount(saleCount)}`,
 				icon: "mdi-receipt-text-multiple",
 				color: "accent-primary",
 			},
 			{
 				key: "net-sales",
 				label: __("Net Sales"),
-				value: netSales,
-				caption: `${__("After returns")}: ${formatCurrency(salesSummary.value.net_company_currency_total)}`,
+				value: netSalesValue,
+				caption: netCaption,
 				icon: "mdi-cash-multiple",
 				color: "accent-success",
 			},
 			{
 				key: "gross-sales",
 				label: __("Gross Sales"),
-				value: grossSales,
-				caption: `${__("Before returns")}`,
+				value: grossSalesValue,
+				caption: grossCaption,
 				icon: "mdi-chart-bar",
 				color: "accent-secondary",
 			},
 			{
 				key: "average-ticket",
 				label: __("Average Ticket"),
-				value: avgInvoice,
-				caption: `${__("Across")}: ${formatCount(salesSummary.value.sale_invoices_count || 0)} ${__("sales")}`,
+				value: avgInvoiceValue,
+				caption: avgCaption,
 				icon: "mdi-chart-donut",
 				color: "accent-info",
 			},

@@ -233,18 +233,60 @@ export default {
 		} = useClosingShift(eventBus);
 
 		// Formatters
-		const formatCurrency = (v) => window.format_currency(v);
+		//
+		// `formatCurrency` is intentionally a NUMBER-ONLY formatter. Call sites
+		// (PaymentReconciliation cells, the print HTML, formatCurrencyWithSymbol)
+		// stamp the currency code/symbol themselves; routing through Frappe's
+		// `format_currency` here was double-stamping the symbol — every row in
+		// the closing dialog rendered as "KWD KWD 3,959.000" / "SAR KWD 48,100.835"
+		// because the company-currency code from format_currency stacked on top
+		// of the row-currency symbol added by formatCurrencyWithSymbol or the
+		// `companyCurrencySymbol` prefix in PaymentReconciliation. `format_number`
+		// keeps the grouping + precision without adding a symbol.
+		const formatNumberSafe = (v, decimals) => {
+			const fn = typeof window?.format_number === "function" ? window.format_number : null;
+			const num = Number(v) || 0;
+			const prec = Number.isFinite(decimals) ? decimals : undefined;
+			if (fn) {
+				try {
+					return fn(num, undefined, prec);
+				} catch {
+					/* fall through to toLocaleString */
+				}
+			}
+			return num.toLocaleString(undefined, {
+				minimumFractionDigits: prec ?? 2,
+				maximumFractionDigits: prec ?? 2,
+			});
+		};
+		const formatCurrency = (v, decimals) => formatNumberSafe(v, decimals);
 		const formatFloat = (v, d) => window.flt(v, d);
 		const currencySymbol = (c) => window.get_currency_symbol(c);
 		const translate = (t) => window.__(t);
 
 		const summaryFormatters = {
+			// Returns "<symbol> <amount>" formatted in the row's own currency so
+			// SAR rows render as "SAR 48,100.835" and KWD (company-currency) rows
+			// render as "KWD 3,959.000". Routing through Frappe's format_currency
+			// with an explicit currency arg keeps each row's locale-aware
+			// precision and currency code correct, instead of always borrowing
+			// the company-currency code (the source of the "KWD KWD" duplication
+			// users hit when transactions were in SAR but the company was KWD).
 			formatCurrencyWithSymbol: (amount, currency) => {
 				const resolvedCurrency = currency || "";
-				const symbol = currencySymbol(resolvedCurrency);
-				const formatted = formatCurrency(amount || 0);
-				if (symbol) return `${symbol} ${formatted}`;
-				return `${resolvedCurrency} ${formatted}`.trim();
+				const numeric = Number(amount) || 0;
+				const fc =
+					typeof window?.format_currency === "function" ? window.format_currency : null;
+				if (fc) {
+					try {
+						return fc(numeric, resolvedCurrency || undefined);
+					} catch {
+						/* fall through */
+					}
+				}
+				const symbol = currencySymbol(resolvedCurrency) || resolvedCurrency;
+				const formatted = formatNumberSafe(numeric);
+				return symbol ? `${symbol} ${formatted}`.trim() : formatted;
 			},
 			formatCount: (value) => formatFloat(value || 0, 0),
 			formatCurrency,
