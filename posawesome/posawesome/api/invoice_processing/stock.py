@@ -714,7 +714,18 @@ def _deduplicate_free_items(invoice_doc):
             if existing:
                 existing.qty = _normalise_qty(existing) + _normalise_qty(item)
                 existing.stock_qty = _normalise_stock_qty(existing) + _normalise_stock_qty(item)
-                # Ensure monetary fields remain zeroed for freebies
+                # Ensure monetary fields remain zeroed for freebies. The
+                # earlier `if field in existing` check raised
+                # `TypeError: argument of type 'SalesInvoiceItem' is not
+                # iterable` because `existing` is a Frappe child Document
+                # (not a dict) and `Document` doesn't implement
+                # `__contains__`. Symptom in the wild: invoice update
+                # crashed whenever two different "Give Product" offers
+                # both granted the same SKU as a freebie (the dedup
+                # branch that fires only on collision). `Document.get`
+                # returns None for unknown fields, so a None-check on
+                # the value is sufficient — and avoids the iterable
+                # protocol on the doc altogether.
                 for field in (
                     "rate",
                     "base_rate",
@@ -727,7 +738,8 @@ def _deduplicate_free_items(invoice_doc):
                     "discount_amount",
                     "base_discount_amount",
                 ):
-                    if field in existing and flt(existing.get(field)):
+                    value = existing.get(field)
+                    if value is not None and flt(value):
                         existing.set(field, 0)
                 continue
 
