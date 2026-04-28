@@ -46,8 +46,16 @@ export function useItemCreation() {
 		new_item.discount_amount_per_item = 0;
 		new_item.price_list_rate = item.price_list_rate ?? item.rate ?? 0;
 
-		// Setup base rates properly for multi-currency
-		const companyCurrency = context.pos_profile.currency;
+		// Setup base rates properly for multi-currency.
+		//
+		// Use the company's actual default_currency (passed via context.
+		// company_currency from the caller) — NOT pos_profile.currency.
+		// When the POS profile intentionally runs in a foreign currency
+		// (e.g. SAR profile on a KWD-base company) those values diverge,
+		// and treating profile.currency as the base would skip the
+		// price_list -> company conversion and stamp base_rate in SAR.
+		const companyCurrency =
+			context.company_currency || context.pos_profile.currency;
 		const selectedCurrency = context.selected_currency || companyCurrency;
 		if (selectedCurrency !== companyCurrency) {
 			// Store original base currency values (Selected -> Company)
@@ -213,7 +221,15 @@ export function useItemCreation() {
 			// applyCurrencyConversionToItem logic
 			itemCurrencyUtils.applyCurrencyConversionToItem(item, context);
 
-			const companyCurrency = pos_profile.currency;
+			// Real company default_currency from the caller (Invoice.vue
+			// passes `company_currency` in context). pos_profile.currency
+			// is the wrong anchor here when the profile runs in a
+			// foreign currency — using it skipped the price_list ->
+			// company conversion and stamped base_rate with the SAR
+			// price-list amount, which the cart then re-divided by
+			// conversion_rate and inflated to 5,455 SAR.
+			const companyCurrency =
+				context.company_currency || pos_profile.currency;
 			// _getPlcToCompanyRate logic
 			const plcToCompanyRate = itemCurrencyUtils.getPlcToCompanyRate(
 				item,

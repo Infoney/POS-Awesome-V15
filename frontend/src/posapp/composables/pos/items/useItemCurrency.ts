@@ -12,6 +12,14 @@ type CurrencyItem = {
 
 type CurrencyContext = {
 	pos_profile: { currency: string };
+	// Company's default_currency (e.g. "KWD"). MUST come from the Company
+	// doc — NOT from `pos_profile.currency`. On profiles that intentionally
+	// run in a foreign currency (SAR profile on a KWD-base company), those
+	// two values diverge, and assuming `pos_profile.currency` is "the
+	// company currency" caused base_rate to be stamped with the foreign
+	// price-list amount, which the cart then divided by conversion_rate
+	// again (449 SAR / 0.0823 = 5,455 SAR per row).
+	company_currency?: string;
 	price_list_currency?: string;
 	selected_currency?: string;
 	exchange_rate?: number;
@@ -20,18 +28,22 @@ type CurrencyContext = {
 	flt?: (_value: unknown, _precision?: number) => number;
 };
 
+const _resolveCompanyCurrency = (context: CurrencyContext): string =>
+	context.company_currency || context.pos_profile.currency;
+
 export function useItemCurrency() {
 	/**
 	 * Calculates the rate from Price List Currency to Company Currency.
 	 * @param {Object} item
-	 * @param {Object} context - Needs: pos_profile, price_list_currency, exchange_rate, conversion_rate
+	 * @param {Object} context - Needs: pos_profile, company_currency,
+	 *                           price_list_currency, exchange_rate, conversion_rate
 	 * @returns {number}
 	 */
 	const getPlcToCompanyRate = (
 		item: CurrencyItem,
 		context: CurrencyContext,
 	): number => {
-		const companyCurrency = context.pos_profile.currency;
+		const companyCurrency = _resolveCompanyCurrency(context);
 		const priceListCurrency =
 			context.price_list_currency || companyCurrency;
 		// Benchmark note: favor item-level plc_conversion_rate to avoid recomputing PLC->CC.
@@ -47,18 +59,21 @@ export function useItemCurrency() {
 	 * Applies currency conversion to a single item.
 	 * Updates item.rate, item.currency, item.base_rate, item.base_price_list_rate
 	 * @param {Object} item
-	 * @param {Object} context - Needs: pos_profile, price_list_currency, selected_currency, exchange_rate, currency_precision, flt
+	 * @param {Object} context - Needs: pos_profile, company_currency,
+	 *                           price_list_currency, selected_currency,
+	 *                           exchange_rate, currency_precision, flt
 	 */
 	const applyCurrencyConversionToItem = (
 		item: CurrencyItem | null | undefined,
 		context: CurrencyContext,
 	) => {
 		if (!item) return;
-		const base = context.pos_profile.currency;
+		const companyCurrency = _resolveCompanyCurrency(context);
 
 		if (!item.original_rate) {
 			item.original_rate = item.rate;
-			item.original_currency = item.currency || base;
+			item.original_currency =
+				item.currency || context.price_list_currency || companyCurrency;
 		}
 
 		// original_rate is in price list currency
@@ -73,8 +88,8 @@ export function useItemCurrency() {
 
 		// Determine selected rate using exchange rate (Price List -> Selected)
 		// item.original_currency is the Price List Currency
-		const priceListCurrency = context.price_list_currency || base;
-		const selectedCurrency = context.selected_currency || base;
+		const priceListCurrency = context.price_list_currency || companyCurrency;
+		const selectedCurrency = context.selected_currency || companyCurrency;
 
 		// Benchmark note: when PLC === SC, keep the displayed rate in PLC to avoid CC bleed-through.
 		const converted_rate =

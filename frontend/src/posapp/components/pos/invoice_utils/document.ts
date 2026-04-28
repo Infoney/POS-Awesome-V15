@@ -563,8 +563,18 @@ export function get_invoice_items(context: any) {
 			new_item.delivery_date = itemDeliveryDate;
 		}
 
-		// Handle currency conversion for rates and amounts
-		const companyCurrency = context.pos_profile.currency;
+		// Handle currency conversion for rates and amounts.
+		//
+		// Use the Company doc's default_currency, NOT pos_profile.currency
+		// — those values diverge on profiles that intentionally run in a
+		// foreign currency (SAR profile on a KWD-base company), and using
+		// the profile currency here mirrors the bug fixed in
+		// useItemCurrency: the SC === CC short-circuit silently skipped
+		// the price_list -> company conversion and stamped base_rate as
+		// the SAR amount.
+		const companyCurrency =
+			(context.company && (context.company as any).default_currency) ||
+			context.pos_profile.currency;
 		if (context.selected_currency !== companyCurrency) {
 			// item.rate is in SC and base_rate should be in CC.
 			new_item.rate = flt(item.rate); // Keep rate in USD

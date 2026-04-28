@@ -263,6 +263,7 @@ const employeeStore = useEmployeeStore();
 const { selectedCustomer } = storeToRefs(customersStore);
 const {
 	posProfile: uiPosProfile,
+	companyDoc: uiCompanyDoc,
 	searchFocusTrigger,
 	triggerTopItemSelection,
 	activeView,
@@ -657,6 +658,14 @@ const add_item = async (item, optionsOrQty: any = {}) => {
 			exchange_rate: selected_exchange_rate.value,
 			conversion_rate: selected_conversion_rate.value,
 			price_list_currency: item.original_currency || item.currency || pos_profile.value?.currency,
+			// Company default_currency from the booted Company doc — read
+			// it explicitly so the currency utils don't fall back to
+			// `pos_profile.currency`, which is the foreign operating
+			// currency on profiles like the SAR-on-KWD expo and would
+			// short-circuit the price_list -> company conversion.
+			company_currency:
+				(uiCompanyDoc?.value && (uiCompanyDoc.value as any).default_currency) ||
+				pos_profile.value?.currency,
 			itemCurrencyUtils,
 			invoiceStore,
 			itemDetailFetcher,
@@ -849,6 +858,16 @@ onMounted(async () => {
 		applyCurrencyConversionToItem: (item) => {
 			itemCurrencyUtils.applyCurrencyConversionToItem(item, {
 				pos_profile: pos_profile.value,
+				// Real company default_currency. Without this the helper
+				// falls back to pos_profile.currency, which equals the
+				// invoice currency on a foreign-currency profile (SAR
+				// on a KWD-base company) and silently skips the
+				// price_list -> company conversion — leaving base_rate
+				// stamped in SAR and the cart inflating it back into
+				// the displayed rate.
+				company_currency:
+					(uiCompanyDoc?.value && (uiCompanyDoc.value as any).default_currency) ||
+					pos_profile.value?.currency,
 				price_list_currency:
 					item?.original_currency || item?.currency || pos_profile.value?.currency,
 				selected_currency: selected_currency.value || pos_profile.value?.currency,
