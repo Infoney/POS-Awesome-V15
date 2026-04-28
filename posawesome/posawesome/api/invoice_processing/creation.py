@@ -706,20 +706,48 @@ def update_invoice(data):
         else None
     ) or invoice_doc.currency
     pre_invoice_currency = invoice_doc.currency or pre_company_currency
-    pre_payload_rate = flt(data.get("conversion_rate") or 0)
     if (
         pre_invoice_currency
         and pre_company_currency
         and pre_invoice_currency != pre_company_currency
-        and pre_payload_rate <= 0
     ):
-        seeded_rate, _seeded_date = get_latest_rate(
-            pre_invoice_currency,
-            pre_company_currency,
-            cache=currency_cache,
+        # Any time the invoice currency differs from the company currency,
+        # `conversion_rate` of 0 OR 1 is invalid (1 SAR can't equal 1 KWD).
+        # Re-seed from Currency Exchange in BOTH cases — covers brand-new
+        # drafts (rate not yet populated), stale browser bundles still
+        # sending rate=1, offline-replayed payloads, and any multi-currency
+        # pair (USD/EUR/etc.), not just SAR/KWD. User-supplied custom rates
+        # > 0 and != 1 are preserved here; the downstream block at
+        # ~line 760 still gets the final say either way.
+        existing_rate = flt(invoice_doc.conversion_rate or 0)
+        if existing_rate <= 0 or existing_rate == 1:
+            seeded_rate, _seeded_date = get_latest_rate(
+                pre_invoice_currency,
+                pre_company_currency,
+                cache=currency_cache,
+            )
+            if seeded_rate:
+                invoice_doc.conversion_rate = seeded_rate
+
+        # Same defensive seeding for plc_conversion_rate (price list ->
+        # company) so set_missing_values doesn't trip on stale 1.0 either.
+        pre_plc_currency = (
+            invoice_doc.price_list_currency
+            or price_list_currency
+            or pre_invoice_currency
         )
-        if seeded_rate:
-            invoice_doc.conversion_rate = seeded_rate
+        if pre_plc_currency and pre_plc_currency != pre_company_currency:
+            existing_plc = flt(invoice_doc.plc_conversion_rate or 0)
+            if existing_plc <= 0 or existing_plc == 1:
+                seeded_plc, _seeded_plc_date = get_latest_rate(
+                    pre_plc_currency,
+                    pre_company_currency,
+                    cache=currency_cache,
+                )
+                if seeded_plc:
+                    invoice_doc.plc_conversion_rate = seeded_plc
+                    if not invoice_doc.price_list_currency:
+                        invoice_doc.price_list_currency = pre_plc_currency
 
     # Set missing values first.
     # `set_missing_values_quietly` strips ERPNext's spurious "Payment methods
