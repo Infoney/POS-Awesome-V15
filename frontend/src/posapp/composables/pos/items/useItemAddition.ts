@@ -425,32 +425,18 @@ export function useItemAddition() {
 				return;
 			}
 
-			if (
-				!context.isReturnInvoice &&
-				!deferStockValidationToPayment &&
-				blockSale &&
-				!allowNegativeStock
-			) {
-				const existingItem =
-					findMergeTarget(context, item, false)?.item ||
-					context.items.find(
-						(i) =>
-							i.item_code === item.item_code &&
-							i.uom === item.uom,
-					);
-				const currentQty = existingItem ? existingItem.qty : 0;
-				const requestedQty = item.qty || 1;
-				const maxQty =
-					item._base_actual_qty / (item.conversion_factor || 1);
-
-				if (currentQty + requestedQty > maxQty) {
-					toastStore.show({
-						title: __("Quantity exceeds available stock"),
-						color: "warning",
-					});
-					return;
-				}
-			}
+			// Removed cart-aware client-side stock gate
+			// (`currentQty + requestedQty > maxQty`).
+			//
+			// `_base_actual_qty` and `actual_qty` drift mid-session from
+			// warehouse-scoped dashboard refreshes and items-store
+			// rehydration, so this gate either blocked legitimate sales
+			// (cart 2 + 1 vs actual 3 reported as "only 1 in stock")
+			// or silently passed oversells. The submit pipeline routes
+			// real shortages through StockConflictDialog (see
+			// usePaymentSubmission `emitStockConflictDialog`); the
+			// `actual_qty <= 0` sanity gate above still refuses to add
+			// items whose bin is literally empty.
 
 			if (!item.uom) {
 				item.uom = item.stock_uom;

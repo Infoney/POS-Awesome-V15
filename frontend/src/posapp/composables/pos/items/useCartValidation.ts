@@ -1,9 +1,5 @@
 import { ref } from "vue";
 import { useToastStore } from "../../../stores/toastStore.js";
-import {
-	parseBooleanSetting,
-	formatStockShortageError,
-} from "../../../utils/stock.js";
 
 declare const __: (_text: string, _args?: any[]) => string;
 declare const frappe: any;
@@ -21,11 +17,40 @@ export function useCartValidation() {
 		eventBus: any,
 		blockSaleBeyondAvailableQty = false,
 		_showNegativeStockWarning = true,
-		skipServerValidation = false,
+		_skipServerValidation = false,
 		isReturnInvoice = false,
 		deferStockValidationToPayment = false,
-		currentCartItems: any[] = [],
+		_currentCartItems: any[] = [],
 	) {
+		// New architecture (2026-04-29):
+		//
+		// The client is a best-effort cache; the server is the only source
+		// of truth for stock and batch availability at submit time. Earlier
+		// revisions tried to enforce per-item / per-batch stock gates in
+		// the cashier's browser using `item.actual_qty` and a cart-aware
+		// running total, but that path repeatedly mis-reported because the
+		// reference values drift (warehouse-scoped dashboard refresh
+		// rewriting `actual_qty`, `batch_no_data` baselines getting
+		// re-stamped on every detail fetch, items store hydrated from the
+		// offline cache during boot, etc.). When the client number is
+		// wrong the gate either blocks legitimate sales (the screenshot
+		// where cart 2 + requested 1 = 3 vs actual 3 was rejected as
+		// "only 1 in stock") or passes oversells without warning.
+		//
+		// What we do here now:
+		//   - Variant template → block (the cashier needs to pick a child).
+		//   - Order / Quotation flows → pass (stock is enforced when the
+		//     order is converted to an invoice).
+		//   - Hard "out of stock" sanity gate (actual_qty === 0 AND the
+		//     profile is configured to display only in-stock items) →
+		//     block. This is the only stock check that doesn't depend on
+		//     cart math; it just refuses to even try when the bin is
+		//     empty.
+		//   - Everything else → pass through to addItem. ERPNext validates
+		//     batch / bin shortages on submit and the existing
+		//     StockConflictDialog flow (see usePaymentSubmission
+		//     `emitStockConflictDialog`) presents the structured error so
+		//     the cashier can adjust the cart and retry.
 		isValidating.value = true;
 		validationError.value = null;
 
@@ -61,103 +86,19 @@ export function useCartValidation() {
 				return false;
 			}
 
-			const isStockItem = parseBooleanSetting(item?.is_stock_item);
-
-			if (isStockItem && !isReturnInvoice) {
-				const allowNegativeStock =
-					!blockSaleBeyondAvailableQty &&
-					(parseBooleanSetting(stockSettings?.allow_negative_stock) ||
-						parseBooleanSetting(item?.allow_negative_stock));
-
-				// Cart-aware availability: previously this check compared the
-				// single click's `requestedQty` against `item.actual_qty`, so
-				// a click of qty=1 on a 2-stock item ALWAYS passed even when
-				// the cart already held 3 of the same item (palcotest log:
-				// ADOL 125MG 10 SUPP cart hit qty 4 against 2 in-stock).
-				// Sum the existing cart qty for the same item (in stock UoM
-				// via `stock_qty`) so the gate fires once total + requested
-				// would exceed `actual_qty`. Negative-qty lines (returns)
-				// are excluded — they free stock back rather than reserving.
-				let cartReservedStockQty = 0;
-				if (Array.isArray(currentCartItems)) {
-					for (const line of currentCartItems) {
-						if (!line || line.item_code !== item.item_code) continue;
-						const stockQty = Number(line.stock_qty);
-						const fallbackQty = Number(line.qty);
-						const conv = Number(line.conversion_factor) || 1;
-						const lineStockQty = Number.isFinite(stockQty) && stockQty
-							? stockQty
-							: Number.isFinite(fallbackQty)
-								? fallbackQty * conv
-								: 0;
-						if (lineStockQty > 0) {
-							cartReservedStockQty += lineStockQty;
-						}
-					}
-				}
-				const requestedStockQty = (() => {
-					const conv = Number(item.conversion_factor) || 1;
-					const stockQty = Number(item.stock_qty);
-					if (Number.isFinite(stockQty) && stockQty) return stockQty;
-					return Number(requestedQty || 0) * conv;
-				})();
-				const totalAfterAdd = cartReservedStockQty + requestedStockQty;
-				const exceedsAvailable =
-					typeof item.actual_qty === "number" &&
-					totalAfterAdd > item.actual_qty;
-				const blockSale = !allowNegativeStock && exceedsAvailable;
-
-				if (blockSale) {
-					toastStore.show({
-						title: formatStockShortageError(
-							item.item_name || item.item_code,
-							item.actual_qty,
-							totalAfterAdd,
-						),
-						color: "error",
-					});
-					return false;
-				}
-
-				if (!skipServerValidation) {
-					const stockValidationResult = await validateStockOnServer(
-						item,
-						requestedQty,
-						posProfile,
-					);
-
-					if (!stockValidationResult.isValid) {
-						toastStore.show({
-							title: formatStockShortageError(
-								stockValidationResult.data?.item_name ||
-									item.item_name ||
-									item.item_code,
-								stockValidationResult.data?.available_qty ??
-									item.actual_qty,
-								stockValidationResult.data?.requested_qty ??
-									requestedQty,
-							),
-							color: "error",
-						});
-						return false;
-					}
-				}
-			}
+			// Quiet the unused-arg lint noise; these stay in the signature
+			// for backward compatibility with callers that haven't yet been
+			// updated to drop them.
+			void blockSaleBeyondAvailableQty;
+			void stockSettings;
+			void requestedQty;
 			return true;
 		} catch (error: any) {
 			console.error("Cart validation error:", error);
 			validationError.value = error.message;
-			return performFallbackValidation(
-				item,
-				requestedQty,
-				stockSettings,
-				eventBus,
-				blockSaleBeyondAvailableQty,
-				_showNegativeStockWarning,
-				isReturnInvoice,
-				deferStockValidationToPayment,
-				currentCartItems,
-			);
+			// On unexpected client-side errors, fail open — let the request
+			// reach the server, which is authoritative.
+			return true;
 		} finally {
 			isValidating.value = false;
 		}
@@ -208,88 +149,20 @@ export function useCartValidation() {
 	}
 
 	function performFallbackValidation(
-		item: any,
-		requestedQty: number,
-		stockSettings: any,
-		eventBus: any,
-		blockSaleBeyondAvailableQty = false,
+		_item: any,
+		_requestedQty: number,
+		_stockSettings: any,
+		_eventBus: any,
+		_blockSaleBeyondAvailableQty = false,
 		_showNegativeStockWarning = true,
-		isReturnInvoice = false,
-		deferStockValidationToPayment = false,
-		currentCartItems: any[] = [],
+		_isReturnInvoice = false,
+		_deferStockValidationToPayment = false,
+		_currentCartItems: any[] = [],
 	) {
-		console.warn(
-			"Using fallback validation due to server validation failure",
-		);
-
-		if (deferStockValidationToPayment && !isReturnInvoice) {
-			return true;
-		}
-
-		const isStockItem = parseBooleanSetting(item?.is_stock_item);
-
-		if (isStockItem && !isReturnInvoice) {
-			const allowNegativeStock =
-				!blockSaleBeyondAvailableQty &&
-				(parseBooleanSetting(stockSettings?.allow_negative_stock) ||
-					parseBooleanSetting(item?.allow_negative_stock));
-
-			if (item.actual_qty < 0 && !allowNegativeStock) {
-				toastStore.show({
-					title: formatStockShortageError(
-						item.item_name || item.item_code,
-						item.actual_qty,
-						requestedQty,
-					),
-					color: "error",
-				});
-				return false;
-			}
-
-			// Mirror the cart-aware comparison from validateCartItem so the
-			// fallback path can't silently pass a click that the primary
-			// path would block. See validateCartItem for the rationale.
-			let cartReservedStockQty = 0;
-			if (Array.isArray(currentCartItems)) {
-				for (const line of currentCartItems) {
-					if (!line || line.item_code !== item.item_code) continue;
-					const stockQty = Number(line.stock_qty);
-					const fallbackQty = Number(line.qty);
-					const conv = Number(line.conversion_factor) || 1;
-					const lineStockQty = Number.isFinite(stockQty) && stockQty
-						? stockQty
-						: Number.isFinite(fallbackQty)
-							? fallbackQty * conv
-							: 0;
-					if (lineStockQty > 0) {
-						cartReservedStockQty += lineStockQty;
-					}
-				}
-			}
-			const requestedStockQty = (() => {
-				const conv = Number(item.conversion_factor) || 1;
-				const stockQty = Number(item.stock_qty);
-				if (Number.isFinite(stockQty) && stockQty) return stockQty;
-				return Number(requestedQty || 0) * conv;
-			})();
-			const totalAfterAdd = cartReservedStockQty + requestedStockQty;
-			const exceedsAvailable =
-				typeof item.actual_qty === "number" &&
-				totalAfterAdd > item.actual_qty;
-			const blockSale = !allowNegativeStock && exceedsAvailable;
-			if (blockSale) {
-				toastStore.show({
-					title: formatStockShortageError(
-						item.item_name || item.item_code,
-						item.actual_qty,
-						totalAfterAdd,
-					),
-					color: "error",
-				});
-				return false;
-			}
-		}
-
+		// Kept for backward compatibility with external callers; the
+		// primary validateCartItem now fails open on its own (the
+		// architecture is "client = best-effort cache, server = source of
+		// truth at submit"), so this fallback is also a pass-through.
 		return true;
 	}
 
