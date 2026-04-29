@@ -237,9 +237,46 @@ export function useItemAddition() {
 				item.qty += data.qty;
 				calcStockQty(item, item.qty);
 
-				// Handle other updates that happen on merge
+				// On merge, recompute `actual_batch_qty` directly from the
+				// cart instead of going through `callSetBatchQty` →
+				// `setBatchQty` → `getBatchAvailability` → re-stamping
+				// `batch_no_data`. The full path was costing an extra batch
+				// list iteration per merge AND mutating the cart line's
+				// `batch_no_data` reference (which `original_batch_qty` was
+				// then read off on the next add — see useItemAddition L274
+				// and the palcotest "available drops by 2" log analysis).
+				//
+				// For the merged line itself, `actual_batch_qty` is
+				// "bin qty − sum of OTHER cart lines on this batch" (the
+				// existing setBatchQty filter excluded self). The merge
+				// only changed THIS line's qty, so the value only needs a
+				// refresh when other cart lines share the batch — the
+				// common single-line-per-batch case is a no-op.
 				if (item.has_batch_no && item.batch_no) {
-					callSetBatchQty(context, item, item.batch_no, false);
+					const batchEntry = Array.isArray(item.batch_no_data)
+						? item.batch_no_data.find(
+								(b: any) => b?.batch_no === item.batch_no,
+							)
+						: null;
+					if (batchEntry) {
+						const baseline = Number(
+							batchEntry.original_batch_qty ??
+								batchEntry.batch_qty ??
+								batchEntry.available_qty ??
+								0,
+						) || 0;
+						let otherQty = 0;
+						const cart = context.invoiceStore?.items || context.items || [];
+						for (const other of cart) {
+							if (!other) continue;
+							if (other.posa_row_id === item.posa_row_id) continue;
+							if (other.item_code !== item.item_code) continue;
+							if (other.batch_no !== item.batch_no) continue;
+							const q = Number(other.qty) || 0;
+							if (q > 0) otherQty += q;
+						}
+						item.actual_batch_qty = Math.max(0, baseline - otherQty);
+					}
 				}
 				callSetSerialNo(context, item);
 
