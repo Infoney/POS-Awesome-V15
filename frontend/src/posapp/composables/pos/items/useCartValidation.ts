@@ -24,6 +24,7 @@ export function useCartValidation() {
 		skipServerValidation = false,
 		isReturnInvoice = false,
 		deferStockValidationToPayment = false,
+		currentCartItems: any[] = [],
 	) {
 		isValidating.value = true;
 		validationError.value = null;
@@ -67,9 +68,43 @@ export function useCartValidation() {
 					!blockSaleBeyondAvailableQty &&
 					(parseBooleanSetting(stockSettings?.allow_negative_stock) ||
 						parseBooleanSetting(item?.allow_negative_stock));
+
+				// Cart-aware availability: previously this check compared the
+				// single click's `requestedQty` against `item.actual_qty`, so
+				// a click of qty=1 on a 2-stock item ALWAYS passed even when
+				// the cart already held 3 of the same item (palcotest log:
+				// ADOL 125MG 10 SUPP cart hit qty 4 against 2 in-stock).
+				// Sum the existing cart qty for the same item (in stock UoM
+				// via `stock_qty`) so the gate fires once total + requested
+				// would exceed `actual_qty`. Negative-qty lines (returns)
+				// are excluded — they free stock back rather than reserving.
+				let cartReservedStockQty = 0;
+				if (Array.isArray(currentCartItems)) {
+					for (const line of currentCartItems) {
+						if (!line || line.item_code !== item.item_code) continue;
+						const stockQty = Number(line.stock_qty);
+						const fallbackQty = Number(line.qty);
+						const conv = Number(line.conversion_factor) || 1;
+						const lineStockQty = Number.isFinite(stockQty) && stockQty
+							? stockQty
+							: Number.isFinite(fallbackQty)
+								? fallbackQty * conv
+								: 0;
+						if (lineStockQty > 0) {
+							cartReservedStockQty += lineStockQty;
+						}
+					}
+				}
+				const requestedStockQty = (() => {
+					const conv = Number(item.conversion_factor) || 1;
+					const stockQty = Number(item.stock_qty);
+					if (Number.isFinite(stockQty) && stockQty) return stockQty;
+					return Number(requestedQty || 0) * conv;
+				})();
+				const totalAfterAdd = cartReservedStockQty + requestedStockQty;
 				const exceedsAvailable =
 					typeof item.actual_qty === "number" &&
-					requestedQty > item.actual_qty;
+					totalAfterAdd > item.actual_qty;
 				const blockSale = !allowNegativeStock && exceedsAvailable;
 
 				if (blockSale) {
@@ -77,7 +112,7 @@ export function useCartValidation() {
 						title: formatStockShortageError(
 							item.item_name || item.item_code,
 							item.actual_qty,
-							requestedQty,
+							totalAfterAdd,
 						),
 						color: "error",
 					});
@@ -121,6 +156,7 @@ export function useCartValidation() {
 				_showNegativeStockWarning,
 				isReturnInvoice,
 				deferStockValidationToPayment,
+				currentCartItems,
 			);
 		} finally {
 			isValidating.value = false;
@@ -180,6 +216,7 @@ export function useCartValidation() {
 		_showNegativeStockWarning = true,
 		isReturnInvoice = false,
 		deferStockValidationToPayment = false,
+		currentCartItems: any[] = [],
 	) {
 		console.warn(
 			"Using fallback validation due to server validation failure",
@@ -209,16 +246,43 @@ export function useCartValidation() {
 				return false;
 			}
 
+			// Mirror the cart-aware comparison from validateCartItem so the
+			// fallback path can't silently pass a click that the primary
+			// path would block. See validateCartItem for the rationale.
+			let cartReservedStockQty = 0;
+			if (Array.isArray(currentCartItems)) {
+				for (const line of currentCartItems) {
+					if (!line || line.item_code !== item.item_code) continue;
+					const stockQty = Number(line.stock_qty);
+					const fallbackQty = Number(line.qty);
+					const conv = Number(line.conversion_factor) || 1;
+					const lineStockQty = Number.isFinite(stockQty) && stockQty
+						? stockQty
+						: Number.isFinite(fallbackQty)
+							? fallbackQty * conv
+							: 0;
+					if (lineStockQty > 0) {
+						cartReservedStockQty += lineStockQty;
+					}
+				}
+			}
+			const requestedStockQty = (() => {
+				const conv = Number(item.conversion_factor) || 1;
+				const stockQty = Number(item.stock_qty);
+				if (Number.isFinite(stockQty) && stockQty) return stockQty;
+				return Number(requestedQty || 0) * conv;
+			})();
+			const totalAfterAdd = cartReservedStockQty + requestedStockQty;
 			const exceedsAvailable =
 				typeof item.actual_qty === "number" &&
-				requestedQty > item.actual_qty;
+				totalAfterAdd > item.actual_qty;
 			const blockSale = !allowNegativeStock && exceedsAvailable;
 			if (blockSale) {
 				toastStore.show({
 					title: formatStockShortageError(
 						item.item_name || item.item_code,
 						item.actual_qty,
-						requestedQty,
+						totalAfterAdd,
 					),
 					color: "error",
 				});
@@ -238,6 +302,7 @@ export function useCartValidation() {
 		showNegativeStockWarning = true,
 		isReturnInvoice = false,
 		deferStockValidationToPayment = false,
+		currentCartItems: any[] = [],
 	) {
 		const validItems: any[] = [];
 		const invalidItems: any[] = [];
@@ -254,6 +319,7 @@ export function useCartValidation() {
 				false,
 				isReturnInvoice,
 				deferStockValidationToPayment,
+				currentCartItems,
 			);
 
 			if (isValid) {

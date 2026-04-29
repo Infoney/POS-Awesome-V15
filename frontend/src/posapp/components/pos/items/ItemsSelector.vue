@@ -689,6 +689,13 @@ const add_item = async (item, optionsOrQty: any = {}) => {
 			true,
 			isReturnInvoice.value,
 			deferStockValidationToPayment.value,
+			// Cart-aware stock gate: pass the live cart so the validator
+			// can sum existing reservations for this item before deciding
+			// whether the new click would exceed `actual_qty`. Without
+			// this, every single-qty click compared 1 vs actual_qty and
+			// always passed, letting the cart accumulate to qty 4 on a
+			// 2-stock item.
+			invoiceStore.items,
 		);
 
 		if (isValid) {
