@@ -269,11 +269,19 @@ export const updateReservations = (
 /**
  * Update per-batch cart reservations.
  *
- * `batchTotals` is shaped as `{ item_code: { batch_no: qty } }`. Any
- * batch absent from the map for a code is cleared (that's how cart
- * removals propagate). Items absent entirely keep whatever batch
- * reservations they had — pass an explicit empty object for an item
- * to drop all of its batch reservations.
+ * `batchTotals` is shaped as `{ item_code: { batch_no: qty } }`. The
+ * caller is expected to pass a complete picture of currently-reserved
+ * batches (mirroring how `updateReservations` works for whole-item
+ * totals). Codes absent from the incoming `batchTotals` get pruned
+ * automatically — without this, removing the last cart line for an
+ * item left its per-batch reservation stuck in the coordinator and
+ * `applyAvailabilityToItem` kept subtracting the stale value from
+ * `batch_qty` forever, so the items-panel card never restored its
+ * batch chips after a remove.
+ *
+ * Pass `{ pruneMissing: false }` to opt out and keep the old
+ * "sticky" semantics for callers that want to update a single
+ * item without touching the rest.
  *
  * Returns the list of item codes whose batch reservations changed, so
  * callers can decide whether to re-render the items panel.
@@ -282,13 +290,15 @@ export const updateBatchReservations = (
 	batchTotals: Record<string, Record<string, any>> = {},
 	options: StockUpdateOptions = {},
 ): string[] => {
-	const { silent = false } = options;
+	const { silent = false, pruneMissing = true } = options;
 	const changed = new Set<string>();
+	const seen = new Set<string>();
 
 	if (batchTotals && typeof batchTotals === "object") {
 		Object.entries(batchTotals).forEach(([codeValue, batchMap]) => {
 			const code = normalizeCode(codeValue);
 			if (!code) return;
+			seen.add(code);
 
 			const incoming = new Map<string, number>();
 			if (batchMap && typeof batchMap === "object") {
@@ -326,6 +336,17 @@ export const updateBatchReservations = (
 				batchReservedQuantities.set(code, incoming);
 				if (differs) changed.add(code);
 			}
+		});
+	}
+
+	if (pruneMissing) {
+		Array.from(batchReservedQuantities.keys()).forEach((code) => {
+			if (seen.has(code)) return;
+			const previous = batchReservedQuantities.get(code);
+			if (previous && previous.size > 0) {
+				changed.add(code);
+			}
+			batchReservedQuantities.delete(code);
 		});
 	}
 
