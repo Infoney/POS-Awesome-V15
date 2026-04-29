@@ -491,8 +491,27 @@ export function useItemAddition() {
 
 					// Standard Case: If no usable batches or only one needed/available
 					if (usable_batches.length === 0) {
-						// Fallback to standard behavior (likely picks first or none)
-						callSetBatchQty(context, new_item, null, false);
+						// Fallback when every batch in the cart-deducted view
+						// is at 0 (cart already reserves all positive qty).
+						// Previously this called `setBatchQty(item, null)`,
+						// which then ran selectable_batches=positive-only,
+						// found nothing, and silently left the line WITHOUT
+						// a batch_no — so click 3 on a 3-stock item with
+						// clicks 1+2 already reserved both batches showed up
+						// as a no-batch row in the cart.
+						//
+						// Aligned with the "trust the server at submit"
+						// architecture: pick the first FIFO-ordered batch
+						// from `batches` regardless of its cart-deducted
+						// availability so the line is always tagged.
+						// `setBatchQty` with an explicit `value` falls back
+						// to `normalized_batch_data` (full list, exhausted
+						// included) so the find succeeds. Server validates
+						// the actual shortage at submit and surfaces it via
+						// StockConflictDialog with authoritative numbers.
+						const fallbackBatchNo =
+							(Array.isArray(batches) && batches[0]?.batch_no) || null;
+						callSetBatchQty(context, new_item, fallbackBatchNo, false);
 					} else {
 						let remaining_qty = new_item.qty;
 
