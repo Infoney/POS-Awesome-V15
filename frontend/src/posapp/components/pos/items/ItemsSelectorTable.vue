@@ -99,9 +99,9 @@
 				<div class="qty-cell">
 					<span
 						class="golden--text qty-cell__value"
-						:class="{ 'negative-number': isNegative(item.actual_qty) }"
+						:class="{ 'negative-number': isNegative(getDisplayStockQty(item)) }"
 					>
-						{{ formatActualQty(item.actual_qty) }}
+						{{ formatActualQty(getDisplayStockQty(item)) }}
 					</span>
 					<ItemStockInfoMenu
 						v-if="showStockInfo(item)"
@@ -120,6 +120,7 @@
 import { ref } from "vue";
 import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
 import ItemStockInfoMenu from "./ItemStockInfoMenu.vue";
+import { getDisplayStockQty } from "../../../utils/stock";
 
 const props = defineProps({
 	displayedItems: { type: Array, default: () => [] },
@@ -166,10 +167,9 @@ const showStockInfo = (item) => {
 	if (!item) return false;
 	if (item.has_batch_no) return true;
 	if (Array.isArray(item.batch_no_data) && item.batch_no_data.length > 0) return true;
-	const qty = Number(item.actual_qty ?? 0) || 0;
 	// Surface the popover when stock is empty/negative even on plain items so
 	// the cashier gets the same "why is it 0?" affordance as for batched ones.
-	return qty <= 0;
+	return getDisplayStockQty(item) <= 0;
 };
 
 const tableRef = ref(null);

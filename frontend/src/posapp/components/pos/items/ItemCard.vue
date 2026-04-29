@@ -147,6 +147,7 @@
 import { computed } from "vue";
 import ItemRateInfoMenu from "./ItemRateInfoMenu.vue";
 import ItemStockInfoMenu from "./ItemStockInfoMenu.vue";
+import { getDisplayStockQty } from "../../../utils/stock";
 
 const props = defineProps({
 	item: { type: Object, required: true },
@@ -197,35 +198,15 @@ const showSecondaryPrice = computed(() => {
 	);
 });
 
-// Headline qty in the card.
-//
-// For batched items we prefer the **sum of non-expired, non-negative
-// batches** over the bin-level `actual_qty`. The two sources can drift
-// server-side (Bin running total vs Batch.batch_qty) — e.g. item 10105
-// shows -3 in the Bin column but the Batch table reports a single
-// non-expired batch with qty 3. The number that actually matters at
-// sale time is per-batch (each invoice line picks one and ERPNext
-// validates that batch on submit), so the bin total is misleading.
-// Showing the sum of batches matches the tooltip's "Available stock"
-// figure and aligns the table A.QTY with what cashiers can actually
-// sell. Falls back to `actual_qty` for non-batched items.
-const numericQty = computed(() => {
-	const item = props.item;
-	const batches = Array.isArray(item?.batch_no_data) ? item.batch_no_data : [];
-	if (batches.length) {
-		let sum = 0;
-		batches.forEach((batch) => {
-			if (!batch || batch.is_expired) return;
-			const qty = Number(batch.batch_qty ?? 0);
-			if (Number.isFinite(qty) && qty > 0) {
-				sum += qty;
-			}
-		});
-		return sum;
-	}
-	const n = Number(item?.actual_qty ?? 0);
-	return Number.isFinite(n) ? n : 0;
-});
+// Headline qty in the card. Delegates to the shared
+// `getDisplayStockQty` helper so the card and the cart validator
+// (`useCartValidation.validateCartItem`) read from the EXACT same
+// source — otherwise the card says "Qty: 3" (sum of non-expired
+// batches) while the validator blocks the click with "No stock
+// available" because it gates on `actual_qty` (Bin running total),
+// which can drift below the per-batch table server-side. See
+// `frontend/src/posapp/utils/stock.ts` for the policy.
+const numericQty = computed(() => getDisplayStockQty(props.item));
 
 const formattedActualQty = computed(() => {
 	if (props.hideQtyDecimals) {

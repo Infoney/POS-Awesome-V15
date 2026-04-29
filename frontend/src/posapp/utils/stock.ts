@@ -5,6 +5,56 @@
 declare const __: any;
 
 /**
+ * Shape we read off an items-panel row when computing displayable stock.
+ * `batch_no_data` is the per-batch table the card surfaces in its meta
+ * row; `actual_qty` is the Bin running total.
+ */
+export type DisplayStockItem = {
+    actual_qty?: number | string | null;
+    has_batch_no?: number | string | boolean | null;
+    batch_no_data?: Array<{
+        batch_no?: string | null;
+        batch_qty?: number | string | null;
+        is_expired?: boolean | null;
+    }> | null;
+};
+
+/**
+ * Returns the headline stock qty the items panel should display AND the
+ * cart-validator should gate on. Single source of truth so the card
+ * never says "Qty: 3" while the gate blocks with "No stock available".
+ *
+ * Logic:
+ *   - For batched rows (`batch_no_data` has at least one entry), sum
+ *     the non-expired batches with positive `batch_qty`. Bin running
+ *     total (`actual_qty`) and the per-batch table can drift
+ *     server-side — Bin -3 vs Batch table 3 has been observed on
+ *     KPG inventory. Per-batch is what ERPNext actually validates at
+ *     submit (each line picks one batch), so this is the number the
+ *     cashier can act on.
+ *   - For non-batched rows, fall back to `actual_qty`.
+ *
+ * Returns 0 (never NaN/null) so callers can compare with `=== 0`.
+ */
+export function getDisplayStockQty(item: DisplayStockItem | null | undefined): number {
+    if (!item) return 0;
+    const batches = Array.isArray(item.batch_no_data) ? item.batch_no_data : [];
+    if (batches.length) {
+        let sum = 0;
+        batches.forEach((batch) => {
+            if (!batch || batch.is_expired) return;
+            const qty = Number(batch.batch_qty ?? 0);
+            if (Number.isFinite(qty) && qty > 0) {
+                sum += qty;
+            }
+        });
+        return sum;
+    }
+    const n = Number(item.actual_qty ?? 0);
+    return Number.isFinite(n) ? n : 0;
+}
+
+/**
  * Parses a value into a boolean based on standard Frappe/POS settings.
  * @param value The value to parse (string, number, or boolean)
  * @returns boolean

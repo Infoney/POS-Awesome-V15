@@ -1,5 +1,6 @@
 import { ref } from "vue";
 import { useToastStore } from "../../../stores/toastStore.js";
+import { getDisplayStockQty } from "../../../utils/stock";
 
 declare const __: (_text: string, _args?: any[]) => string;
 declare const frappe: any;
@@ -74,8 +75,17 @@ export function useCartValidation() {
 				return true;
 			}
 
+			// Block "literally out of stock" using the SAME computation
+			// the items panel uses to draw the headline qty
+			// (`getDisplayStockQty`) — otherwise the card honestly shows
+			// "Qty: 3" (sum of non-expired batches with positive
+			// `batch_qty`) while this gate fires "No stock available"
+			// because it gated on `actual_qty` (Bin running total) and
+			// the two server fields drift. AL-KHANSA report:
+			// ACNECINAMIDE batch 350 had batch_qty=3 but Bin=0 →
+			// click was rejected even though stock was sellable.
 			if (
-				item.actual_qty === 0 &&
+				getDisplayStockQty(item) <= 0 &&
 				posProfile?.posa_display_items_in_stock &&
 				!isReturnInvoice
 			) {
