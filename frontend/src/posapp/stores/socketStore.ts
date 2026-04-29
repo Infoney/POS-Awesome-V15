@@ -31,6 +31,10 @@ import { ref } from "vue";
 import { useToastStore } from "./toastStore";
 import { useUIStore } from "./uiStore";
 import { dispatchRealtimeStockPayload } from "../utils/realtimeStock";
+import { parseNegativeStockMessage } from "../utils/stock";
+import { updateLocalStockCache } from "../../offline/index";
+import stockCoordinator from "../utils/stockCoordinator";
+import { bus } from "../bus";
 
 type InvoiceProcessingPayload = {
   invoice?: string;
@@ -146,6 +150,89 @@ export const useSocketStore = defineStore("socket", () => {
         updatedAt: Date.now(),
       };
       resolveWaiters(invoiceWaiters, invoice, new Error(message), true);
+
+      // Try to surface a per-batch overdraw as a focused, actionable
+      // message instead of pasting the raw HTML-ish ERPNext dump. When
+      // the parser recognises a "Batch X has negative stock of [quantity]
+      // -N" string we:
+      //   - Refresh the items panel cache for that item so the cashier
+      //     immediately sees the real on-hand (typically 0) and can't
+      //     re-add the same line and re-trigger the same failure.
+      //   - Replace the generic "Background processing failed" wall of
+      //     text with a one-line summary naming the batch, item, and
+      //     warehouse so the cashier knows exactly which DB-stuck draft
+      //     to open and adjust.
+      // Falls through to the original generic msgprint/toast path when
+      // the failure isn't a recognised batch overdraw (timestamp
+      // mismatches, permission errors, network drops, etc.).
+      const shortage = parseNegativeStockMessage(message);
+      if (shortage) {
+        try {
+          updateLocalStockCache([
+            { item_code: shortage.item_code, actual_qty: shortage.available },
+          ]);
+        } catch (err) {
+          console.warn(
+            "[socketStore] background-error stock cache refresh failed",
+            err,
+          );
+        }
+        try {
+          stockCoordinator.updateBaseQuantities(
+            [
+              {
+                item_code: shortage.item_code,
+                actual_qty: shortage.available,
+              },
+            ],
+            { source: "stock-conflict" },
+          );
+        } catch (err) {
+          console.warn(
+            "[socketStore] background-error stockCoordinator refresh failed",
+            err,
+          );
+        }
+
+        // Notify any listener that wants to react to a background
+        // shortage (e.g. surface the StockConflictDialog when the cart
+        // still holds the offending line, or jump the cashier to the
+        // stuck draft). Decoupled via the bus so socketStore stays a
+        // pure transport — Pos.vue / Invoice.vue decides what to do.
+        bus.emit("background_invoice_stock_shortage", {
+          invoice,
+          doctype: data.doctype,
+          shortage,
+          rawMessage: message,
+        });
+
+        const focusedMessage = __(
+          "Batch {0} of item {1} can't fulfil the requested {2} (only {3} available in {4}). Open the stuck draft to adjust the qty or pick a different batch, then resubmit.",
+          [
+            shortage.batch_no,
+            shortage.item_code,
+            String(shortage.requested),
+            String(shortage.available),
+            shortage.warehouse,
+          ],
+        );
+
+        if (typeof frappe.msgprint === "function") {
+          frappe.msgprint({
+            title: __("Invoice {0} — stock shortage", [invoice || ""]),
+            message: focusedMessage,
+            indicator: "orange",
+          });
+        }
+
+        toastStore.show({
+          title: __("Stock shortage on Invoice {0}", [invoice || ""]),
+          detail: focusedMessage,
+          color: "warning",
+          timeout: 8000,
+        });
+        return;
+      }
 
       if (typeof frappe.msgprint === "function") {
         frappe.msgprint({
