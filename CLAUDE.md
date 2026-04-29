@@ -264,3 +264,49 @@ _("Text to translate")
 - Frontend assets are compiled to `posawesome/public/dist/`
 - Development mode enables auto-reloading and debugging features
 - Production builds are optimized and minified
+
+## Stock & Batch Validation Architecture (2026-04 onward)
+
+The cart deliberately **does not** block over-stock additions on the
+client. The architecture is "client = best-effort cache, server =
+source of truth at submit time" — this avoided a class of bugs where
+drifting client references (`item.actual_qty`, `_base_actual_qty`,
+`batch_no_data.original_batch_qty` re-stamped on every detail fetch,
+items store hydrated from offline cache during boot) caused either
+false rejections of legitimate sales or silent oversells.
+
+**Validation pipeline:**
+
+1. `useCartValidation.validateCartItem` — only blocks the literal
+   `actual_qty === 0 && posa_display_items_in_stock` case.
+   Everything else passes through.
+2. Auto-batch picker in
+   `frontend/src/posapp/composables/pos/items/useItemAddition.ts`
+   tags each line with a batch. The fallback (when no usable batches
+   remain after cart deduction) MUST filter to batches with positive
+   `original_batch_qty` to skip "zombie" batches (entries left in
+   `batch_no_data` from a stale warehouse / Stock Reconciliation).
+   Picking a zombie silently lands the cart on a batch ERPNext
+   rejects with "Batch X has negative stock of quantity -N".
+3. Pre-flight `check_invoice_availability` — server-side dry-run
+   called by `usePaymentSubmission.checkAvailabilityBeforeSubmit`
+   right before submit. Uses the same `_collect_stock_errors`
+   pipeline the actual submit uses. On `ok: false`, emits
+   `open_stock_conflict_dialog` for `StockConflictDialog`.
+4. Submit catch block — `usePaymentSubmission.submitInvoice` parses
+   server-side "negative stock" messages via the shared
+   `parseNegativeStockMessage` from `frontend/src/posapp/utils/stock.ts`
+   and re-routes to the same dialog.
+5. Background submit failures — `pos_invoice_submit_error` realtime
+   event handled in `frontend/src/posapp/stores/socketStore.ts`
+   parses the shortage, refreshes the items panel cache, and
+   shows a focused msgprint instead of the raw error dump.
+
+**Two ERPNext negative-stock message formats** are supported by the
+parser (the literal word "quantity" between "of" and the number is
+optional):
+
+- Legacy Bin-level: `has negative stock of -1.0`
+- v15+ Serial and Batch Bundle (`BatchNegativeStockError`):
+  `has negative stock of quantity -1.0`
+  (frappe/erpnext#41908, #41909)
