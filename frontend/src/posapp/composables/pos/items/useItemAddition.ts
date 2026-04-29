@@ -493,24 +493,42 @@ export function useItemAddition() {
 					if (usable_batches.length === 0) {
 						// Fallback when every batch in the cart-deducted view
 						// is at 0 (cart already reserves all positive qty).
-						// Previously this called `setBatchQty(item, null)`,
-						// which then ran selectable_batches=positive-only,
-						// found nothing, and silently left the line WITHOUT
-						// a batch_no — so click 3 on a 3-stock item with
-						// clicks 1+2 already reserved both batches showed up
-						// as a no-batch row in the cart.
 						//
-						// Aligned with the "trust the server at submit"
-						// architecture: pick the first FIFO-ordered batch
-						// from `batches` regardless of its cart-deducted
-						// availability so the line is always tagged.
-						// `setBatchQty` with an explicit `value` falls back
-						// to `normalized_batch_data` (full list, exhausted
-						// included) so the find succeeds. Server validates
-						// the actual shortage at submit and surfaces it via
-						// StockConflictDialog with authoritative numbers.
+						// We MUST pick a batch whose ORIGINAL on-hand was
+						// positive — i.e. one ERPNext can actually validate
+						// against without throwing "Batch No XXX has
+						// negative stock of quantity -N". A previous version
+						// of this fallback grabbed `batches[0]` blind, which
+						// happily landed on a "zombie" batch (one with
+						// `original_batch_qty = 0` left in `batch_no_data`
+						// from a stale warehouse / Stock Reconciliation —
+						// e.g. item 10037, batch YBOPH, on-hand 0 but
+						// FIFO-first by expiry date). The cart then carried
+						// a phantom 2 NOS line for YBOPH and the background
+						// submit blew up with the per-batch validator.
+						//
+						// Filtering to `original_batch_qty > 0` keeps the
+						// 2bc0d47b "always tag a batch on auto-allocate"
+						// guarantee for the legitimate case (all real
+						// batches reserved → merge into the FIFO-first real
+						// batch, oversell becomes a clean per-batch
+						// shortage the StockConflictDialog can resolve)
+						// while excluding zombies that would surface a
+						// confusing "negative stock of -N" on a batch the
+						// cashier never saw on the items panel.
+						//
+						// If NO batch has any real stock the line is left
+						// untagged; pre-flight (`check_invoice_availability`)
+						// surfaces the truly-empty case via
+						// StockConflictDialog with the right item-level
+						// shortage numbers.
 						const fallbackBatchNo =
-							(Array.isArray(batches) && batches[0]?.batch_no) || null;
+							(Array.isArray(batches) &&
+								batches.find(
+									(b: any) =>
+										Number(b?.original_batch_qty || 0) > 0,
+								)?.batch_no) ||
+							null;
 						callSetBatchQty(context, new_item, fallbackBatchNo, false);
 					} else {
 						let remaining_qty = new_item.qty;
