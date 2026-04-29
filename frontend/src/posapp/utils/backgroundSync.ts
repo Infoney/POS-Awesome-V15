@@ -26,6 +26,14 @@ export interface BackgroundSyncParams {
     backgroundSyncInFlight: boolean;
     isOffline: boolean;
     usesLimitSearch: boolean;
+    /**
+     * Whether the cashier currently has an active sale in progress (cart
+     * has at least one line). When true the sync is deferred — running it
+     * mid-add stomps on `batch_no_data` snapshots that the in-flight item
+     * addition is reading, producing the "available qty drops by 2 per
+     * add" symptom and other availability drift.
+     */
+    cartActive?: boolean;
 }
 
 /**
@@ -37,6 +45,7 @@ export const shouldRunBackgroundSync = ({
     backgroundSyncInFlight,
     isOffline,
     usesLimitSearch,
+    cartActive = false,
 }: BackgroundSyncParams): boolean => {
     if (!posProfile || !posProfile.name) {
         return false;
@@ -51,6 +60,9 @@ export const shouldRunBackgroundSync = ({
         return false;
     }
     if (usesLimitSearch) {
+        return false;
+    }
+    if (cartActive) {
         return false;
     }
     return true;

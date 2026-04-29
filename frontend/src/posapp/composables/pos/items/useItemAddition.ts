@@ -259,7 +259,19 @@ export function useItemAddition() {
 				const resolvers = currentResolvers[index] || []; // Array of resolvers
 				refreshMergeCacheEntry(context, item, 0);
 				// Benchmark note: Use preloaded batch data to avoid extra fetches on auto-assign.
-				if (shouldAutoSetBatch(context, item)) {
+				//
+				// Bug fix: only re-run batch auto-pick if the line still has
+				// no `batch_no`. The pre-flush allocation pass
+				// (`shouldAllocateAcrossBatches` block in `addItem`) already
+				// stamped a batch onto the line, and re-running setBatchQty
+				// here with `value=null` overwrites `batch_no_data` with a
+				// freshly normalised array whose `original_batch_qty`
+				// baseline is then cached on the cart line. The next add
+				// then read that already-deducted baseline AS WELL AS
+				// re-deducted the cart line's qty, producing the
+				// "available drops by 2 per add" symptom (e.g. 17 → 15 → 13
+				// instead of 17 → 16 → 15) seen in palcotest.
+				if (shouldAutoSetBatch(context, item) && !item.batch_no) {
 					callSetBatchQty(context, item, null, false);
 				}
 				runAsyncTask(

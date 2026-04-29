@@ -976,6 +976,16 @@ onMounted(async () => {
 		eventBus,
 		getItems: () => items.value,
 		getDisplayedItems: () => displayedItems.value,
+		// Defer background sync while the cashier has an active sale
+		// (cart non-empty). Running it mid-add stomps on `batch_no_data`
+		// snapshots that the in-flight item addition is reading and is
+		// one half of the "available qty drops by 2 per add" symptom
+		// seen on palcotest. The deferred sync fires on the next interval
+		// once the cart drains.
+		getCartItemCount: () => {
+			const cartItems = invoiceStore.items;
+			return Array.isArray(cartItems) ? cartItems.length : 0;
+		},
 		itemDetailFetcher,
 	});
 

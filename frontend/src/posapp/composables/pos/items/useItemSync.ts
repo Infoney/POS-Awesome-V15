@@ -48,6 +48,15 @@ export function useItemSync() {
 		getBackgroundSyncPriceList: null | (() => string | null);
 		getItems: () => SyncItem[];
 		getDisplayedItems: () => SyncItem[];
+		/**
+		 * Returns the number of items currently in the active cart. The
+		 * scheduler defers a sync cycle while this is > 0 to avoid
+		 * mutating `batch_no_data` snapshots that an in-flight item
+		 * addition is reading. See `useItemAddition` flushPendingItems
+		 * for the consumer side. Optional — defaults to 0 (sync allowed
+		 * when caller hasn't wired it up).
+		 */
+		getCartItemCount?: () => number;
 		onBackgroundLoadFinished?: () => void;
 	};
 
@@ -158,6 +167,12 @@ export function useItemSync() {
 	async function performBackgroundSync({
 		source = "manual",
 	}: { source?: string } = {}) {
+		const cartItemCount =
+			typeof ctx.getCartItemCount === "function"
+				? Math.max(0, Number(ctx.getCartItemCount()) || 0)
+				: 0;
+		const cartActive = cartItemCount > 0;
+
 		const skipReasons: string[] = [];
 		if (!ctx.pos_profile || !(ctx.pos_profile as any)?.name) {
 			skipReasons.push("missing_pos_profile");
@@ -174,6 +189,9 @@ export function useItemSync() {
 		if (ctx.usesLimitSearch) {
 			skipReasons.push("limit_search_enabled");
 		}
+		if (cartActive) {
+			skipReasons.push("cart_active");
+		}
 
 		if (
 			!shouldRunBackgroundSync({
@@ -182,19 +200,34 @@ export function useItemSync() {
 				backgroundSyncInFlight: background_sync_in_flight.value,
 				isOffline: isOffline(),
 				usesLimitSearch: ctx.usesLimitSearch,
+				cartActive,
 			})
 		) {
-			console.debug(`${BG_SYNC_LOG} skipped`, { source, skipReasons });
+			console.debug(`${BG_SYNC_LOG} skipped`, {
+				source,
+				skipReasons,
+				cartItemCount,
+			});
 			return;
 		}
 
 		background_sync_in_flight.value = true;
 		const startedAt = Date.now();
+		// Capture an ISO floor BEFORE we issue the network request so that
+		// any edits that land server-side during the sync window are still
+		// picked up by the next interval. We advance the watermark past
+		// this floor unconditionally below — `refreshModifiedItems`
+		// previously only advanced when its own `maxModified` happened to
+		// be > the prior cursor, and the API filter `modified_after` was
+		// returning the same 9 items (whose `modified` matched the cursor)
+		// each interval, leaving the cursor frozen at e.g.
+		// '2026-04-23 12:54:07.543629' for days while the same delta
+		// re-fired every 30s.
+		const syncStartIso = new Date().toISOString();
 		let modifiedCount = 0;
 		try {
 			console.info(`${BG_SYNC_LOG} started`, { source });
 			await ensureBackgroundSyncBaseline();
-			const syncCursorBefore = getItemsLastSync();
 			const backgroundPriceList =
 				typeof ctx.getBackgroundSyncPriceList === "function"
 					? ctx.getBackgroundSyncPriceList()
@@ -231,13 +264,23 @@ export function useItemSync() {
 			// Detailed refresh is applied only to changed items above.
 
 			const completedAt = new Date().toISOString();
-			let deltaCursor = getItemsLastSync();
-			if (!deltaCursor || deltaCursor === syncCursorBefore) {
+			const cursorAfter = getItemsLastSync();
+			// Always advance past `syncStartIso`. If `refreshModifiedItems`
+			// already pushed it further (max-modified greater than the
+			// request floor), keep that value. Otherwise pull it forward
+			// to the floor so the next interval doesn't re-fetch the same
+			// delta.
+			let deltaCursor = cursorAfter;
+			if (!cursorAfter || cursorAfter < syncStartIso) {
 				let serverTimestamp: string | null = null;
 				if (ctx.fetchServerItemsTimestamp) {
-					serverTimestamp = await ctx.fetchServerItemsTimestamp();
+					try {
+						serverTimestamp = await ctx.fetchServerItemsTimestamp();
+					} catch {
+						/* fall through to syncStartIso */
+					}
 				}
-				deltaCursor = serverTimestamp || completedAt;
+				deltaCursor = serverTimestamp || syncStartIso;
 				setItemsLastSync(deltaCursor);
 			}
 			last_background_sync_time.value = completedAt;
