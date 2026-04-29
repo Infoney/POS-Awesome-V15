@@ -8,6 +8,7 @@ import {
 } from "../../../../offline/index";
 import { ensureInvoiceClientRequestId } from "../../../../offline/idempotency";
 import stockCoordinator from "../../../utils/stockCoordinator";
+import { parseNegativeStockMessage as parseNegativeStockMessageShared } from "../../../utils/stock";
 
 declare const frappe: any;
 declare const __: (_str: string, _args?: any[]) => string;
@@ -83,16 +84,12 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 	} = options;
 
 	/**
-	 * Try to parse a server-side "negative stock" error message into the
-	 * structured shortage payload that StockConflictDialog expects. Returns
-	 * `null` when the message doesn't match the expected pattern.
-	 *
-	 * The backend normally yields something like:
-	 *   "Batch No <strong>2114011</strong> of an Item <strong>30879</strong>
-	 *    has negative stock of <strong>-1.0</strong> in the warehouse
-	 *    AL-KHANSA PHARMACY - PPC"
-	 * — but the `<strong>` wrappers, decimals, and warehouse spelling all
-	 * vary, so we use a tolerant regex against the stripped text.
+	 * Decorate the shared `parseNegativeStockMessage` output with cart-aware
+	 * `label` and `requested` fields so StockConflictDialog can render a
+	 * friendly row. The shared parser handles the regex (and the v15+
+	 * "of quantity X" variant — see `utils/stock.ts`); this layer just
+	 * cross-references the current invoice doc to upgrade the placeholder
+	 * `requested` (negative balance) with the line's real `stock_qty`.
 	 */
 	const parseNegativeStockMessage = (rawMessage: string): {
 		item_code: string;
@@ -102,29 +99,13 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		requested: number;
 		label: string;
 	} | null => {
-		if (!rawMessage) return null;
-		const stripped = String(rawMessage)
-			.replace(/<[^>]+>/g, "")
-			.replace(/\s+/g, " ")
-			.trim();
-		// Match both "negative stock" and "Negative Stock" with optional
-		// "the warehouse" / "warehouse" wording, and a trailing period.
-		const re =
-			/Batch\s+No\s+([^\s]+)\s+of\s+an?\s+Item\s+([^\s]+)\s+has\s+negative\s+stock\s+of\s+(-?[0-9]+(?:\.[0-9]+)?)\s+in\s+(?:the\s+)?warehouse\s+(.+?)(?:\.|$)/i;
-		const match = stripped.match(re);
-		if (!match) return null;
-		const batch_no = String(match[1] ?? "");
-		const item_code = String(match[2] ?? "");
-		const negativeQty = Math.abs(parseFloat(String(match[3] ?? "0")) || 0);
-		const warehouse = String(match[4] ?? "").trim();
-		if (!batch_no || !item_code || !warehouse) return null;
+		const parsed = parseNegativeStockMessageShared(rawMessage);
+		if (!parsed) return null;
+		const { item_code, batch_no, warehouse, negative_qty } = parsed;
 
-		// Try to read the cart line so we can label the item nicely + show
-		// the actual requested quantity from this invoice rather than just
-		// the negative balance the server reports.
 		const doc = unref(invoiceDoc);
 		let label = item_code;
-		let requested = negativeQty;
+		let requested = negative_qty;
 		if (doc && Array.isArray(doc.items)) {
 			const line = doc.items.find(
 				(l: any) =>
@@ -147,7 +128,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		// Available is whatever was on hand BEFORE this invoice tried to
 		// consume it. The server's negative balance equals
 		// (available - requested), so available = requested - |negative|.
-		const available = Math.max(requested - negativeQty, 0);
+		const available = Math.max(requested - negative_qty, 0);
 
 		return {
 			item_code,
