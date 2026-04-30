@@ -1,6 +1,6 @@
 import _ from "lodash";
 import { withPerf } from "../../../utils/perf";
-import { parseBooleanSetting } from "../../../utils/stock";
+import { parseBooleanSetting, getDisplayStockQty } from "../../../utils/stock";
 import { useToastStore } from "../../../stores/toastStore";
 import { useStockUtils } from "../shared/useStockUtils";
 
@@ -398,17 +398,31 @@ export function useItemAddition() {
 					context.stock_settings?.allow_negative_stock,
 				) || parseBooleanSetting(item.allow_negative_stock);
 
+			// "Literally out of stock" sanity gate. Use the SAME
+			// `getDisplayStockQty` policy the items panel renders with
+			// (sum of non-expired positive `batch_qty` for batched rows,
+			// `actual_qty` otherwise) so the card and this gate can never
+			// disagree. AL-KHANSA report: AMARYL 1MG / ALLOPOT BODY WASH
+			// cards showed positive qty but the click fired "Cannot add
+			// an item with zero or negative quantity" because this gate
+			// read `item.actual_qty` (Bin running total) which had drifted
+			// to 0/negative while the per-batch table still had stock.
+			// Server-side `_collect_stock_errors` runs the same per-batch
+			// policy at submit, so trusting the batch sum here keeps
+			// preflight and submit aligned.
+			const displayStockQty = getDisplayStockQty(item);
 			if (
 				!context.isReturnInvoice &&
 				!deferStockValidationToPayment &&
 				blockSale &&
 				item.is_stock_item &&
-				item.actual_qty <= 0 &&
+				displayStockQty <= 0 &&
 				!allowNegativeStock
 			) {
 				console.debug("POS stock gate: item blocked", {
 					item_code: item.item_code,
 					actual_qty: item.actual_qty,
+					display_stock_qty: displayStockQty,
 					block_sale_beyond_available_qty: blockSale,
 					allow_negative_stock: allowNegativeStock,
 					item_allow_negative_stock: parseBooleanSetting(

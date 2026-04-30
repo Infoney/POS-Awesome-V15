@@ -42,11 +42,14 @@ export function useCartValidation() {
 		//   - Variant template → block (the cashier needs to pick a child).
 		//   - Order / Quotation flows → pass (stock is enforced when the
 		//     order is converted to an invoice).
-		//   - Hard "out of stock" sanity gate (actual_qty === 0 AND the
-		//     profile is configured to display only in-stock items) →
-		//     block. This is the only stock check that doesn't depend on
-		//     cart math; it just refuses to even try when the bin is
-		//     empty.
+		//   - Hard "out of stock" sanity gate (`getDisplayStockQty(item)
+		//     <= 0` AND the profile is configured to display only
+		//     in-stock items) → block. Same policy the items panel uses
+		//     to draw the qty so card and gate can never disagree
+		//     (sum of non-expired positive `batch_qty` for batched rows,
+		//     `actual_qty` otherwise — Bin running total can drift below
+		//     a positive Batch table server-side, so trusting the per-
+		//     batch policy keeps card and gate aligned).
 		//   - Everything else → pass through to addItem. ERPNext validates
 		//     batch / bin shortages on submit and the existing
 		//     StockConflictDialog flow (see usePaymentSubmission
