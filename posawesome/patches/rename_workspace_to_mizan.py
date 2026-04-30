@@ -1,42 +1,56 @@
 import frappe
 
-WORKSPACE_NAME = "POS Awesome"
+OLD_WORKSPACE_NAME = "POS Awesome"
+NEW_WORKSPACE_NAME = "Mizan"
 
 
 def execute():
     """
-    Re-applies the workspace JSON fixture (which now carries the Mizan brand)
-    to existing sites. Without this patch, `bench migrate` does NOT re-import
-    a Workspace fixture once the DB record exists — it only imports on first
-    install — so the sidebar/header keep reading "POS Awesome" forever.
+    Reset the workspace so Frappe's post-patch fixture sync recreates it
+    under the Mizan brand AND new primary key.
 
-    Strategy mirrors patches/recreate_pos_awesome_workspace.py: delete the
-    existing workspace doc, then Frappe's standard sync step that runs after
-    patches recreates it from posawesome/workspace/pos_awesome/pos_awesome.json
-    with the new "Mizan" / "Mizan App" labels.
+    History:
+      * The original workspace was named "POS Awesome" (URL slug
+        `/app/pos-awesome`). An earlier rebrand pass updated only the
+        display fields (title/label/header text/shortcuts) and kept
+        `name = "POS Awesome"` to preserve URL bookmarks.
+      * That worked for cashiers, but Frappe's module → workspace
+        navigation looks up a workspace whose name matches the
+        module name. After the module was renamed to "Mizan", that
+        lookup couldn't find any workspace called "Mizan" and
+        navigated visitors to `/app/mizan`, which 404'd as
+        "Page mizan not found" on a fresh test bench install.
+      * So the workspace primary key now also moves: the JSON fixture
+        is `posawesome/mizan/workspace/mizan/mizan.json` with
+        `"name": "Mizan"`. URL becomes `/app/mizan`.
 
-    The workspace's primary key (`name`) intentionally stays "POS Awesome" —
-    that's the URL slug source (/app/pos-awesome) and renaming it would break
-    existing bookmarks. Only the *display* fields change.
+    What this patch does on every site state:
+      1. Drop the old "POS Awesome" workspace if it's still in DB.
+      2. Drop any stale "Mizan" workspace whose content was written
+         by an older version of this rebrand (idempotency belt).
+      3. Let Frappe's standard post-patch workspace sync recreate
+         "Mizan" from the JSON fixture.
+
+    URL change is intentional and expected. Existing bookmarks at
+    `/app/pos-awesome` will 404 — see docs/MIZAN_RENAME.md for the
+    deploy comms checklist.
     """
-    if not frappe.db.exists("Workspace", WORKSPACE_NAME):
-        print(f"Workspace '{WORKSPACE_NAME}' not found, nothing to rename.")
-        return
+    deleted_any = False
+    for ws in (OLD_WORKSPACE_NAME, NEW_WORKSPACE_NAME):
+        if not frappe.db.exists("Workspace", ws):
+            continue
+        try:
+            frappe.delete_doc("Workspace", ws, force=1, ignore_permissions=True)
+            print(
+                f"Deleted workspace '{ws}' so the post-patch sync can recreate "
+                f"it from the updated JSON fixture."
+            )
+            deleted_any = True
+        except Exception as e:
+            print(f"Failed to delete workspace '{ws}': {e}")
 
-    title = frappe.db.get_value("Workspace", WORKSPACE_NAME, "title")
-    if title == "Mizan":
-        print(f"Workspace '{WORKSPACE_NAME}' already shows as 'Mizan', skipping.")
-        return
-
-    try:
-        frappe.delete_doc("Workspace", WORKSPACE_NAME, force=1, ignore_permissions=True)
+    if deleted_any:
         frappe.db.commit()
-        print(
-            f"Deleted workspace '{WORKSPACE_NAME}' so the migration step recreates "
-            f"it from the updated JSON fixture (Mizan brand)."
-        )
-    except Exception as e:
-        print(f"Failed to delete workspace '{WORKSPACE_NAME}' for Mizan rename: {e}")
-        return
-
-    frappe.clear_cache()
+        frappe.clear_cache()
+    else:
+        print("No POS Awesome / Mizan workspace found in DB — clean install or already migrated.")
