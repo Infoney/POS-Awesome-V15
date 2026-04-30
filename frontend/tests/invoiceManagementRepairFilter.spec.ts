@@ -219,7 +219,7 @@ describe("InvoiceManagement repair candidate filter", () => {
 
 		expect(callMock).toHaveBeenCalledWith(
 			expect.objectContaining({
-				method: "posawesome.posawesome.api.payments.repair_overpayment_change_allocations",
+				method: "posawesome.mizan.api.payments.repair_overpayment_change_allocations",
 				args: expect.objectContaining({
 					doctype: "POS Invoice",
 					invoice_names: ["ACC-PINV-0001"],

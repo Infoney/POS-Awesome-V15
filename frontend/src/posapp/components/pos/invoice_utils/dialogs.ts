@@ -224,7 +224,7 @@ export async function get_draft_invoices(context: any) {
 export async function get_draft_orders(context: any) {
 	try {
 		const { message } = await frappe.call({
-			method: "posawesome.posawesome.api.sales_orders.search_orders",
+			method: "posawesome.mizan.api.sales_orders.search_orders",
 			args: {
 				company: context.pos_profile.company,
 				currency: context.pos_profile.currency,
@@ -363,7 +363,7 @@ export async function change_price_list_rate(
 
 		try {
 			await frappe.call({
-				method: "posawesome.posawesome.api.items.update_price_list_rate",
+				method: "posawesome.mizan.api.items.update_price_list_rate",
 				args: {
 					item_code: itemCode,
 					price_list: priceList,

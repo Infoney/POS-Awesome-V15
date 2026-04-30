@@ -11,7 +11,7 @@ export function useBundles() {
 		}
 		try {
 			const r = await frappe.call({
-				method: "posawesome.posawesome.api.bundles.get_bundle_components",
+				method: "posawesome.mizan.api.bundles.get_bundle_components",
 				args: { bundles: [bundleCode] },
 			});
 			const data =

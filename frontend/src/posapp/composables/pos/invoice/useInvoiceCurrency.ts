@@ -104,7 +104,7 @@ export function useInvoiceCurrency() {
 		let initialisedFromProfile = false;
 		try {
 			const r = await frappe.call({
-				method: "posawesome.posawesome.api.invoices.get_available_currencies",
+				method: "posawesome.mizan.api.invoices.get_available_currencies",
 			});
 
 			if (r.message) {
@@ -173,7 +173,7 @@ export function useInvoiceCurrency() {
 				exchange_rate.value = 1;
 			} else {
 				const r = await frappe.call({
-					method: "posawesome.posawesome.api.invoices.fetch_exchange_rate_pair",
+					method: "posawesome.mizan.api.invoices.fetch_exchange_rate_pair",
 					args: {
 						from_currency: plCurrency,
 						to_currency: selected_currency.value,
@@ -206,7 +206,7 @@ export function useInvoiceCurrency() {
 				exchange_rate_date.value = frappe.datetime.get_today();
 			} else {
 				const r2 = await frappe.call({
-					method: "posawesome.posawesome.api.invoices.fetch_exchange_rate_pair",
+					method: "posawesome.mizan.api.invoices.fetch_exchange_rate_pair",
 					args: {
 						from_currency: selected_currency.value,
 						to_currency: companyCurrency,
@@ -346,7 +346,7 @@ export function useInvoiceCurrency() {
 		if (pos_profile.value.posa_enable_price_list_dropdown) {
 			try {
 				const r = await frappe.call({
-					method: "posawesome.posawesome.api.utilities.get_selling_price_lists",
+					method: "posawesome.mizan.api.utilities.get_selling_price_lists",
 				});
 				if (r && r.message) {
 					price_lists.value = r.message.map((pl: any) => pl.name);
@@ -365,7 +365,7 @@ export function useInvoiceCurrency() {
 
 		try {
 			const r = await frappe.call({
-				method: "posawesome.posawesome.api.invoices.get_price_list_currency",
+				method: "posawesome.mizan.api.invoices.get_price_list_currency",
 				args: { price_list: selected_price_list.value },
 			});
 			if (r && r.message) {

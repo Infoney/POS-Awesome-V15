@@ -20,7 +20,7 @@ interface ClientErrorPayload {
 	timestamp: string;
 }
 
-const ERROR_LOG_METHOD = "posawesome.posawesome.api.utilities.log_client_error";
+const ERROR_LOG_METHOD = "posawesome.mizan.api.utilities.log_client_error";
 const DEDUPE_WINDOW_MS = 10000;
 const MAX_STRING_LENGTH = 2000;
 

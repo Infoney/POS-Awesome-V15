@@ -363,7 +363,7 @@ export const useCustomersStore = defineStore("customers", () => {
 				return;
 			}
 			frappe.call({
-				method: "posawesome.posawesome.api.customers.get_customer_names",
+				method: "posawesome.mizan.api.customers.get_customer_names",
 				args: {
 					pos_profile: serializedProfile,
 					modified_after: modifiedAfter,
@@ -459,7 +459,7 @@ export const useCustomersStore = defineStore("customers", () => {
 				return;
 			}
 			const response = await (frappe.call as any)({
-				method: "posawesome.posawesome.api.customers.get_customers_count",
+				method: "posawesome.mizan.api.customers.get_customers_count",
 				args: { pos_profile: serializedProfile },
 			});
 			const serverCount = response.message || 0;
@@ -565,7 +565,7 @@ export const useCustomersStore = defineStore("customers", () => {
 		try {
 			try {
 				const countResponse = await (frappe.call as any)({
-					method: "posawesome.posawesome.api.customers.get_customers_count",
+					method: "posawesome.mizan.api.customers.get_customers_count",
 					args: { pos_profile: serializedProfile },
 				});
 				totalCustomerCount.value = countResponse.message || 0;

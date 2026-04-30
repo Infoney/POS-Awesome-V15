@@ -230,7 +230,7 @@ export async function syncOfflineInvoices() {
 			const queuedInvoice = entry.payload;
 			try {
 				await frappe.call({
-					method: "posawesome.posawesome.api.invoices.submit_invoice",
+					method: "posawesome.mizan.api.invoices.submit_invoice",
 					args: {
 						invoice: queuedInvoice.invoice,
 						data: queuedInvoice.data,
@@ -246,7 +246,7 @@ export async function syncOfflineInvoices() {
 				console.error("Failed to submit invoice, saving as draft", error);
 				try {
 					await frappe.call({
-						method: "posawesome.posawesome.api.invoices.update_invoice",
+						method: "posawesome.mizan.api.invoices.update_invoice",
 						args: { data: queuedInvoice.invoice },
 					});
 					drafted += 1;

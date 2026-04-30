@@ -179,7 +179,7 @@ export function useInvoiceDetails(options: InvoiceDetailsOptions) {
 		}
 
 		frappe.call({
-			method: "posawesome.posawesome.api.customers.get_customer_addresses",
+			method: "posawesome.mizan.api.customers.get_customer_addresses",
 			args: { customer: doc.customer },
 			async: true,
 			callback: function (r: any) {
@@ -266,7 +266,7 @@ export function useInvoiceDetails(options: InvoiceDetailsOptions) {
 		}
 
 		frappe.call({
-			method: "posawesome.posawesome.api.utilities.get_sales_person_names",
+			method: "posawesome.mizan.api.utilities.get_sales_person_names",
 			callback: function (r: any) {
 				if (r.message && r.message.length > 0) {
 					sales_persons.value = r.message.map((sp: any) => ({

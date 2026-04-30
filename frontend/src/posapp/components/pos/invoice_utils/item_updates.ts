@@ -17,7 +17,7 @@ export async function update_items_details(context: any, items: any[]) {
 
 	try {
 		const response = await frappe.call({
-			method: "posawesome.posawesome.api.items.get_items_details",
+			method: "posawesome.mizan.api.items.get_items_details",
 			args: {
 				pos_profile: JSON.stringify(context.pos_profile),
 				items_data: JSON.stringify(items),
@@ -187,7 +187,7 @@ export async function _performItemDetailUpdate(
 			? context.get_invoice_doc()
 			: {};
 		const response = await frappe.call({
-			method: "posawesome.posawesome.api.items.get_item_detail",
+			method: "posawesome.mizan.api.items.get_item_detail",
 			args: {
 				warehouse: item.warehouse || context.pos_profile.warehouse,
 				doc: currentDoc,

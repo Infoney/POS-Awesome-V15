@@ -348,7 +348,7 @@ export default {
 		async fetchGroupItems(group) {
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_items",
+					method: "posawesome.mizan.api.items.get_items",
 					args: {
 						pos_profile: JSON.stringify(this.pos_profile),
 						item_group: group,

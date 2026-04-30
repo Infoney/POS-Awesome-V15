@@ -208,7 +208,7 @@ describe("InvoiceManagement supervisor scope", () => {
 
 		expect(callMock).toHaveBeenCalledWith(
 			expect.objectContaining({
-				method: "posawesome.posawesome.api.invoices.get_draft_invoices",
+				method: "posawesome.mizan.api.invoices.get_draft_invoices",
 				args: {
 					pos_opening_shift: "POSA-OS-26-0000007",
 					doctype: "Sales Invoice",

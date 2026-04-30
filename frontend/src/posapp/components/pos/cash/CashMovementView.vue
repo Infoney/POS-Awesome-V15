@@ -170,8 +170,8 @@ async function handleSubmit(payload: any) {
 		if (isOffline()) {
 			const method =
 				payload.movementType === "Deposit"
-					? "posawesome.posawesome.api.cash_movement.service.create_cash_deposit"
-					: "posawesome.posawesome.api.cash_movement.service.create_pos_expense";
+					? "posawesome.mizan.api.cash_movement.service.create_cash_deposit"
+					: "posawesome.mizan.api.cash_movement.service.create_pos_expense";
 			await saveOfflineCashMovement({
 				method,
 				args: {

@@ -142,7 +142,7 @@ export async function runSupportedOfflineSyncResource({
 				...sharedArgs,
 				fetcher: ({ posProfile, watermark, schemaVersion }) =>
 					callOfflineSyncMethod(
-						"posawesome.posawesome.api.offline_sync.bootstrap.sync_bootstrap_config",
+						"posawesome.mizan.api.offline_sync.bootstrap.sync_bootstrap_config",
 						{
 							pos_profile: posProfile,
 							watermark,
@@ -155,7 +155,7 @@ export async function runSupportedOfflineSyncResource({
 				...sharedArgs,
 				fetcher: ({ posProfile, watermark, schemaVersion }) =>
 					callOfflineSyncMethod(
-						"posawesome.posawesome.api.offline_sync.bootstrap.sync_bootstrap_config",
+						"posawesome.mizan.api.offline_sync.bootstrap.sync_bootstrap_config",
 						{
 							pos_profile: posProfile,
 							watermark,
@@ -173,7 +173,7 @@ export async function runSupportedOfflineSyncResource({
 					schemaVersion,
 				}) =>
 					callOfflineSyncMethod(
-						"posawesome.posawesome.api.offline_sync.currencies.sync_currency_scope",
+						"posawesome.mizan.api.offline_sync.currencies.sync_currency_scope",
 						{
 							pos_profile: posProfile,
 							watermark,
@@ -187,7 +187,7 @@ export async function runSupportedOfflineSyncResource({
 				...sharedArgs,
 				fetcher: ({ posProfile, watermark, schemaVersion }) =>
 					callOfflineSyncMethod(
-						"posawesome.posawesome.api.offline_sync.payment_methods.sync_payment_method_currencies",
+						"posawesome.mizan.api.offline_sync.payment_methods.sync_payment_method_currencies",
 						{
 							pos_profile: posProfile,
 							watermark,
@@ -207,7 +207,7 @@ export async function runSupportedOfflineSyncResource({
 					schemaVersion,
 				}) =>
 					callOfflineSyncMethod(
-						"posawesome.posawesome.api.offline_sync.items.sync_items",
+						"posawesome.mizan.api.offline_sync.items.sync_items",
 						{
 							pos_profile: posProfile,
 							price_list: priceList,
@@ -227,7 +227,7 @@ export async function runSupportedOfflineSyncResource({
 				...sharedArgs,
 				fetcher: ({ posProfile, watermark, schemaVersion }) =>
 					callOfflineSyncMethod(
-						"posawesome.posawesome.api.offline_sync.stock.sync_stock",
+						"posawesome.mizan.api.offline_sync.stock.sync_stock",
 						{
 							pos_profile: posProfile,
 							watermark,
@@ -240,7 +240,7 @@ export async function runSupportedOfflineSyncResource({
 				...sharedArgs,
 				fetcher: ({ posProfile, watermark, schemaVersion }) =>
 					callOfflineSyncMethod(
-						"posawesome.posawesome.api.offline_sync.customers.sync_customers",
+						"posawesome.mizan.api.offline_sync.customers.sync_customers",
 						{
 							pos_profile: posProfile,
 							watermark,

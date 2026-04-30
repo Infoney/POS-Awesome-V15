@@ -86,7 +86,7 @@ describe("NavbarCashierPinForm", () => {
 
 		expect(frappeCall).toHaveBeenCalledWith(
 			expect.objectContaining({
-				method: "posawesome.posawesome.api.employees.get_cashier_pin_status",
+				method: "posawesome.mizan.api.employees.get_cashier_pin_status",
 			}),
 		);
 		expect(wrapper.get('[data-test="cashier-pin-message"]').text()).toContain(
@@ -145,7 +145,7 @@ describe("NavbarCashierPinForm", () => {
 
 		expect(frappeCall).toHaveBeenLastCalledWith(
 			expect.objectContaining({
-				method: "posawesome.posawesome.api.employees.save_cashier_pin",
+				method: "posawesome.mizan.api.employees.save_cashier_pin",
 			}),
 		);
 		expect(wrapper.get('[data-test="cashier-pin-message"]').text()).toContain(

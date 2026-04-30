@@ -8,7 +8,7 @@ authors = [
     { name = "Ahmed Osama", email = "eng.ahmed.osama.1190@gmail.com"},
     { name = "Samarth Upare", email = "samarth.upare@redtra.com"},
 ]
-description = "POS project that's simply awesome"
+description = "Mizan — Point of Sale for ERPNext (Infoney). Forked from POS Awesome 2026-04 and rebranded; bench app slug is preserved for asset-path stability."
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]

@@ -146,7 +146,7 @@ describe("EmployeeSwitchDialog", () => {
 		await Promise.resolve();
 
 		expect((window as any).frappe.call).toHaveBeenCalledWith({
-			method: "posawesome.posawesome.api.employees.verify_terminal_employee_pin",
+			method: "posawesome.mizan.api.employees.verify_terminal_employee_pin",
 			args: {
 				pos_profile: "Main POS",
 				user: "backup@example.com",

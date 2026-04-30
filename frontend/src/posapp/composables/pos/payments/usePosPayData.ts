@@ -80,7 +80,7 @@ export function usePosPayData({
 					: posProfileSearch || null;
 
 			const r = await frappe.call(
-				"posawesome.posawesome.api.payment_entry.get_outstanding_invoices",
+				"posawesome.mizan.api.payment_entry.get_outstanding_invoices",
 				{
 					customer: customerName.value,
 					party: customerName.value,
@@ -137,7 +137,7 @@ export function usePosPayData({
 
 		try {
 			const r = await frappe.call(
-				"posawesome.posawesome.api.payment_entry.get_unallocated_payments",
+				"posawesome.mizan.api.payment_entry.get_unallocated_payments",
 				{
 					customer: customerName.value,
 					party: customerName.value,
@@ -205,7 +205,7 @@ export function usePosPayData({
 
 		try {
 			const r = await frappe.call(
-				"posawesome.posawesome.api.m_pesa.get_mpesa_draft_payments",
+				"posawesome.mizan.api.m_pesa.get_mpesa_draft_payments",
 				{
 					company: company.value,
 					mode_of_payment: null,
@@ -253,7 +253,7 @@ export function usePosPayData({
 
 		try {
 			const response = await frappe.call({
-				method: "posawesome.posawesome.api.payment_entry.auto_reconcile_customer_invoices",
+				method: "posawesome.mizan.api.payment_entry.auto_reconcile_customer_invoices",
 				args: {
 					customer: customerName.value,
 					party_type: resolvedPartyType,
@@ -350,7 +350,7 @@ export function usePosPayData({
 
 		try {
 			const r = await frappe.call({
-				method: "posawesome.posawesome.api.customers.get_customer_info",
+				method: "posawesome.mizan.api.customers.get_customer_info",
 				args: {
 					customer,
 					company: company.value || null,

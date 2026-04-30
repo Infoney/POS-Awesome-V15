@@ -145,7 +145,7 @@ export function useItemsSync() {
 		try {
 			// @ts-ignore
 			const response = await frappe.call({
-				method: "posawesome.posawesome.api.items.get_delta_items",
+				method: "posawesome.mizan.api.items.get_delta_items",
 				args: {
 					pos_profile: JSON.stringify(posProfile),
 					price_list: activePriceList,
@@ -263,7 +263,7 @@ export function useItemsSync() {
 
 				// @ts-ignore
 				const response = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_items",
+					method: "posawesome.mizan.api.items.get_items",
 					args: {
 						pos_profile: JSON.stringify(requestProfile),
 						price_list: activePriceList,

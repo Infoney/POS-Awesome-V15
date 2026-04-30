@@ -61,7 +61,7 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 		if (!company) return;
 
 		frappe.call({
-			method: "posawesome.posawesome.api.m_pesa.get_mpesa_mode_of_payment",
+			method: "posawesome.mizan.api.m_pesa.get_mpesa_mode_of_payment",
 			args: { company },
 			async: true,
 			callback: function (r: any) {
@@ -324,7 +324,7 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 			};
 
 			const updateResponse = await frappe.call({
-				method: "posawesome.posawesome.api.invoices.update_invoice",
+				method: "posawesome.mizan.api.invoices.update_invoice",
 				args: { data: argsData },
 			});
 
@@ -333,7 +333,7 @@ export function usePaymentMethods(options: PaymentMethodsOptions) {
 			}
 
 			const paymentResponse = await frappe.call({
-				method: "posawesome.posawesome.api.payments.create_payment_request",
+				method: "posawesome.mizan.api.payments.create_payment_request",
 				args: { doc: doc },
 			});
 

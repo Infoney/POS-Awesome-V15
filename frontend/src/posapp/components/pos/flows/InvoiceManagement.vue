@@ -1293,7 +1293,7 @@ export default {
 				const responses = await Promise.all(
 					Object.entries(invoicesByDoctype).map(async ([doctype, invoiceNames]) => {
 						const { message } = await frappe.call({
-							method: "posawesome.posawesome.api.payments.repair_overpayment_change_allocations",
+							method: "posawesome.mizan.api.payments.repair_overpayment_change_allocations",
 							args: {
 								doctype,
 								invoice_names: invoiceNames,
@@ -1475,7 +1475,7 @@ export default {
 		},
 		async runRepairChangeAllocation(invoice, dryRun = true) {
 			const response = await frappe.call({
-				method: "posawesome.posawesome.api.payments.repair_overpayment_change_allocations",
+				method: "posawesome.mizan.api.payments.repair_overpayment_change_allocations",
 				args: {
 					doctype: invoice.doctype || this.currentInvoiceDoctype || "Sales Invoice",
 					invoice_names: [invoice.name],
@@ -1617,7 +1617,7 @@ export default {
 			this.loading = true;
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.invoices.get_draft_invoices",
+					method: "posawesome.mizan.api.invoices.get_draft_invoices",
 					args: {
 						pos_opening_shift: this.posOpeningShift.name,
 						doctype: this.currentInvoiceDoctype,
@@ -1650,7 +1650,7 @@ export default {
 		},
 		async loadDraft(invoice) {
 			try {
-				const { message } = await frappe.call({ method: "posawesome.posawesome.api.invoices.get_draft_invoice_doc", args: { invoice_name: invoice.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
+				const { message } = await frappe.call({ method: "posawesome.mizan.api.invoices.get_draft_invoice_doc", args: { invoice_name: invoice.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
 				if (message) {
 					this.invoiceStore.triggerLoadInvoice(message);
 					this.uiStore.closeInvoiceManagement();
@@ -1663,7 +1663,7 @@ export default {
 		async deleteDraft(invoice) {
 			if (!window.confirm(__("Delete draft invoice {0}?", [invoice.name]))) return;
 			try {
-				await frappe.call({ method: "posawesome.posawesome.api.invoices.delete_invoice", args: { invoice: invoice.name } });
+				await frappe.call({ method: "posawesome.mizan.api.invoices.delete_invoice", args: { invoice: invoice.name } });
 				this.toastStore.show({ title: __("Draft invoice deleted"), color: "success" });
 				await this.loadDrafts();
 			} catch (error) {
@@ -1673,7 +1673,7 @@ export default {
 		},
 		async createReturn(invoice) {
 			try {
-				const { message } = await frappe.call({ method: "posawesome.posawesome.api.invoices.get_invoice_for_return", args: { invoice_name: invoice.name, pos_profile: this.posProfile?.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
+				const { message } = await frappe.call({ method: "posawesome.mizan.api.invoices.get_invoice_for_return", args: { invoice_name: invoice.name, pos_profile: this.posProfile?.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
 				const returnDoc = message;
 				if (!returnDoc || !Array.isArray(returnDoc.items) || !returnDoc.items.length) {
 					this.toastStore.show({ title: __("No returnable items found for this invoice"), color: "warning" });

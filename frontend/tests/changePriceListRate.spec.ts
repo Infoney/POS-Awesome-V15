@@ -59,7 +59,7 @@ describe("change_price_list_rate", () => {
 		expect(context.schedulePricingRuleApplication).toHaveBeenCalledWith(true);
 		expect(context.forceUpdate).toHaveBeenCalled();
 		expect(globalThis.frappe.call).toHaveBeenCalledWith({
-			method: "posawesome.posawesome.api.items.update_price_list_rate",
+			method: "posawesome.mizan.api.items.update_price_list_rate",
 			args: {
 				item_code: "ITEM-001",
 				price_list: "Standard Selling",

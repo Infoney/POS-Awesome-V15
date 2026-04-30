@@ -79,7 +79,7 @@ export async function ensurePosProfile() {
 		if (navigator.onLine) {
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.utils.get_active_pos_profile",
+					method: "posawesome.mizan.api.utils.get_active_pos_profile",
 					args: { user: frappe.session.user },
 				});
 				if (
@@ -99,7 +99,7 @@ export async function ensurePosProfile() {
 	}
 	try {
 		const res = await frappe.call({
-			method: "posawesome.posawesome.api.utils.get_active_pos_profile",
+			method: "posawesome.mizan.api.utils.get_active_pos_profile",
 			args: { user: frappe.session.user },
 		});
 		if (res.message) {

@@ -147,7 +147,7 @@ export async function cancel_invoice(context: any) {
 	if (doc.name && context.pos_profile.posa_allow_delete) {
 		const cancelledName = doc.name;
 		await frappe.call({
-			method: "posawesome.posawesome.api.invoices.delete_invoice",
+			method: "posawesome.mizan.api.invoices.delete_invoice",
 			args: { invoice: doc.name },
 			async: true,
 			callback: function (r) {
@@ -308,7 +308,7 @@ export async function get_invoice_from_order_doc(context: any) {
 	let doc: any = {};
 	if (context.invoice_doc.doctype == "Sales Order") {
 		await frappe.call({
-			method: "posawesome.posawesome.api.invoices.create_sales_invoice_from_order",
+			method: "posawesome.mizan.api.invoices.create_sales_invoice_from_order",
 			args: {
 				sales_order: context.invoice_doc.name,
 			},

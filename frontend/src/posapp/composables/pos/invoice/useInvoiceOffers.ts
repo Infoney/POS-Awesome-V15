@@ -1186,7 +1186,7 @@ export function useInvoiceOffers() {
 				};
 				// Price list logic...
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_items_details",
+					method: "posawesome.mizan.api.items.get_items_details",
 					args,
 				});
 				const fetched = Array.isArray(message) ? message[0] : null;

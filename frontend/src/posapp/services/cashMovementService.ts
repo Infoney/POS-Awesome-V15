@@ -1,6 +1,6 @@
 import api from "./api";
 
-const baseMethod = "posawesome.posawesome.api.cash_movement.service";
+const baseMethod = "posawesome.mizan.api.cash_movement.service";
 
 const cashMovementService = {
 	getContext(pos_profile?: string, pos_opening_shift?: string) {

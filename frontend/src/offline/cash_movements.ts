@@ -16,9 +16,9 @@ type AnyRecord = Record<string, any>;
 const CASH_MOVEMENT_ENTITY: OfflineEntityType = "cash_movement";
 
 const CREATE_EXPENSE_METHOD =
-	"posawesome.posawesome.api.cash_movement.service.create_pos_expense";
+	"posawesome.mizan.api.cash_movement.service.create_pos_expense";
 const CREATE_DEPOSIT_METHOD =
-	"posawesome.posawesome.api.cash_movement.service.create_cash_deposit";
+	"posawesome.mizan.api.cash_movement.service.create_cash_deposit";
 
 export async function saveOfflineCashMovement(entry: AnyRecord) {
 	let cleanEntry;

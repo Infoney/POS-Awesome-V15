@@ -156,7 +156,7 @@ function loadAppInfo() {
 	appInfoError.value = false;
 
 	frappe.call({
-		method: "posawesome.posawesome.api.utilities.get_app_info",
+		method: "posawesome.mizan.api.utilities.get_app_info",
 		callback: (r) => {
 			loadingAppInfo.value = false;
 			if (Array.isArray(r.message.apps)) {

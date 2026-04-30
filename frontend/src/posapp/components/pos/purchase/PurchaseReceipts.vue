@@ -337,7 +337,7 @@ export default {
 			try {
 				const { message } = await frappe.call({
 					method:
-						"posawesome.posawesome.api.purchase_orders.search_suppliers",
+						"posawesome.mizan.api.purchase_orders.search_suppliers",
 					args: { search_text: searchText, limit: 20 },
 				});
 				supplierOptions.value = Array.isArray(message) ? message : [];
@@ -453,7 +453,7 @@ export default {
 			itemSearchLoading.value = true;
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.purchase_orders.search_items",
+					method: "posawesome.mizan.api.purchase_orders.search_items",
 					args: { search_text: searchText, limit: 20 },
 				});
 				itemSearchResults.value = Array.isArray(message) ? message : [];
@@ -559,7 +559,7 @@ export default {
 			try {
 				const { message } = await frappe.call({
 					method:
-						"posawesome.posawesome.api.purchase_orders.get_buying_price_list",
+						"posawesome.mizan.api.purchase_orders.get_buying_price_list",
 				});
 				if (message && !supplierPriceList.value) {
 					supplierPriceList.value = message;

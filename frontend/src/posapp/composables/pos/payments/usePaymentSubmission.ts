@@ -620,7 +620,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		try {
 			const resp = await frappe.call({
 				method:
-					"posawesome.posawesome.api.invoice_processing.stock.check_invoice_availability",
+					"posawesome.mizan.api.invoice_processing.stock.check_invoice_availability",
 				args: { items: payload, pos_profile: profile?.name || null },
 			});
 			response = resp?.message;

@@ -221,7 +221,7 @@ async function loadPinStatus() {
 	pinStatusLoading.value = true;
 	try {
 		const response = await frappe.call({
-			method: "posawesome.posawesome.api.employees.get_cashier_pin_status",
+			method: "posawesome.mizan.api.employees.get_cashier_pin_status",
 			args: {
 				pos_profile: props.posProfile.name,
 				user: props.currentCashier.user,
@@ -268,7 +268,7 @@ async function saveCashierPin() {
 	pinSubmitting.value = true;
 	try {
 		const response = await frappe.call({
-			method: "posawesome.posawesome.api.employees.save_cashier_pin",
+			method: "posawesome.mizan.api.employees.save_cashier_pin",
 			args: {
 				pos_profile: props.posProfile.name,
 				user: props.currentCashier.user,

@@ -95,7 +95,7 @@ export default {
 			this.address.customer = this.customer;
 			this.address.doctype = "Customer";
 			frappe.call({
-				method: "posawesome.posawesome.api.customers.make_address",
+				method: "posawesome.mizan.api.customers.make_address",
 				args: {
 					args: this.address,
 				},

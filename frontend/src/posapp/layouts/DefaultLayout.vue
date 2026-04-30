@@ -1216,7 +1216,7 @@ const refreshTaxInclusiveSetting = async () => {
 	}
 	try {
 		const r = await frappe.call({
-			method: "posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive",
+			method: "posawesome.mizan.api.utilities.get_pos_profile_tax_inclusive",
 			args: {
 				pos_profile: posProfile.value.name,
 			},

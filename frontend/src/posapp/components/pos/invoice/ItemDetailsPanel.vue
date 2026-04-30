@@ -486,7 +486,7 @@ const fetchDashboard = async () => {
 	error.value = "";
 	try {
 		const resp = await frappe.call({
-			method: "posawesome.posawesome.api.items.get_item_dashboard",
+			method: "posawesome.mizan.api.items.get_item_dashboard",
 			args: {
 				item_code: props.itemCode,
 				pos_profile: props.posProfile?.name || props.posProfile || null,

@@ -86,7 +86,7 @@ export function useLastBuyingRate(context: UseLastBuyingRateContext = {}) {
 		try {
 			const profile = unwrapValue(pos_profile);
 			const { message } = await frappe.call({
-				method: "posawesome.posawesome.api.purchase_orders.get_last_buying_rate",
+				method: "posawesome.mizan.api.purchase_orders.get_last_buying_rate",
 				args: {
 					supplier: supplierVal || null,
 					item_codes: JSON.stringify(itemCodes),

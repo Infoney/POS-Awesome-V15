@@ -108,7 +108,7 @@ export function useRedemptionLogic(options: RedemptionLogicOptions) {
 
 			frappe
 				.call(
-					"posawesome.posawesome.api.payments.get_available_credit",
+					"posawesome.mizan.api.payments.get_available_credit",
 					{
 						customer,
 						company,

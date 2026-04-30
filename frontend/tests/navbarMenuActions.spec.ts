@@ -25,7 +25,7 @@ describe("NavbarMenu action surfaces", () => {
 				pos_profile: {},
 			},
 			call: vi.fn(async ({ method }: { method: string }) => {
-				if (method === "posawesome.posawesome.api.utilities.get_current_user_language") {
+				if (method === "posawesome.mizan.api.utilities.get_current_user_language") {
 					return {
 						message: {
 							success: true,

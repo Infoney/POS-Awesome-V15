@@ -25,7 +25,7 @@ export const fetchDraftInvoices = async ({
 		: "Sales Invoice";
 
 	const { message } = await frappe.call({
-		method: "posawesome.posawesome.api.invoices.get_draft_invoices",
+		method: "posawesome.mizan.api.invoices.get_draft_invoices",
 		args: {
 			// Send both: backend prefers pos_profile when present so the cashier
 			// sees every draft on this terminal across shifts; pos_opening_shift
@@ -51,7 +51,7 @@ export const fetchDraftInvoiceDoc = async ({
 	}
 
 	const { message } = await frappe.call({
-		method: "posawesome.posawesome.api.invoices.get_draft_invoice_doc",
+		method: "posawesome.mizan.api.invoices.get_draft_invoice_doc",
 		args: {
 			invoice_name: draft.name,
 			doctype: resolveDraftInvoiceDoctype(draft, posProfile),
@@ -122,7 +122,7 @@ export const validateDraftInvoiceStock = async ({
 	try {
 		const { message } = await frappe.call({
 			method:
-				"posawesome.posawesome.api.invoice_processing.stock.validate_draft_invoice_stock",
+				"posawesome.mizan.api.invoice_processing.stock.validate_draft_invoice_stock",
 			args: {
 				invoice_name: draft.name,
 				doctype: resolveDraftInvoiceDoctype(draft, posProfile),

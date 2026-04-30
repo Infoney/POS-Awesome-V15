@@ -134,7 +134,7 @@ export function useCartValidation() {
 			};
 
 			const response = await frappe.call({
-				method: "posawesome.posawesome.api.invoices.validate_cart_items",
+				method: "posawesome.mizan.api.invoices.validate_cart_items",
 				args: {
 					items: JSON.stringify([testItem]),
 					pos_profile: posProfile?.name,

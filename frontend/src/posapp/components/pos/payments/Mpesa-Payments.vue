@@ -148,7 +148,7 @@ async function search() {
 
 	try {
 		const { message } = await frappe.call({
-			method: "posawesome.posawesome.api.m_pesa.get_mpesa_draft_payments",
+			method: "posawesome.mizan.api.m_pesa.get_mpesa_draft_payments",
 			args: {
 				company: company.value,
 				mode_of_payment: mode_of_payment.value,
@@ -177,7 +177,7 @@ async function submit_dialog() {
 	try {
 		const selected_payment = selected.value[0].name;
 		const { message } = await frappe.call({
-			method: "posawesome.posawesome.api.m_pesa.submit_mpesa_payment",
+			method: "posawesome.mizan.api.m_pesa.submit_mpesa_payment",
 			args: {
 				mpesa_payment: selected_payment,
 				customer: customer.value,

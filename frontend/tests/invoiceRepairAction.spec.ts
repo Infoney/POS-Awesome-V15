@@ -137,7 +137,7 @@ describe("InvoiceManagement repair change allocation", () => {
 		expect(callMock).toHaveBeenNthCalledWith(
 			1,
 			expect.objectContaining({
-				method: "posawesome.posawesome.api.payments.repair_overpayment_change_allocations",
+				method: "posawesome.mizan.api.payments.repair_overpayment_change_allocations",
 				args: {
 					doctype: "Sales Invoice",
 					invoice_names: ["ACC-SINV-2026-08532"],
@@ -149,7 +149,7 @@ describe("InvoiceManagement repair change allocation", () => {
 		expect(callMock).toHaveBeenNthCalledWith(
 			2,
 			expect.objectContaining({
-				method: "posawesome.posawesome.api.payments.repair_overpayment_change_allocations",
+				method: "posawesome.mizan.api.payments.repair_overpayment_change_allocations",
 				args: {
 					doctype: "Sales Invoice",
 					invoice_names: ["ACC-SINV-2026-08532"],

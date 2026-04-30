@@ -771,7 +771,7 @@ export default {
 			this.changing = true;
 			try {
 				const response = await frappe.call({
-					method: "posawesome.posawesome.api.utilities.set_current_user_language",
+					method: "posawesome.mizan.api.utilities.set_current_user_language",
 					args: { lang_code: this.selectedLanguage },
 				});
 
@@ -810,7 +810,7 @@ export default {
 			this.loading = true;
 			try {
 				const response = await frappe.call({
-					method: "posawesome.posawesome.api.utilities.get_current_user_language",
+					method: "posawesome.mizan.api.utilities.get_current_user_language",
 				});
 
 				const result = response?.message || response;

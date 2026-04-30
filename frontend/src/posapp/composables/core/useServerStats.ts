@@ -25,7 +25,7 @@ export function useServerStats(pollInterval = 10000, windowSize = 60) {
 		error.value = null;
 		try {
 			const res = await (window as any).frappe.call({
-				method: "posawesome.posawesome.api.utilities.get_server_usage",
+				method: "posawesome.mizan.api.utilities.get_server_usage",
 			});
 			if (res && res.message) {
 				cpu.value = res.message.cpu_percent;

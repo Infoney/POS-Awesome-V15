@@ -146,7 +146,7 @@ describe("offline sync resource runner", () => {
 			schemaVersion: "2026-04-09",
 		});
 		expect(callOfflineSyncMethod).toHaveBeenCalledWith(
-			"posawesome.posawesome.api.offline_sync.items.sync_items",
+			"posawesome.mizan.api.offline_sync.items.sync_items",
 			expect.objectContaining({
 				price_list: "Retail",
 				watermark: "2026-04-09T09:30:00",

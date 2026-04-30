@@ -370,7 +370,7 @@ async function get_opening_dialog_data() {
 	}
 
 	frappe.call({
-		method: "posawesome.posawesome.api.shifts.get_opening_dialog_data",
+		method: "posawesome.mizan.api.shifts.get_opening_dialog_data",
 		args: {},
 		callback: function (r) {
 			if (r.message) {
@@ -396,7 +396,7 @@ function submit_dialog() {
 	is_loading.value = true;
 
 	return frappe
-		.call("posawesome.posawesome.api.shifts.create_opening_voucher", {
+		.call("posawesome.mizan.api.shifts.create_opening_voucher", {
 			pos_profile: pos_profile.value,
 			company: company.value,
 			balance_details: payments_methods.value,

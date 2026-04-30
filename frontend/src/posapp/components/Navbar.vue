@@ -610,7 +610,7 @@ export default {
 
 			try {
 				const response = await frappe.call({
-					method: "posawesome.posawesome.api.employees.get_terminal_employees",
+					method: "posawesome.mizan.api.employees.get_terminal_employees",
 					args: {
 						pos_profile: this.posProfile.name,
 					},

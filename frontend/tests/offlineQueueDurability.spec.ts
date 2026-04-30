@@ -68,7 +68,7 @@ describe("offline write queue durability", () => {
 
 	it("prevents duplicate queue entries for the same idempotent cash movement", async () => {
 		const entry = {
-			method: "posawesome.posawesome.api.cash_movement.service.create_pos_expense",
+			method: "posawesome.mizan.api.cash_movement.service.create_pos_expense",
 			args: {
 				payload: {
 					amount: 25,
@@ -139,7 +139,7 @@ describe("offline write queue durability", () => {
 
 	it("tracks retry metadata and moves exhausted entries to dead letter", async () => {
 		await saveOfflineCashMovement({
-			method: "posawesome.posawesome.api.cash_movement.service.create_pos_expense",
+			method: "posawesome.mizan.api.cash_movement.service.create_pos_expense",
 			args: {
 				payload: {
 					amount: 15,

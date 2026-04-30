@@ -328,7 +328,7 @@ const verifySelection = async () => {
 
 	try {
 		const response = await window.frappe.call({
-			method: "posawesome.posawesome.api.employees.verify_terminal_employee_pin",
+			method: "posawesome.mizan.api.employees.verify_terminal_employee_pin",
 			args: {
 				pos_profile: posProfileName.value,
 				user: selectedCashier.value.user,

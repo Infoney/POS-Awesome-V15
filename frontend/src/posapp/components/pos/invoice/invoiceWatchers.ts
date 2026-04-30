@@ -262,7 +262,7 @@ const invoiceWatchers: Record<string, unknown> & ThisType<InvoiceWatchersVm> = {
 		// If multi-currency is enabled, sync currency with the price list currency
 		if (this.pos_profile.posa_allow_multi_currency && applied) {
 			frappe.call({
-				method: "posawesome.posawesome.api.invoices.get_price_list_currency",
+				method: "posawesome.mizan.api.invoices.get_price_list_currency",
 				args: { price_list: applied },
 				callback: (r: { message?: string }) => {
 					if (r.message) {

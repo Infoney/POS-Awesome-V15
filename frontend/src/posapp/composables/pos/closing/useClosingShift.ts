@@ -214,7 +214,7 @@ export function useClosingShift(eventBus: any) {
 		});
 
 		const request = frappe.call(
-			"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.get_closing_shift_overview",
+			"posawesome.mizan.doctype.pos_closing_shift.pos_closing_shift.get_closing_shift_overview",
 			{
 				pos_opening_shift: openingShift,
 			},

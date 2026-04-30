@@ -104,10 +104,10 @@ export async function update_invoice(context: any, doc: any) {
 
 	const method =
 		doc.doctype === "Sales Order" && context.pos_profile.posa_create_only_sales_order
-			? "posawesome.posawesome.api.sales_orders.update_sales_order"
+			? "posawesome.mizan.api.sales_orders.update_sales_order"
 			: doc.doctype === "Quotation"
-				? "posawesome.posawesome.api.quotations.update_quotation"
-				: "posawesome.posawesome.api.invoices.update_invoice";
+				? "posawesome.mizan.api.quotations.update_quotation"
+				: "posawesome.mizan.api.invoices.update_invoice";
 
 	try {
 		_logPriceListDebug(context, "update_invoice_request", {
@@ -171,7 +171,7 @@ export async function update_invoice_from_order(context: any, doc: any) {
 
 	try {
 		const response = await frappe.call({
-			method: "posawesome.posawesome.api.invoices.update_invoice_from_order",
+			method: "posawesome.mizan.api.invoices.update_invoice_from_order",
 			args: {
 				data: doc,
 			},

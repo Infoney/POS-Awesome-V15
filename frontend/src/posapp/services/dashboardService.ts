@@ -727,7 +727,7 @@ export interface DashboardRequest {
 
 export function fetchDashboardData(args: DashboardRequest = {}) {
 	return api.call<DashboardResponse>(
-		"posawesome.posawesome.api.dashboard.get_dashboard_data",
+		"posawesome.mizan.api.dashboard.get_dashboard_data",
 		args,
 	);
 }
