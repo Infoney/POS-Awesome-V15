@@ -193,6 +193,34 @@ When you're satisfied with the test bench:
 
 ---
 
+## URL change: `/app/pos-awesome` → `/app/mizan`
+
+The workspace's primary key (URL slug source) **does** change in this
+rename. Before: `/app/pos-awesome`. After: `/app/mizan`.
+
+Why the change is non-negotiable: Frappe's module → workspace
+navigation looks up the workspace by `name == module_name`. A name /
+module mismatch ("POS Awesome" name + "Mizan" module) sends the Desk
+to `/app/mizan` and 404s as "Page mizan not found" — observed on the
+first test-bench install (commit 57272c74 fixed it by aligning the
+name with the module).
+
+What this means for your team:
+
+- **Communicate the new URL** before the production cutover. Anyone
+  with `/app/pos-awesome` bookmarked will see a 404 once.
+- **The workspace is still public** — every role that could open the
+  old workspace can open the new one; permissions migrate via Frappe's
+  fixture sync.
+- **No data is lost.** Only the URL slug and primary key change. All
+  shortcut cards, links, and customisations on the workspace
+  recreate identically from the JSON fixture.
+
+If you absolutely need `/app/pos-awesome` to keep working (e.g. the
+team has the old URL pasted in shared docs), the fallback is a Frappe
+Web Page redirect or an Nginx rewrite. Ask before adding either —
+they're easy to set up but they're an extra surface to maintain.
+
 ## Known leftovers (intentional, not regressions)
 
 These still say `posawesome` after the rename — by design:
