@@ -367,7 +367,7 @@ def _create_issue_or_top_up_entry(profile_doc, company, amount, reference_doctyp
 	source_account = _resolve_issue_source_account(profile_doc, company)
 	liability_account = _resolve_liability_account(profile_doc)
 	cost_center = _resolve_cost_center(profile_doc, company)
-	remark = frappe._("POS Awesome gift card {0} for {1}").format(
+	remark = frappe._("Mizan gift card {0} for {1}").format(
 		reference_doctype.lower(),
 		reference_name,
 	)
@@ -400,7 +400,7 @@ def _create_redemption_entry(profile_doc, invoice_doc, amount, cashier):
 
 	liability_account = _resolve_liability_account(profile_doc)
 	cost_center = _resolve_cost_center(profile_doc, invoice_doc.company)
-	remark = frappe._("POS Awesome gift card redemption for {0} {1}").format(
+	remark = frappe._("Mizan gift card redemption for {0} {1}").format(
 		invoice_doc.doctype,
 		invoice_doc.name,
 	)

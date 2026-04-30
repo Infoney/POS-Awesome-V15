@@ -41,7 +41,7 @@ function redirectToCanonicalPosApp() {
 frappe.pages["pos"].on_page_load = function (wrapper) {
 	frappe.ui.make_app_page({
 		parent: wrapper,
-		title: "POS Awesome",
+		title: "Mizan",
 		single_column: true,
 	});
 

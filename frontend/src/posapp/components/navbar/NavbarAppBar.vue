@@ -44,11 +44,10 @@
 					<span class="pos-navbar-title-bold pos-navbar-title-custom">{{ customBrandName }}</span>
 				</template>
 				<template v-else-if="isMobile">
-					<span class="pos-navbar-title-compact">{{ __("POS") }}</span>
+					<span class="pos-navbar-title-compact">{{ __("Mizan") }}</span>
 				</template>
 				<template v-else>
-					<span class="font-weight-light pos-navbar-title-light">{{ __("POS") }}</span
-					><span class="pos-navbar-title-bold">{{ __("Awesome") }}</span>
+					<span class="pos-navbar-title-bold">{{ __("Mizan") }}</span>
 				</template>
 			</v-toolbar-title>
 		</div>
@@ -370,7 +369,8 @@ export default {
 		},
 
 		// Per-POS-Profile brand overrides. When a profile sets a custom brand name
-		// or logo, those win over the bundled "POS Awesome" defaults.
+		// or logo, those win over the bundled "Mizan" defaults (formal name:
+		// "Infoney Mizan" — see CLAUDE.md "Brand identity" section).
 		customBrandName() {
 			const raw = this.posProfile?.posa_brand_name;
 			return typeof raw === "string" ? raw.trim() : "";
@@ -393,7 +393,7 @@ export default {
 		},
 
 		brandLogoAlt() {
-			return this.customBrandName || "POS Awesome";
+			return this.customBrandName || "Mizan";
 		},
 
 		// Operator opt-out: show only the logo, no text. Falsy values keep the title.

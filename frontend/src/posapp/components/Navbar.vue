@@ -334,7 +334,7 @@ export default {
 				{ text: "Barcode Printing", icon: "mdi-barcode", to: "/barcode" },
 			],
 			items: [],
-			company: "POS Awesome",
+			company: "Infoney Mizan",
 			// Start blank — populated from frappe.boot.website_settings.app_logo
 			// (or the POS Profile's `posa_brand_logo`) once boot resolves.
 			companyImg: "",

@@ -2,7 +2,7 @@
 frappe.pages["posapp"].on_page_load = async function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: "POS Awesome",
+		title: "Mizan",
 		single_column: true,
 	});
 	const pageRef = (wrapper && wrapper.page) || page;
@@ -331,7 +331,7 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 		clearBootstrapState();
 
 		frappe.msgprint({
-			title: "POS Awesome",
+			title: "Mizan",
 			indicator: "red",
 			message:
 				`POS app failed to start (${failureCode}). Automatic cache recovery was attempted. If the problem persists, reload /app/posapp or use the in-app cache clear shortcut.`,

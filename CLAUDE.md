@@ -6,6 +6,25 @@ POSAwesome is a Frappe application - a Point of Sale (POS) system built on the F
 
 **Enhanced Camera Scanner**: Features advanced OpenCV-based image processing for superior barcode and QR code scanning with real-time image enhancement.
 
+## Brand identity
+
+**Product name (user-facing): "Mizan"** — Arabic for "scales / balance / the just measure". Branded as **"Infoney Mizan"** in formal copy (proposals, invoices, documentation), **"Mizan"** alone on the navbar and other tight UI surfaces.
+
+**The Frappe app slug stays `posawesome`** — the Python module, bench app name, DocType module references (`POSAwesome`), database namespace, and the upstream project identity all stay as-is. Renaming those would break installs, migrations, custom field references, every external integration, and the upstream attribution. The brand swap is purely a user-facing label change.
+
+**What carries the Mizan brand** (changeable copy):
+- Navbar title fallback (`NavbarAppBar.vue` — `customBrandName` from POS Profile still wins)
+- Frappe page titles (`page/pos/pos.js`, `page/posapp/posapp.js`, plus the `.json` metadata)
+- Print views and customer-visible receipt strings (gift card remarks)
+- AppBar default `company` field
+
+**What stays "POS Awesome"** (project-of-origin identity):
+- README.md, CHANGELOG.md, package.json — fork attribution to the open-source project
+- Python module `posawesome/`, Frappe module `POSAwesome`, all DocType slugs (`pos_awesome_print_format_rule`, etc.)
+- Internal log_error titles, debug console breadcrumbs, dev-facing docstrings
+
+When adding new user-visible copy, default to **Mizan**. When the string is internal/technical (logs, telemetry, file paths, doctype names), leave the historical naming alone — it's the trace back to the upstream source the user can use to apply security patches.
+
 ## Build Commands
 
 ### Main Build Commands
