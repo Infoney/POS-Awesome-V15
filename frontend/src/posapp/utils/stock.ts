@@ -22,36 +22,59 @@ export type DisplayStockItem = {
 /**
  * Returns the headline stock qty the items panel should display AND the
  * cart-validator should gate on. Single source of truth so the card
- * never says "Qty: 3" while the gate blocks with "No stock available".
+ * never says "Qty: 1" while the warehouse is actually empty.
  *
- * Logic:
- *   - For batched rows (`batch_no_data` has at least one entry), sum
- *     the non-expired batches with positive `batch_qty`. Bin running
- *     total (`actual_qty`) and the per-batch table can drift
- *     server-side — Bin -3 vs Batch table 3 has been observed on
- *     KPG inventory. Per-batch is what ERPNext actually validates at
- *     submit (each line picks one batch), so this is the number the
- *     cashier can act on.
- *   - For non-batched rows, fall back to `actual_qty`.
+ * Two independent server-side fields can disagree on stock:
+ *   - **Bin running total** (`actual_qty`). Updated continuously by
+ *     ERPNext's stock ledger AND pushed to this terminal via the
+ *     `posa_stock_changed` realtime event, so it reflects the most
+ *     recent state — including sales from other terminals.
+ *   - **Per-batch qty** (`batch_no_data[].batch_qty`). Snapshotted from
+ *     the items API at boot / refresh time and NOT updated by
+ *     realtime. Goes stale the moment another terminal sells a unit
+ *     from the same batch.
+ *
+ * Policy:
+ *   - For non-batched rows, just return `actual_qty`.
+ *   - For batched rows, sum the non-expired positive batches (matches
+ *     what the card's per-batch chip strip displays), then:
+ *       * If bin >= 0 → return `min(batchSum, bin)`. Bin is the
+ *         authoritative live total; if the cached batch sum exceeds
+ *         it, the cache is stale (another terminal sold the unit)
+ *         and the bin is the correct ceiling. AL-KHANSA report:
+ *         ALLOPOT BODY WASH card showed `Qty: 1 · Batch: 024 (1)`
+ *         after another terminal sold the unit; bin had updated to
+ *         0 via realtime but the batch chip still said 1.
+ *       * If bin < 0 → return `batchSum`. The bin itself is broken
+ *         (out-of-order SLE writes / negative-stock drift the
+ *         original ItemCard comment documented as Bin -3 vs Batch
+ *         table 3) and the per-batch table is the only reliable
+ *         signal. Don't let a negative bin hide real stock.
  *
  * Returns 0 (never NaN/null) so callers can compare with `=== 0`.
  */
 export function getDisplayStockQty(item: DisplayStockItem | null | undefined): number {
     if (!item) return 0;
+    const rawBin = Number(item.actual_qty ?? 0);
+    const binQty = Number.isFinite(rawBin) ? rawBin : 0;
     const batches = Array.isArray(item.batch_no_data) ? item.batch_no_data : [];
-    if (batches.length) {
-        let sum = 0;
-        batches.forEach((batch) => {
-            if (!batch || batch.is_expired) return;
-            const qty = Number(batch.batch_qty ?? 0);
-            if (Number.isFinite(qty) && qty > 0) {
-                sum += qty;
-            }
-        });
-        return sum;
+    if (!batches.length) {
+        return binQty;
     }
-    const n = Number(item.actual_qty ?? 0);
-    return Number.isFinite(n) ? n : 0;
+    let batchSum = 0;
+    batches.forEach((batch) => {
+        if (!batch || batch.is_expired) return;
+        const qty = Number(batch.batch_qty ?? 0);
+        if (Number.isFinite(qty) && qty > 0) {
+            batchSum += qty;
+        }
+    });
+    if (binQty < 0) {
+        // Bin is in the negative-drift state, fall back to the
+        // per-batch table so real stock isn't hidden.
+        return batchSum;
+    }
+    return Math.min(batchSum, binQty);
 }
 
 /**
