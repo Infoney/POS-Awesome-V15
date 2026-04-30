@@ -1,6 +1,6 @@
 {
-  "name": "POS Awesome",
-  "short_name": "POS",
+  "name": "Infoney Mizan",
+  "short_name": "Mizan",
   "start_url": "/app/posapp",
   "display": "standalone",
   "background_color": "#FFFFFF",
