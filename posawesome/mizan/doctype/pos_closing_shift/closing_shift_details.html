@@ -18,7 +18,7 @@
                                                                                         {% if sales_currency_breakdown %}
                                                                                         <div class="text-muted small">
                                                                                                 {% for row in sales_currency_breakdown %}
-                                                                                                        {{ row.currency }} {{ frappe.utils.fmt_money(row.amount, currency=row.currency) }}{% if not loop.last %}<br>{% endif %}
+                                                                                                        {{ frappe.utils.fmt_money(row.amount, currency=row.currency) }}{% if not loop.last %}<br>{% endif %}
                                                                                                 {% endfor %}
                                                                                         </div>
                                                                                         {% endif %}
@@ -31,7 +31,7 @@
                                                                                         {% if net_currency_breakdown %}
                                                                                         <div class="text-muted small">
                                                                                                 {% for row in net_currency_breakdown %}
-                                                                                                        {{ row.currency }} {{ frappe.utils.fmt_money(row.amount, currency=row.currency) }}{% if not loop.last %}<br>{% endif %}
+                                                                                                        {{ frappe.utils.fmt_money(row.amount, currency=row.currency) }}{% if not loop.last %}<br>{% endif %}
                                                                                                 {% endfor %}
                                                                                         </div>
                                                                                         {% endif %}
@@ -71,7 +71,7 @@
                                                                                         {% if breakdown %}
                                                                                         <div class="text-muted small">
                                                                                                 {% for row in breakdown %}
-                                                                                                        {{ row.currency }} {{ frappe.utils.fmt_money(row.amount, currency=row.currency) }}{% if not loop.last %}<br>{% endif %}
+                                                                                                        {{ frappe.utils.fmt_money(row.amount, currency=row.currency) }}{% if not loop.last %}<br>{% endif %}
                                                                                                 {% endfor %}
                                                                                         </div>
                                                                                         {% endif %}
