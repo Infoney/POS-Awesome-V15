@@ -54,6 +54,7 @@ def get_draft_invoices(
     pos_profile=None,
     cashier=None,
     is_supervisor=0,
+    cost_center=None,
 ):
     started_at = time.perf_counter()
     try:
@@ -83,6 +84,16 @@ def get_draft_invoices(
         filters["posa_pos_opening_shift"] = pos_opening_shift
     if frappe.db.has_column(doctype, "posa_is_printed"):
         filters["posa_is_printed"] = 0
+
+    # Cost-center clamp — the InvoiceManagement dialog's other tabs
+    # (history / unpaid / returns) hit `frappe.client.get_list` with
+    # `cost_center` baked into `buildInvoiceFilters`. The Drafts tab
+    # routes through this server method, so we honour the same scope
+    # via an explicit arg. `frappe.db.has_column` guard so older
+    # ERPNext versions that haven't shipped `cost_center` on
+    # POS Invoice still accept the call.
+    if cost_center and frappe.db.has_column(doctype, "cost_center"):
+        filters["cost_center"] = cost_center
 
     invoices_list = frappe.get_list(
         doctype,

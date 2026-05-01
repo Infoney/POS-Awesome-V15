@@ -1337,6 +1337,20 @@ export default {
 		},
 		buildInvoiceFilters(baseFilters = {}) {
 			const filters = { ...baseFilters, docstatus: 1 };
+			// Cost-center scope: every Invoice Management tab (History,
+			// Unpaid, Drafts, Returns) is hard-clamped to the cost
+			// center configured on the cashier's POS Profile. So a
+			// user assigned to "AL-KHANSA — KPG" only ever sees
+			// invoices posted against THAT cost center, even when they
+			// also have access to other profiles in the same company.
+			// Returns inherit the filter automatically because they're
+			// derived from the same `historyInvoices` array. Drafts go
+			// through the server-side `get_draft_invoices`, which
+			// applies the same cost_center filter from a separate arg.
+			const costCenter = this.posProfile?.cost_center;
+			if (costCenter) {
+				filters.cost_center = costCenter;
+			}
 			if (this.isSupervisorScope()) {
 				filters.company = this.posProfile.company;
 				const scopedProfile = typeof this.resolveSupervisorProfileScope === "function"
@@ -1628,6 +1642,14 @@ export default {
 							: null,
 						cashier: null,
 						is_supervisor: this.isSupervisorScope() ? 1 : 0,
+						// Mirror the cost-center clamp from
+						// `buildInvoiceFilters` — the History / Unpaid /
+						// Returns tabs filter via frappe.client.get_list,
+						// the Drafts tab uses a dedicated server method,
+						// so we pass the cost center through as its own
+						// arg to keep all four tabs honouring the same
+						// scope rule.
+						cost_center: this.posProfile?.cost_center || null,
 					},
 				});
 				this.draftInvoices = Array.isArray(message) ? message.map((entry) => ({ ...entry, doctype: entry.doctype || this.currentInvoiceDoctype })) : [];
