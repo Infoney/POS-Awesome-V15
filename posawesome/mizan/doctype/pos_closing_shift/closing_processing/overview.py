@@ -251,19 +251,40 @@ def get_closing_shift_overview(pos_opening_shift):
         invoice_currency = invoice.get("currency") or company_currency
         invoice_total = invoice.get("rounded_total") or invoice.get("grand_total") or 0
 
-        # Tax collected on this invoice. We deliberately derive ALL
-        # tax totals (the headline `tax_company_currency_total`, the
-        # per-currency `tax_currency_breakdown`, and the per-account
-        # `tax_account_breakdown`) from a single source: the invoice's
-        # `taxes` child rows. The invoice-level `total_taxes_and_charges`
-        # / `base_total_taxes_and_charges` field can drift from the
-        # row-level sum on tax-inclusive pricing or discount-on-tax
-        # configurations (observed in production: an invoice whose
-        # rows summed to KWD 35.857 had `base_total_taxes_and_charges`
-        # of KWD 17.928 — half — making the dialog's "Total Tax
-        # Collected" line disagree with the per-account row right
-        # above it). Single source of truth → footer can't disagree
-        # with rows by construction.
+        # Tax collected on this invoice. The per-account / per-currency
+        # breakdown comes from walking the invoice's `taxes` child
+        # rows, but with a critical caveat for tax-inclusive +
+        # additional-discount setups (the AL-KHANSA Jeddah Expo
+        # tenants use exactly this combination):
+        #
+        # ERPNext stores two values per tax row:
+        #   * `tax_amount` / `base_tax_amount`
+        #     — the PRE-discount tax that would have applied if no
+        #     additional discount were given. ERPNext keeps this for
+        #     audit + recompute purposes and it can stay in the row
+        #     even after the discount lands.
+        #   * `tax_amount_after_discount_amount` /
+        #     `base_tax_amount_after_discount_amount`
+        #     — the POST-discount tax actually owed. This is what
+        #     `total_taxes_and_charges` /
+        #     `base_total_taxes_and_charges` aggregate to at the
+        #     invoice level, and what the customer actually paid.
+        #
+        # Summing `base_tax_amount` across rows on a discounted
+        # invoice can land at ~2× the real tax (a 50%-discount
+        # invoice whose post-discount tax was KWD 17.928 then sums
+        # to KWD 35.856 across its rows because both the pre- and
+        # post-discount entries linger). Always prefer
+        # `*_after_discount_amount`; fall back to the bare field
+        # only when ERPNext didn't populate it (unusual — happens on
+        # very old invoice versions or non-discount setups where the
+        # two are equal anyway).
+        #
+        # Per-account totals + the headline `tax_company_currency_total`
+        # both feed off this same row walk, so they stay consistent
+        # by construction (the original drift the user reported on
+        # 2026-05-01 — footer KWD 26.892 vs row KWD 53.785 — was the
+        # opposite axis of this same problem).
         invoice_doctype = invoice.get("doctype") or doctype
         try:
             invoice_doc = frappe.get_cached_doc(invoice_doctype, invoice.get("name"))
@@ -277,11 +298,21 @@ def get_closing_shift_overview(pos_opening_shift):
                 if not account_head:
                     continue
                 rate = flt(tax_row.get("rate") or 0)
-                row_amount = flt(tax_row.get("tax_amount") or 0)
+                # Always prefer the after-discount amounts; fall back
+                # to the bare field only if it isn't populated (the
+                # two are equal on non-discount invoices anyway).
+                raw_amount = tax_row.get("tax_amount_after_discount_amount")
+                if raw_amount in (None, ""):
+                    raw_amount = tax_row.get("tax_amount")
+                row_amount = flt(raw_amount or 0)
+
+                raw_base = tax_row.get("base_tax_amount_after_discount_amount")
+                if raw_base in (None, ""):
+                    raw_base = tax_row.get("base_tax_amount")
                 row_base_amount = flt(
-                    tax_row.get("base_tax_amount")
-                    or (row_amount * (flt(conversion_rate) or 1))
+                    raw_base or (row_amount * (flt(conversion_rate) or 1))
                 )
+
                 if not row_amount and not row_base_amount:
                     continue
                 bucket_key = (account_head, rate, invoice_currency)
