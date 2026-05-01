@@ -177,11 +177,37 @@ export function useClosingShift(eventBus: any) {
 					payload.sales_summary?.net_company_currency_total ??
 						payload.company_currency_total,
 				),
+				tax_company_currency_total: toNumber(
+					payload.sales_summary?.tax_company_currency_total,
+				),
 				average_invoice_value: toNumber(
 					payload.sales_summary?.average_invoice_value,
 				),
 				sale_invoices_count: toNumber(
 					payload.sales_summary?.sale_invoices_count,
+				),
+			},
+			taxes_collected: {
+				company_currency_total: toNumber(
+					payload.taxes_collected?.company_currency_total,
+				),
+				by_account: Array.isArray(payload.taxes_collected?.by_account)
+					? payload.taxes_collected.by_account.map((row: any) => ({
+							account_head: row?.account_head || "",
+							rate: toNumber(row?.rate),
+							currency: row?.currency || "",
+							amount: toNumber(row?.amount),
+							company_currency_amount: toNumber(
+								row?.company_currency_amount,
+							),
+						}))
+					: [],
+				by_currency: normalizeCurrencyRows(
+					payload.taxes_collected?.by_currency,
+					{
+						includeCount: false,
+						includeExchangeRates: false,
+					},
 				),
 			},
 			returns: {

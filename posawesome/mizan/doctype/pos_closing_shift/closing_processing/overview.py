@@ -76,6 +76,21 @@ def get_closing_shift_overview(pos_opening_shift):
     cash_movement_company_currency_total = 0
     cash_movement_totals_by_type = {}
     cash_movement_totals_by_currency = {}
+    # Tax collected during the shift, broken three ways so the dialog +
+    # print can answer "how much of today's revenue was tax owed to the
+    # government vs revenue we keep":
+    #   * `tax_company_currency_total` — single number, sum of every
+    #     invoice's `base_total_taxes_and_charges`. Used by the new
+    #     "Taxes Collected" insight card.
+    #   * `tax_account_breakdown` — per `account_head` (e.g. "4209 - KSA
+    #     Expo Tax - KPG"), so accounting can see the per-account
+    #     liability without reading the underlying invoices.
+    #   * `tax_currency_breakdown` — per invoice currency, to mirror the
+    #     other multi_currency_totals tables (so a SAR shift on a KWD
+    #     company shows tax both in SAR and KWD).
+    tax_company_currency_total = 0
+    tax_account_breakdown = {}
+    tax_currency_breakdown = {}
 
     cash_mode_of_payment = frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
     if not cash_mode_of_payment:
@@ -235,6 +250,68 @@ def get_closing_shift_overview(pos_opening_shift):
             returns_count += 1
         invoice_currency = invoice.get("currency") or company_currency
         invoice_total = invoice.get("rounded_total") or invoice.get("grand_total") or 0
+
+        # Tax collected on this invoice. ERPNext stores the total in
+        # `total_taxes_and_charges` (invoice currency) and
+        # `base_total_taxes_and_charges` (company currency). Per-account
+        # breakdown lives on the invoice's child table; we resolve that
+        # by fetching the doc once and walking `taxes`.
+        invoice_tax_base = flt(
+            get_base_value(
+                invoice,
+                "total_taxes_and_charges",
+                "base_total_taxes_and_charges",
+                conversion_rate,
+            )
+        )
+        invoice_tax_currency = flt(invoice.get("total_taxes_and_charges") or 0)
+        if invoice_tax_base or invoice_tax_currency:
+            tax_company_currency_total += invoice_tax_base
+            tax_currency_entry = tax_currency_breakdown.setdefault(
+                invoice_currency,
+                {
+                    "currency": invoice_currency,
+                    "total": 0,
+                    "company_currency_total": 0,
+                },
+            )
+            tax_currency_entry["total"] += invoice_tax_currency
+            tax_currency_entry["company_currency_total"] += invoice_tax_base
+
+            # Per-account breakdown — read the invoice's `taxes` child
+            # table directly. We only fetch the doc when the invoice
+            # actually has tax (else the loop is a no-op anyway), so
+            # zero-tax shifts don't pay the round-trip.
+            invoice_doctype = invoice.get("doctype") or doctype
+            try:
+                invoice_doc = frappe.get_cached_doc(invoice_doctype, invoice.get("name"))
+            except frappe.DoesNotExistError:
+                invoice_doc = None
+            if invoice_doc:
+                for tax_row in invoice_doc.get("taxes") or []:
+                    account_head = tax_row.get("account_head")
+                    if not account_head:
+                        continue
+                    rate = flt(tax_row.get("rate") or 0)
+                    row_amount = flt(tax_row.get("tax_amount") or 0)
+                    row_base_amount = flt(
+                        tax_row.get("base_tax_amount")
+                        or (row_amount * (flt(conversion_rate) or 1))
+                    )
+                    bucket_key = (account_head, rate, invoice_currency)
+                    tax_bucket = tax_account_breakdown.setdefault(
+                        bucket_key,
+                        {
+                            "account_head": account_head,
+                            "rate": rate,
+                            "currency": invoice_currency,
+                            "amount": 0,
+                            "company_currency_amount": 0,
+                        },
+                    )
+                    tax_bucket["amount"] += row_amount
+                    tax_bucket["company_currency_amount"] += row_base_amount
+
         currency_entry = multi_currency_totals.setdefault(
             invoice_currency,
             {
@@ -658,10 +735,54 @@ def get_closing_shift_overview(pos_opening_shift):
             "by_currency": prepare_currency_rows(credit_totals_by_currency, include_count=True),
         },
         "sales_summary": {
+            # GROSS = sum of base_grand_total of POSITIVE invoices (i.e.
+            # what customers paid, before subtracting returns). NET =
+            # GROSS - returns (= same `company_currency_total` we use
+            # for multi-currency rendering). The dialog's "Gross Sales"
+            # / "Net Sales" cards read these directly.
             "gross_company_currency_total": flt(gross_company_currency_total),
             "net_company_currency_total": flt(company_currency_total),
+            "tax_company_currency_total": flt(tax_company_currency_total),
             "average_invoice_value": flt(average_invoice_value),
             "sale_invoices_count": sale_invoices_count,
+        },
+        "taxes_collected": {
+            "company_currency_total": flt(tax_company_currency_total),
+            # Per-account breakdown — useful for accounting reconciliation
+            # against the GL. account_head is the tax account
+            # (e.g. "4209 - KSA Expo Tax - KPG"), rate is the percent
+            # rate from the invoice's tax row.
+            "by_account": sorted(
+                [
+                    {
+                        "account_head": row["account_head"],
+                        "rate": flt(row.get("rate") or 0),
+                        "currency": row.get("currency"),
+                        "amount": flt(row.get("amount") or 0),
+                        "company_currency_amount": flt(
+                            row.get("company_currency_amount") or 0
+                        ),
+                    }
+                    for row in tax_account_breakdown.values()
+                ],
+                key=lambda r: (
+                    r.get("account_head") or "",
+                    r.get("currency") or "",
+                ),
+            ),
+            "by_currency": sorted(
+                [
+                    {
+                        "currency": row.get("currency"),
+                        "total": flt(row.get("total") or 0),
+                        "company_currency_total": flt(
+                            row.get("company_currency_total") or 0
+                        ),
+                    }
+                    for row in tax_currency_breakdown.values()
+                ],
+                key=lambda r: r.get("currency") or "",
+            ),
         },
         "returns": {
             "count": returns_count,

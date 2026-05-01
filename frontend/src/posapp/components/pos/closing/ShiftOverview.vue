@@ -669,6 +669,88 @@
 					</table>
 				</div>
 			</div>
+
+			<!--
+				Taxes Collected — split out as its own section so the
+				cashier / store manager / accountant can see the day's
+				tax liability at a glance, broken down per tax account
+				(useful for ZATCA reconciliation in KSA-shifts) AND per
+				invoice currency. Hides itself when no tax was collected.
+			-->
+			<div
+				v-if="taxesCollectedSummary && taxesCollectedSummary.company_currency_total"
+				class="table-section mt-4"
+			>
+				<div class="table-header mb-2">
+					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
+						{{ __("Taxes Collected") }}
+					</h5>
+					<p class="text-body-2 text-grey">
+						{{ __("Tax owed to the government — separate from net sales (revenue you keep)") }}
+					</p>
+				</div>
+
+				<div class="overview-table-wrapper" v-if="taxesCollectedByAccount && taxesCollectedByAccount.length">
+					<table class="overview-table">
+						<thead>
+							<tr>
+								<th>{{ __("Tax Account") }}</th>
+								<th class="text-end">{{ __("Rate") }}</th>
+								<th>{{ __("Currency") }}</th>
+								<th class="text-end">{{ __("Amount") }}</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr
+								v-for="row in taxesCollectedByAccount"
+								:key="`tax-account-${row.account_head}-${row.currency}-${row.rate}`"
+							>
+								<td>{{ row.account_head }}</td>
+								<td class="text-end">{{ row.rate }}%</td>
+								<td>{{ row.currency || overviewCompanyCurrency }}</td>
+								<td class="text-end">
+									<div class="amount-with-base">
+										<div class="amount-primary">
+											<span class="overview-amount">
+												{{
+													formatCurrencyWithSymbol(
+														row.amount || 0,
+														row.currency || overviewCompanyCurrency,
+													)
+												}}
+											</span>
+											<span
+												v-if="shouldShowCompanyEquivalent({ company_currency_total: row.company_currency_amount }, row.currency)"
+												class="company-equivalent"
+											>
+												({{
+													formatCurrencyWithSymbol(
+														row.company_currency_amount || 0,
+														overviewCompanyCurrency,
+													)
+												}})
+											</span>
+										</div>
+									</div>
+								</td>
+							</tr>
+							<tr>
+								<td colspan="3"><strong>{{ __("Total Tax Collected") }}</strong></td>
+								<td class="text-end">
+									<strong>
+										{{
+											formatCurrencyWithSymbol(
+												taxesCollectedSummary.company_currency_total || 0,
+												overviewCompanyCurrency,
+											)
+										}}
+									</strong>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
 		</div>
 	</div>
 </template>
@@ -685,6 +767,9 @@ defineProps({
 	cashExpectedByCurrency: Array,
 	cashMovementSummary: Object,
 	paymentsByMode: Array,
+	taxesCollectedSummary: { type: Object, default: () => ({ company_currency_total: 0, by_account: [], by_currency: [] }) },
+	taxesCollectedByAccount: { type: Array, default: () => [] },
+	taxesCollectedByCurrency: { type: Array, default: () => [] },
 	overviewCompanyCurrency: String,
 	// Functions
 	formatCurrencyWithSymbol: Function,

@@ -457,6 +457,49 @@ function mizan_build_currency_table(title, rows, companyCurrency) {
 	`;
 }
 
+function mizan_build_taxes_table(taxes, companyCurrency) {
+	if (!Array.isArray(taxes) || !taxes.length) return "";
+	let total = 0;
+	const body = taxes
+		.map((row) => {
+			const rate = flt(row.rate || 0);
+			const amount = flt(row.amount || 0);
+			total += amount;
+			return `<tr>
+				<td>${mizan_escape_html(row.account_head || "—")}</td>
+				<td class="num">${mizan_escape_html(`${format_number(rate, null, 2)}%`)}</td>
+				<td class="num">${mizan_escape_html(mizan_format_currency(amount, companyCurrency))}</td>
+			</tr>`;
+		})
+		.join("");
+	return `
+		<section class="block">
+			<h3>${mizan_escape_html(__("Taxes Collected"))}</h3>
+			<p style="margin: 0 0 6px; color: #6b7280; font-size: 11px;">
+				${mizan_escape_html(
+					__("Tax owed to the government — kept separate from net sales (revenue you keep)."),
+				)}
+			</p>
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>${mizan_escape_html(__("Tax Account"))}</th>
+						<th class="num">${mizan_escape_html(__("Rate"))}</th>
+						<th class="num">${mizan_escape_html(__("Amount"))}</th>
+					</tr>
+				</thead>
+				<tbody>${body}</tbody>
+				<tfoot>
+					<tr>
+						<td colspan="2"><strong>${mizan_escape_html(__("Total Tax Collected"))}</strong></td>
+						<td class="num"><strong>${mizan_escape_html(mizan_format_currency(total, companyCurrency))}</strong></td>
+					</tr>
+				</tfoot>
+			</table>
+		</section>
+	`;
+}
+
 function mizan_build_reconciliation_table(rows) {
 	if (!rows.length) return "";
 	const body = rows
@@ -552,6 +595,8 @@ function mizan_build_closing_shift_a4_html(doc) {
 			? mizan_build_currency_table(__("Multi-Currency Totals"), multiCurrencyRows, companyCurrency)
 			: "";
 
+	const taxesTable = mizan_build_taxes_table(doc.taxes || [], companyCurrency);
+
 	const reconciliationRows = Array.isArray(doc.payment_reconciliation)
 		? doc.payment_reconciliation
 		: [];
@@ -614,6 +659,7 @@ function mizan_build_closing_shift_a4_html(doc) {
 		</section>
 
 		${multiCurrencyTable}
+		${taxesTable}
 		${reconciliationTable}
 
 		<div class="footer">

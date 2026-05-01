@@ -101,6 +101,9 @@
 									:cash-expected-by-currency="cashExpectedByCurrency"
 									:cash-movement-summary="cashMovementSummary"
 									:payments-by-mode="paymentsByMode"
+									:taxes-collected-summary="taxesCollectedSummary"
+									:taxes-collected-by-account="taxesCollectedByAccount"
+									:taxes-collected-by-currency="taxesCollectedByCurrency"
 									:overview-company-currency="overviewCompanyCurrency"
 									:format-currency-with-symbol="formatCurrencyWithSymbol"
 									:should-show-company-equivalent="shouldShowCompanyEquivalent"
@@ -440,6 +443,13 @@ export default {
 				creditInvoicesByCurrency:
 					summary.creditInvoicesByCurrency.value || [],
 				returnsByCurrency: summary.returnsByCurrency.value || [],
+				taxesCollectedSummary: summary.taxesCollectedSummary?.value || {
+					company_currency_total: 0,
+					by_account: [],
+					by_currency: [],
+				},
+				taxesCollectedByAccount:
+					summary.taxesCollectedByAccount?.value || [],
 				cashMovementCompanyTotal,
 				formatCurrencyWithSymbol: summaryFormatters.formatCurrencyWithSymbol,
 				formatCurrency,

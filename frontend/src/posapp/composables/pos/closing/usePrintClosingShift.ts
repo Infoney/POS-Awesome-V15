@@ -47,6 +47,20 @@ interface PaymentByModeRow extends CurrencyRow {
 	mode_of_payment?: string;
 }
 
+interface TaxAccountRow {
+	account_head?: string;
+	rate?: number;
+	currency?: string;
+	amount?: number;
+	company_currency_amount?: number;
+}
+
+interface TaxesCollectedSummary {
+	company_currency_total?: number;
+	by_account?: TaxAccountRow[];
+	by_currency?: CurrencyRow[];
+}
+
 export interface PrintClosingShiftPayload {
 	shiftName: string;
 	companyName: string;
@@ -63,6 +77,10 @@ export interface PrintClosingShiftPayload {
 	reconciliation: ReconciliationRow[];
 	creditInvoicesByCurrency: CurrencyRow[];
 	returnsByCurrency: CurrencyRow[];
+	/** Per-account + per-currency tax breakdown for the shift. */
+	taxesCollectedSummary?: TaxesCollectedSummary;
+	/** Convenience: same as `taxesCollectedSummary.by_account`. */
+	taxesCollectedByAccount?: TaxAccountRow[];
 	cashMovementCompanyTotal: number;
 	/**
 	 * Whether the shift had already been submitted (closed) when the
@@ -378,11 +396,19 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 		reconciliation,
 		creditInvoicesByCurrency,
 		returnsByCurrency,
+		taxesCollectedSummary,
+		taxesCollectedByAccount,
 		cashMovementCompanyTotal,
 		formatCurrency,
 		formatCurrencyWithSymbol,
 		shiftClosed = false,
 	} = payload;
+	const taxAccountRows: TaxAccountRow[] = Array.isArray(taxesCollectedByAccount)
+		? taxesCollectedByAccount
+		: Array.isArray(taxesCollectedSummary?.by_account)
+			? taxesCollectedSummary?.by_account || []
+			: [];
+	const taxCompanyTotal = Number(taxesCollectedSummary?.company_currency_total || 0);
 	const statusBanner = buildStatusBanner(Boolean(shiftClosed), "a4");
 
 	const renderInsightCards = (cards: InsightCard[]) =>
@@ -492,6 +518,59 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 	};
 
 	const reconcileBody = buildReconciliationRows(reconciliation, formatCurrency);
+
+	// Per-account tax table — surfaces what the shift owes to the
+	// government, broken down per tax account (e.g. "4209 - KSA Expo
+	// Tax") + per invoice currency. Skipped entirely when no tax was
+	// collected, so a 0%-tax tenant doesn't see an empty table.
+	const taxesSection = taxAccountRows.length
+		? `<section class="block">
+			<h3>${escapeHtml(tt("Taxes Collected"))}</h3>
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>${escapeHtml(tt("Tax Account"))}</th>
+						<th class="num">${escapeHtml(tt("Rate"))}</th>
+						<th>${escapeHtml(tt("Currency"))}</th>
+						<th class="num">${escapeHtml(tt("Amount"))}</th>
+						<th class="num">${escapeHtml(`${tt("In")} ${companyCurrency}`)}</th>
+					</tr>
+				</thead>
+				<tbody>
+					${taxAccountRows
+						.map((row) => {
+							const rowCurrency = row.currency || companyCurrency;
+							const isCompany = rowCurrency === companyCurrency;
+							return `<tr>
+								<td>${escapeHtml(row.account_head || "—")}</td>
+								<td class="num">${escapeHtml(`${formatCurrency(Number(row.rate || 0), 2)}%`)}</td>
+								<td>${escapeHtml(rowCurrency)}</td>
+								<td class="num">${escapeHtml(
+									formatCurrencyWithSymbol(Number(row.amount || 0), rowCurrency),
+								)}</td>
+								<td class="num">${escapeHtml(
+									isCompany
+										? "—"
+										: formatCurrencyWithSymbol(
+												Number(row.company_currency_amount || 0),
+												companyCurrency,
+											),
+								)}</td>
+							</tr>`;
+						})
+						.join("")}
+				</tbody>
+				<tfoot>
+					<tr>
+						<td colspan="4">${escapeHtml(tt("Total Tax Collected"))}</td>
+						<td class="num">${escapeHtml(
+							formatCurrencyWithSymbol(taxCompanyTotal, companyCurrency),
+						)}</td>
+					</tr>
+				</tfoot>
+			</table>
+		</section>`
+		: "";
 
 	const html = `
 		<style>
@@ -664,6 +743,7 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 
 		${renderCurrencyTable(tt("Multi-Currency Totals"), multiCurrencyTotals)}
 		${renderPaymentsTable(paymentsByMode)}
+		${taxesSection}
 		${renderCurrencyTable(tt("Credit Invoices Outstanding"), creditInvoicesByCurrency, { showInvoiceCount: true })}
 		${renderCurrencyTable(tt("Returns by Currency"), returnsByCurrency, { showInvoiceCount: true })}
 

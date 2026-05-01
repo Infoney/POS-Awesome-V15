@@ -308,8 +308,19 @@ export function useClosingSummary(
 		let grossSalesValue = formatCompany(grossCompany);
 		let avgInvoiceValue = formatCompany(avgCompany);
 
-		const netCaptionPrefix = __("After returns");
-		const grossCaptionPrefix = __("Before returns");
+		// Card captions spell out the formula so the cashier / store
+		// manager doesn't have to guess what "Net" and "Gross" mean
+		// here:
+		//   * Gross Sales = sum of every invoice's grand_total (what
+		//     customers actually paid, including tax)
+		//   * Net Sales   = Gross − Returns (refunds reduce net but NOT
+		//     gross — gross is "money that came in", net is "money we
+		//     keep before tax")
+		// Tax is surfaced as its own card / table elsewhere; we
+		// deliberately don't fold it into either "gross" or "net" so
+		// the breakdown stays explicit.
+		const netCaptionPrefix = __("Gross − returns");
+		const grossCaptionPrefix = __("Sum of grand totals");
 		const avgCaptionPrefix = __("Across");
 
 		let netCaption = `${netCaptionPrefix}: ${formatCompany(netCompany)}`;
@@ -532,6 +543,27 @@ export function useClosingSummary(
 		return entry?.total || 0;
 	};
 
+	// ── Taxes collected ────────────────────────────────────────────────
+	// Surfaced as its own section in the dialog AND on the printed
+	// closing report so the cashier / store manager / accountant can
+	// see exactly how much of the day's revenue was tax owed to the
+	// government (vs revenue we keep). Driven by overview.py's
+	// `taxes_collected` payload (added in this commit). Populated on
+	// the dialog via `salesSummary.tax_company_currency_total` (single
+	// number for the headline card) plus per-account / per-currency
+	// breakdowns for the detail tables.
+	const taxesCollectedSummary = computed(() => {
+		const ov: any = unref(overview);
+		const node = ov?.taxes_collected || {};
+		return {
+			company_currency_total: Number(node.company_currency_total) || 0,
+			by_account: Array.isArray(node.by_account) ? node.by_account : [],
+			by_currency: Array.isArray(node.by_currency) ? node.by_currency : [],
+		};
+	});
+	const taxesCollectedByAccount = computed(() => taxesCollectedSummary.value.by_account);
+	const taxesCollectedByCurrency = computed(() => taxesCollectedSummary.value.by_currency);
+
 	return {
 		overviewCompanyCurrency,
 		companyCurrencySymbol,
@@ -544,6 +576,9 @@ export function useClosingSummary(
 		cashMovementSummary,
 		primaryInsights,
 		secondaryInsights,
+		taxesCollectedSummary,
+		taxesCollectedByAccount,
+		taxesCollectedByCurrency,
 		shouldShowCompanyEquivalent,
 		showExchangeRates,
 		formatExchangeRates,
