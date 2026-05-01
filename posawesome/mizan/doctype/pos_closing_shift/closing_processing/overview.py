@@ -251,66 +251,67 @@ def get_closing_shift_overview(pos_opening_shift):
         invoice_currency = invoice.get("currency") or company_currency
         invoice_total = invoice.get("rounded_total") or invoice.get("grand_total") or 0
 
-        # Tax collected on this invoice. ERPNext stores the total in
-        # `total_taxes_and_charges` (invoice currency) and
-        # `base_total_taxes_and_charges` (company currency). Per-account
-        # breakdown lives on the invoice's child table; we resolve that
-        # by fetching the doc once and walking `taxes`.
-        invoice_tax_base = flt(
-            get_base_value(
-                invoice,
-                "total_taxes_and_charges",
-                "base_total_taxes_and_charges",
-                conversion_rate,
-            )
-        )
-        invoice_tax_currency = flt(invoice.get("total_taxes_and_charges") or 0)
-        if invoice_tax_base or invoice_tax_currency:
-            tax_company_currency_total += invoice_tax_base
-            tax_currency_entry = tax_currency_breakdown.setdefault(
-                invoice_currency,
-                {
-                    "currency": invoice_currency,
-                    "total": 0,
-                    "company_currency_total": 0,
-                },
-            )
-            tax_currency_entry["total"] += invoice_tax_currency
-            tax_currency_entry["company_currency_total"] += invoice_tax_base
+        # Tax collected on this invoice. We deliberately derive ALL
+        # tax totals (the headline `tax_company_currency_total`, the
+        # per-currency `tax_currency_breakdown`, and the per-account
+        # `tax_account_breakdown`) from a single source: the invoice's
+        # `taxes` child rows. The invoice-level `total_taxes_and_charges`
+        # / `base_total_taxes_and_charges` field can drift from the
+        # row-level sum on tax-inclusive pricing or discount-on-tax
+        # configurations (observed in production: an invoice whose
+        # rows summed to KWD 35.857 had `base_total_taxes_and_charges`
+        # of KWD 17.928 — half — making the dialog's "Total Tax
+        # Collected" line disagree with the per-account row right
+        # above it). Single source of truth → footer can't disagree
+        # with rows by construction.
+        invoice_doctype = invoice.get("doctype") or doctype
+        try:
+            invoice_doc = frappe.get_cached_doc(invoice_doctype, invoice.get("name"))
+        except frappe.DoesNotExistError:
+            invoice_doc = None
+        if invoice_doc:
+            invoice_tax_currency_sum = 0
+            invoice_tax_base_sum = 0
+            for tax_row in invoice_doc.get("taxes") or []:
+                account_head = tax_row.get("account_head")
+                if not account_head:
+                    continue
+                rate = flt(tax_row.get("rate") or 0)
+                row_amount = flt(tax_row.get("tax_amount") or 0)
+                row_base_amount = flt(
+                    tax_row.get("base_tax_amount")
+                    or (row_amount * (flt(conversion_rate) or 1))
+                )
+                if not row_amount and not row_base_amount:
+                    continue
+                bucket_key = (account_head, rate, invoice_currency)
+                tax_bucket = tax_account_breakdown.setdefault(
+                    bucket_key,
+                    {
+                        "account_head": account_head,
+                        "rate": rate,
+                        "currency": invoice_currency,
+                        "amount": 0,
+                        "company_currency_amount": 0,
+                    },
+                )
+                tax_bucket["amount"] += row_amount
+                tax_bucket["company_currency_amount"] += row_base_amount
+                invoice_tax_currency_sum += row_amount
+                invoice_tax_base_sum += row_base_amount
 
-            # Per-account breakdown — read the invoice's `taxes` child
-            # table directly. We only fetch the doc when the invoice
-            # actually has tax (else the loop is a no-op anyway), so
-            # zero-tax shifts don't pay the round-trip.
-            invoice_doctype = invoice.get("doctype") or doctype
-            try:
-                invoice_doc = frappe.get_cached_doc(invoice_doctype, invoice.get("name"))
-            except frappe.DoesNotExistError:
-                invoice_doc = None
-            if invoice_doc:
-                for tax_row in invoice_doc.get("taxes") or []:
-                    account_head = tax_row.get("account_head")
-                    if not account_head:
-                        continue
-                    rate = flt(tax_row.get("rate") or 0)
-                    row_amount = flt(tax_row.get("tax_amount") or 0)
-                    row_base_amount = flt(
-                        tax_row.get("base_tax_amount")
-                        or (row_amount * (flt(conversion_rate) or 1))
-                    )
-                    bucket_key = (account_head, rate, invoice_currency)
-                    tax_bucket = tax_account_breakdown.setdefault(
-                        bucket_key,
-                        {
-                            "account_head": account_head,
-                            "rate": rate,
-                            "currency": invoice_currency,
-                            "amount": 0,
-                            "company_currency_amount": 0,
-                        },
-                    )
-                    tax_bucket["amount"] += row_amount
-                    tax_bucket["company_currency_amount"] += row_base_amount
+            if invoice_tax_currency_sum or invoice_tax_base_sum:
+                tax_company_currency_total += invoice_tax_base_sum
+                tax_currency_entry = tax_currency_breakdown.setdefault(
+                    invoice_currency,
+                    {
+                        "currency": invoice_currency,
+                        "total": 0,
+                        "company_currency_total": 0,
+                    },
+                )
+                tax_currency_entry["total"] += invoice_tax_currency_sum
+                tax_currency_entry["company_currency_total"] += invoice_tax_base_sum
 
         currency_entry = multi_currency_totals.setdefault(
             invoice_currency,
