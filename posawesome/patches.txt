@@ -21,3 +21,4 @@ posawesome.patches.add_pos_menu_logo_setting
 posawesome.patches.backfill_pos_opening_shift_detail_currency
 posawesome.patches.rename_module_to_mizan
 posawesome.patches.rename_workspace_to_mizan
+posawesome.patches.rename_dashboard_labels_to_mizan

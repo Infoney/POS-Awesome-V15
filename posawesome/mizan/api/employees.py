@@ -40,8 +40,21 @@ def _get_user_doc(user: str):
 
 
 def _get_user_pin(user_doc) -> str:
+	# Use the lower-level password helper with `raise_exception=False`
+	# so a user who hasn't set a PIN yet doesn't get the noisy
+	#   Password not found for User <email> posa_pos_pin
+	# entry in `Error Log` every time the Manage Pharmacist PIN form
+	# pre-fetches the current value. `Document.get_password` raises +
+	# logs before we can catch it; the helper just returns None.
 	try:
-		return str(user_doc.get_password("posa_pos_pin") or "").strip()
+		from frappe.utils.password import get_decrypted_password
+		pin = get_decrypted_password(
+			"User",
+			user_doc.name,
+			"posa_pos_pin",
+			raise_exception=False,
+		)
+		return str(pin or "").strip()
 	except Exception:
 		return ""
 

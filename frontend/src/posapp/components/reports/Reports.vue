@@ -3,7 +3,7 @@
 		<v-container fluid class="dashboard-shell pa-3 pa-sm-4">
 			<div class="dashboard-toolbar mb-4">
 				<div>
-					<h1 class="text-h5 text-sm-h4 font-weight-bold mb-1">{{ __("Awesome Dashboard") }}</h1>
+					<h1 class="text-h5 text-sm-h4 font-weight-bold mb-1">{{ __("Mizan Dashboard") }}</h1>
 					<p class="text-body-2 text-medium-emphasis mb-0">
 						{{ __("Real-time POS insights for retail operations.") }}
 					</p>
@@ -2463,16 +2463,16 @@ const profileFilterItems = computed(() =>
 const canRenderDashboard = computed(() => isPosSupervisor.value && isDashboardEnabledOnServer.value);
 const disabledReasonText = computed(() => {
 	if (!isPosSupervisor.value) {
-		return __("Awesome Dashboard is visible only to POS supervisors.");
+		return __("Mizan Dashboard is visible only to POS supervisors.");
 	}
 	const reason = dashboardData.value.disabled_reason;
 	if (reason === "profile_disabled") {
-		return __("Awesome Dashboard is disabled for the selected POS Profile.");
+		return __("Mizan Dashboard is disabled for the selected POS Profile.");
 	}
 	if (reason === "no_profiles_in_scope") {
 		return __("No profiles found for selected scope. Falling back to current profile failed.");
 	}
-	return __("Awesome Dashboard is unavailable for the selected scope.");
+	return __("Mizan Dashboard is unavailable for the selected scope.");
 });
 const selectedProfilesCount = computed(
 	() => Number(dashboardData.value.selected_profiles?.length || 0),
