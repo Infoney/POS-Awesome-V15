@@ -1,79 +1,30 @@
-"""Expose API functions for POS Awesome."""
+"""POS-Awesome (Mizan) API package.
 
-from .bundles import get_bundle_components
-from .dashboard import get_dashboard_data
-from .customers import (
-    create_customer,
-    get_customer_addresses,
-    get_customer_info,
-    get_customer_names,
-    get_customers_count,
-    get_sales_person_names,
-    make_address,
-    set_customer_info,
-)
-from .invoices import (
-    delete_invoice,
-    get_draft_invoices,
-    get_last_invoice_rates,
-    search_invoices_for_return,
-    submit_invoice,
-    update_invoice,
-    validate_return_items,
-)
-from .items import (
-    build_scale_barcode,
-    get_item_attributes,
-    get_item_brand,
-    get_item_detail,
-    get_items,
-    get_items_count,
-    get_items_details,
-    get_items_from_barcode,
-    parse_scale_barcode,
-    get_items_groups,
-)
-from .offers import (
-    get_active_gift_coupons,
-    get_applicable_delivery_charges,
-    get_offers,
-    get_pos_coupon,
-)
-from .payments import (
-    create_payment_request,
-    get_available_credit,
-)
-from .stored_value import (
-    get_available_stored_value,
-    get_stored_value_summary,
-)
-from .sales_orders import (
-    search_orders,
-    submit_sales_order,
-    update_sales_order,
-)
-from .quotations import (
-    submit_quotation,
-    update_quotation,
-)
-from .purchase_orders import (
-    create_purchase_item,
-    create_purchase_order,
-    create_supplier,
-    search_suppliers,
-)
-from .shifts import (
-    check_opening_shift,
-    create_opening_voucher,
-    get_opening_dialog_data,
-)
-from .utilities import (
-    get_app_branch,
-    get_app_info,
-    get_language_options,
-    get_pos_profile_tax_inclusive,
-    get_selling_price_lists,
-    get_translation_dict,
-    get_version,
-)
-from .utils import get_active_pos_profile, get_default_warehouse
+Intentionally empty — submodules (`utilities`, `items`, `invoices`,
+`shifts`, etc.) are imported on demand by Frappe's whitelisted-method
+dispatch (`frappe.get_attr("posawesome.mizan.api.<submodule>.<fn>")`),
+which only needs the parent package to exist as a namespace, not to
+pre-load every child.
+
+History: this file used to eagerly do `from .X import …` for ~13
+submodules. None of the eager re-exports were actually consumed
+(grep for `from posawesome.mizan.api import …` is empty across the
+whole repo). They were dead weight — and they opened a cold-start
+race: under concurrent first-hit load, two worker threads racing
+through the package init could each hold one submodule's
+`_ModuleLock` while waiting for another, and Python's import system
+would abort one of them with
+
+    Failed to get method for command posawesome.mizan.api.<X>.<fn>
+    with deadlock detected by _ModuleLock('posawesome.mizan.api.<Y>')
+
+Self-resolved on the next request once `sys.modules` was warm, but
+recurred after every `bench restart` / worker recycle. Reported
+twice on AL-KHANSA: once on `get_terminal_employees` (lock on
+`shifts`) and once on `get_current_user_language` (lock on
+`shifts`).
+
+If a future caller wants `from posawesome.mizan.api import get_items`
+shorthand back, prefer adding it inline at the import site rather
+than re-introducing the eager block here.
+"""
