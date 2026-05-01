@@ -352,7 +352,17 @@ export default {
 					args: {
 						pos_profile: JSON.stringify(this.pos_profile),
 						item_group: group,
-						// fetch complete inventory; backend paginates internally
+						// fetch complete inventory; backend paginates internally.
+						// include_image=1 — the give-item picker dialog renders
+						// product thumbnails when the row carries one, but the
+						// server defaults `include_image` to False and skips
+						// the column for the broader items grid (image fetch
+						// is the slowest column on a wide-result query).
+						// We're asking for a single offer's eligible group,
+						// so the cost is bounded — we'd rather pay it than
+						// show every offer item with the package-fallback
+						// icon (AL-KHANSA report 2026-05).
+						include_image: 1,
 					},
 				});
 
