@@ -70,7 +70,7 @@ frappe.ui.form.on("POS Profile", {
 		});
 
 		frappe.call({
-			method: "posawesome.posawesome.api.utilities.get_language_options",
+			method: "posawesome.mizan.api.utilities.get_language_options",
 			callback: function (r) {
 				if (!r.exc) {
 					frm.fields_dict["posa_language"].df.options = r.message;

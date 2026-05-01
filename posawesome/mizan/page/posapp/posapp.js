@@ -399,7 +399,7 @@ frappe.pages["posapp"].on_page_load = async function (wrapper) {
 
 			const fetchAndCache = () => {
 				frappe.call({
-					method: "posawesome.posawesome.api.utilities.get_pos_profile_tax_inclusive",
+					method: "posawesome.mizan.api.utilities.get_pos_profile_tax_inclusive",
 					args: {
 						pos_profile: posProfile,
 					},
