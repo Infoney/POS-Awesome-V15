@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { computed, inject } from "vue";
+import { computed, inject, reactive, watch } from "vue";
 
 const props = defineProps({
 	payments: Array,
@@ -149,33 +149,99 @@ const displayConvert = (value) => {
 	return num * safeRate.value;
 };
 
-// `closing_amount` is the user-entered "I counted X" figure. The DB stores
-// it in company currency; the display shows it in closing currency.
-const closingDisplayValue = (item) => {
-	const stored = Number(item?.closing_amount) || 0;
-	if (!stored) {
-		// Empty / 0 in DB → empty string in input so the cashier sees a
-		// blank "Edit" placeholder rather than a literal "0".
-		return item?.closing_amount === 0 ? 0 : "";
-	}
-	return stored * safeRate.value;
+// Per-row local display state for the closing-amount input. Keeping
+// the cashier's typed string here (rather than re-deriving it from
+// `closing_amount × rate` on every render) avoids a floating-point
+// round-trip drift that made typing genuinely impossible at non-1
+// rates: type "5" → store 5/12.1497 ≈ 0.4115 → re-display as
+// 0.4115 × 12.1497 ≈ 4.99999 → input now reads "4.99999" and the
+// next keystroke compounds the loss. AL-KHANSA report: cashier
+// typed 50 SAR, input flickered to 49.999999.
+//
+// Strategy:
+//   - Each row has its own entry in `localDisplayValues`, keyed by
+//     the child-row primary key (`name`, with mode_of_payment as a
+//     fallback for fresh rows the back-end hasn't named yet).
+//   - The v-text-field v-models against this entry, NOT against
+//     `closing_amount`. Typing only mutates the local string.
+//   - On every keystroke we still compute `closing_amount = typed /
+//     rate` so the submit pipeline (`isNaN(parseFloat(closing_amount))`
+//     in useClosingShift.submitDialog) sees a fresh number — no
+//     "press submit, lose the last keystroke" surprise.
+//   - When the rate changes (cashier picks a different closing
+//     currency), we re-derive every row's display value from the
+//     stored `closing_amount × newRate` so the table re-units
+//     itself in one shot.
+const localDisplayValues = reactive({});
+const rowKey = (item) => {
+	if (!item) return "";
+	return String(item.name || item.mode_of_payment || "");
 };
 
-// Reverse: parse the cashier's typed value (in closing currency) back to
-// company currency and store on the row.
+const closingDisplayValue = (item) => {
+	const key = rowKey(item);
+	if (key && key in localDisplayValues) {
+		return localDisplayValues[key];
+	}
+	const stored = Number(item?.closing_amount) || 0;
+	if (!stored) {
+		// Empty / 0 in DB → empty string in input so the cashier sees
+		// a blank "Edit" placeholder rather than a literal "0".
+		const initial = item?.closing_amount === 0 ? 0 : "";
+		if (key) localDisplayValues[key] = initial;
+		return initial;
+	}
+	const initial = stored * safeRate.value;
+	if (key) localDisplayValues[key] = initial;
+	return initial;
+};
+
 const onClosingInput = (item, rawValue) => {
 	if (!item) return;
+	const key = rowKey(item);
+	if (key) localDisplayValues[key] = rawValue;
 	if (rawValue === "" || rawValue === null || rawValue === undefined) {
 		item.closing_amount = "";
 		return;
 	}
 	const num = typeof rawValue === "number" ? rawValue : Number(String(rawValue).trim());
 	if (!Number.isFinite(num)) {
+		// User typed garbage — leave the raw string on the row so
+		// the closing-amount validation rule catches it and stops
+		// submit. Don't mutate localDisplayValues here either; the
+		// v-text-field is already showing the bad input.
 		item.closing_amount = rawValue;
 		return;
 	}
 	item.closing_amount = num / safeRate.value;
 };
+
+// When the cashier flips the currency dropdown, re-derive every
+// already-touched row's display value from the new rate so the
+// numbers re-unit in place. Untouched rows pick up the new rate
+// lazily via `closingDisplayValue`'s "first read seeds" branch.
+watch(
+	() => safeRate.value,
+	() => {
+		const rows = Array.isArray(props.payments) ? props.payments : [];
+		rows.forEach((row) => {
+			const key = rowKey(row);
+			if (!key) return;
+			const stored = Number(row?.closing_amount);
+			if (row?.closing_amount === "" || row?.closing_amount === null || row?.closing_amount === undefined) {
+				localDisplayValues[key] = "";
+				return;
+			}
+			if (!Number.isFinite(stored)) {
+				// Row had non-numeric junk in `closing_amount`; leave
+				// the local display alone so the validation message
+				// stays visible.
+				return;
+			}
+			localDisplayValues[key] = stored ? stored * safeRate.value : 0;
+		});
+	},
+);
 
 const onChangeCurrency = (value) => {
 	emit("update:closing-currency", value);
