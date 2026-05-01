@@ -846,7 +846,7 @@ def get_payment_reconciliation_details(closing_shift_doc):
     ]
 
     return frappe.render_template(
-        "posawesome/posawesome/doctype/pos_closing_shift/closing_shift_details.html",
+        "posawesome/mizan/doctype/pos_closing_shift/closing_shift_details.html",
         {
             "data": closing_shift_doc,
             "currency": company_currency,

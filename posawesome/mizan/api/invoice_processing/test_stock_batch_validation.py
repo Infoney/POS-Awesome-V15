@@ -1,7 +1,7 @@
 """Tests for the batched-item branch of ``_collect_stock_errors``.
 
 Run directly:
-``python posawesome/posawesome/api/invoice_processing/test_stock_batch_validation.py``
+``python posawesome/mizan/api/invoice_processing/test_stock_batch_validation.py``
 """
 
 import importlib.util

@@ -1,6 +1,6 @@
 """Tests for the bulk stock availability path.
 
-Run directly: ``python posawesome/posawesome/api/item_processing/test_stock_bulk.py``.
+Run directly: ``python posawesome/mizan/api/item_processing/test_stock_bulk.py``.
 Mirrors the framework-stub style used by ``test_offline_sync_stock.py`` so the
 suite stays runnable without a live Frappe bench.
 """
