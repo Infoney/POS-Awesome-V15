@@ -329,3 +329,66 @@ optional):
 - v15+ Serial and Batch Bundle (`BatchNegativeStockError`):
   `has negative stock of quantity -1.0`
   (frappe/erpnext#41908, #41909)
+
+## Closing-shift aggregation invariants (2026-05 onward)
+
+A series of drift bugs on multi-currency, tax-inclusive, and
+discounted invoices established these rules. Touching any of:
+`posawesome/mizan/doctype/pos_closing_shift/closing_processing/overview.py`,
+`useClosingSummary.ts`, `ShiftOverview.vue`, the dialog A4 print
+(`usePrintClosingShift.ts`), or the Desk A4 print
+(`pos_closing_shift.js::mizan_print_a4_closing_shift`) — keep these
+invariants:
+
+1. **Tax totals come from row-level sums.** Σ of every invoice's
+   `taxes` child rows' `base_tax_amount` is the single source of
+   truth — drives the headline `tax_company_currency_total`, the
+   per-currency breakdown, AND the per-account breakdown. Don't
+   accumulate `invoice.base_total_taxes_and_charges` separately
+   and expect it to match — tax-inclusive pricing and discount-on-
+   tax invoices have field-vs-row drift.
+
+2. **Gross / Net / Average Ticket use base_grand_total.**
+   Gross = Σ(positive `base_grand_total`); Net = Gross − returns
+   (= Σ of all `base_grand_total` including negatives); Average
+   = Gross ÷ sale_invoices_count. Tax is NEVER folded into either
+   — it's its own card / section.
+
+3. **Reconciliation `expected_amount` per mode = Σ of
+   `payment.base_amount` across invoices**, MINUS change_amount
+   for the cash mode. For an invoice paid entirely on one mode
+   that's identical to `base_grand_total`; for split-payment
+   invoices it's the per-mode share.
+
+4. **Multi-currency display: trust `multi_currency_totals.total`,
+   not ratio projection.** The server's per-currency aggregate is
+   already correct. Don't compute a ratio of company-currency
+   aggregates and project — discount/tax shifts make ratio math
+   drift.
+
+5. **Closing-amount input never round-trips on every keystroke.**
+   The v-text-field model-value is bound to a per-row local
+   display state (verbatim what the cashier typed); on input we
+   ALSO write `item.closing_amount = typed ÷ rate` so submit
+   validation has a fresh number, but the displayed string is
+   never re-derived from the round-trip product. A × ÷ × at any
+   non-1 rate compounds float loss into the input.
+
+## Brand identity vs bench slug (Mizan rename)
+
+**Frappe module** is `Mizan` (renamed from `POSAwesome` on
+`feat/mizan-module-rename`, 2026-04-30). On-disk module dir is
+`posawesome/mizan/`, every DocType / Page / Workspace JSON
+`"module"` field reads `Mizan`, all Python imports go through
+`posawesome.mizan.*`, the workspace lives at `/app/mizan`.
+
+**Bench app slug** is and STAYS `posawesome`. That's the slug for
+`bench --app posawesome ...`, `/assets/posawesome/dist/...` asset
+URLs, the Python package root, `pyproject.toml` `name`, IndexedDB
+key prefixes. Renaming the bench slug is Option C from the
+planning conversation — out of scope, would force an
+uninstall/reinstall on production with manual data porting.
+
+When making user-visible changes, default copy to **Mizan** (or
+"Infoney Mizan" in formal contexts). When writing imports, file
+paths, or asset URLs, the slug is **posawesome**.
