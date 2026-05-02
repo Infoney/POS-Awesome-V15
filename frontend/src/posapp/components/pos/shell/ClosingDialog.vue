@@ -104,6 +104,7 @@
 									:taxes-collected-summary="taxesCollectedSummary"
 									:taxes-collected-by-account="taxesCollectedByAccount"
 									:taxes-collected-by-currency="taxesCollectedByCurrency"
+									:cashiers-breakdown="cashiersBreakdown"
 									:overview-company-currency="overviewCompanyCurrency"
 									:format-currency-with-symbol="formatCurrencyWithSymbol"
 									:should-show-company-equivalent="shouldShowCompanyEquivalent"
@@ -450,6 +451,7 @@ export default {
 				},
 				taxesCollectedByAccount:
 					summary.taxesCollectedByAccount?.value || [],
+				cashiersBreakdown: summary.cashiersBreakdown?.value || [],
 				cashMovementCompanyTotal,
 				formatCurrencyWithSymbol: summaryFormatters.formatCurrencyWithSymbol,
 				formatCurrency,

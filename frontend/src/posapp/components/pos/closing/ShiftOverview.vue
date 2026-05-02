@@ -602,6 +602,65 @@
 				</v-col>
 			</v-row>
 
+			<!--
+				Cashiers — per-cashier breakdown of who rang what on this
+				shift. Multiple cashiers can rotate via the in-app Switch
+				Cashier flow without ending the shift, so this is the only
+				place the closing report shows the per-mini-shift split.
+				Hides on shifts that pre-date the cashier-tracking rollout
+				(empty array).
+			-->
+			<div
+				v-if="cashiersBreakdown && cashiersBreakdown.length"
+				class="table-section mt-4"
+			>
+				<div class="table-header mb-2">
+					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
+						{{ __("Cashiers") }}
+					</h5>
+					<p class="text-body-2 text-grey">
+						{{
+							__(
+								"Per-cashier sales for this shift. Multiple cashiers can rotate via the in-app Switch Cashier flow without ending the shift.",
+							)
+						}}
+					</p>
+				</div>
+
+				<div class="overview-table-wrapper">
+					<table class="overview-table">
+						<thead>
+							<tr>
+								<th>{{ __("Cashier") }}</th>
+								<th>{{ __("Sales Person") }}</th>
+								<th class="text-end">{{ __("Invoices") }}</th>
+								<th class="text-end">{{ __("Grand Total") }}</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr
+								v-for="row in cashiersBreakdown"
+								:key="row.cashier"
+							>
+								<td>{{ row.cashier_name || row.cashier }}</td>
+								<td>{{ row.sales_person || "—" }}</td>
+								<td class="text-end">{{ row.invoice_count || 0 }}</td>
+								<td class="text-end">
+									<span class="overview-amount">
+										{{
+											formatCurrencyWithSymbol(
+												row.grand_total || 0,
+												overviewCompanyCurrency,
+											)
+										}}
+									</span>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
+
 			<div v-if="paymentsByMode.length" class="table-section mt-4">
 				<div class="table-header mb-2">
 					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
@@ -770,6 +829,7 @@ defineProps({
 	taxesCollectedSummary: { type: Object, default: () => ({ company_currency_total: 0, by_account: [], by_currency: [] }) },
 	taxesCollectedByAccount: { type: Array, default: () => [] },
 	taxesCollectedByCurrency: { type: Array, default: () => [] },
+	cashiersBreakdown: { type: Array, default: () => [] },
 	overviewCompanyCurrency: String,
 	// Functions
 	formatCurrencyWithSymbol: Function,

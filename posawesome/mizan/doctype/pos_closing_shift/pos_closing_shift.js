@@ -581,6 +581,89 @@ function mizan_build_taxes_table(taxes, companyCurrency) {
 	`;
 }
 
+function mizan_build_cashier_table(doc, companyCurrency) {
+	// Source rows from the explicit `cashiers` rollup if it's been
+	// populated (post-validate save), and fall back to walking
+	// `pos_transactions` so a shift saved with a stale JS bundle still
+	// renders a per-cashier breakdown without another round-trip.
+	let rows = Array.isArray(doc.cashiers) ? doc.cashiers : [];
+	if (!rows.length) {
+		const buckets = {};
+		(Array.isArray(doc.pos_transactions) ? doc.pos_transactions : []).forEach(
+			(tx) => {
+				const cashier = (tx.cashier || "").trim();
+				if (!cashier) return;
+				const bucket =
+					buckets[cashier] ||
+					(buckets[cashier] = {
+						cashier,
+						invoice_count: 0,
+						grand_total: 0,
+						net_total: 0,
+					});
+				bucket.invoice_count += 1;
+				bucket.grand_total += flt(tx.grand_total || 0);
+			},
+		);
+		rows = Object.values(buckets);
+	}
+	if (!rows.length) return "";
+	const sorted = rows.slice().sort((a, b) =>
+		(a.cashier_name || a.cashier || "").localeCompare(
+			b.cashier_name || b.cashier || "",
+		),
+	);
+	const totalInvoices = sorted.reduce(
+		(sum, row) => sum + flt(row.invoice_count || 0),
+		0,
+	);
+	const totalGrand = sorted.reduce(
+		(sum, row) => sum + flt(row.grand_total || 0),
+		0,
+	);
+	const body = sorted
+		.map((row) => {
+			const display = row.cashier_name || row.cashier || "—";
+			return `<tr>
+				<td>${mizan_escape_html(display)}</td>
+				<td>${mizan_escape_html(row.sales_person || "—")}</td>
+				<td class="num">${mizan_escape_html(format_number(row.invoice_count || 0, null, 0))}</td>
+				<td class="num">${mizan_escape_html(mizan_format_currency(row.grand_total, companyCurrency))}</td>
+			</tr>`;
+		})
+		.join("");
+	return `
+		<section class="block">
+			<h3>${mizan_escape_html(__("Cashiers"))}</h3>
+			<p style="margin: 0 0 6px; color: #6b7280; font-size: 11px;">
+				${mizan_escape_html(
+					__(
+						"Per-cashier sales for this shift. Multiple cashiers can rotate via the in-app Switch Cashier flow without ending the shift.",
+					),
+				)}
+			</p>
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>${mizan_escape_html(__("Cashier"))}</th>
+						<th>${mizan_escape_html(__("Sales Person"))}</th>
+						<th class="num">${mizan_escape_html(__("Invoices"))}</th>
+						<th class="num">${mizan_escape_html(__("Grand Total"))}</th>
+					</tr>
+				</thead>
+				<tbody>${body}</tbody>
+				<tfoot>
+					<tr>
+						<td colspan="2"><strong>${mizan_escape_html(__("Total"))}</strong></td>
+						<td class="num"><strong>${mizan_escape_html(format_number(totalInvoices, null, 0))}</strong></td>
+						<td class="num"><strong>${mizan_escape_html(mizan_format_currency(totalGrand, companyCurrency))}</strong></td>
+					</tr>
+				</tfoot>
+			</table>
+		</section>
+	`;
+}
+
 function mizan_build_reconciliation_table(rows) {
 	if (!rows.length) return "";
 	const body = rows
@@ -677,6 +760,7 @@ function mizan_build_closing_shift_a4_html(doc) {
 			: "";
 
 	const taxesTable = mizan_build_taxes_table(doc.taxes || [], companyCurrency);
+	const cashiersTable = mizan_build_cashier_table(doc, companyCurrency);
 
 	const reconciliationRows = Array.isArray(doc.payment_reconciliation)
 		? doc.payment_reconciliation
@@ -740,6 +824,7 @@ function mizan_build_closing_shift_a4_html(doc) {
 		</section>
 
 		${multiCurrencyTable}
+		${cashiersTable}
 		${taxesTable}
 		${reconciliationTable}
 

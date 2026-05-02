@@ -61,6 +61,15 @@ interface TaxesCollectedSummary {
 	by_currency?: CurrencyRow[];
 }
 
+interface CashierBreakdownRow {
+	cashier?: string;
+	cashier_name?: string;
+	sales_person?: string;
+	invoice_count?: number;
+	grand_total?: number;
+	net_total?: number;
+}
+
 export interface PrintClosingShiftPayload {
 	shiftName: string;
 	companyName: string;
@@ -81,6 +90,8 @@ export interface PrintClosingShiftPayload {
 	taxesCollectedSummary?: TaxesCollectedSummary;
 	/** Convenience: same as `taxesCollectedSummary.by_account`. */
 	taxesCollectedByAccount?: TaxAccountRow[];
+	/** Per-cashier rollup (one row per User who rang an invoice on this shift). */
+	cashiersBreakdown?: CashierBreakdownRow[];
 	cashMovementCompanyTotal: number;
 	/**
 	 * Whether the shift had already been submitted (closed) when the
@@ -398,6 +409,7 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 		returnsByCurrency,
 		taxesCollectedSummary,
 		taxesCollectedByAccount,
+		cashiersBreakdown,
 		cashMovementCompanyTotal,
 		formatCurrency,
 		formatCurrencyWithSymbol,
@@ -409,6 +421,9 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 			? taxesCollectedSummary?.by_account || []
 			: [];
 	const taxCompanyTotal = Number(taxesCollectedSummary?.company_currency_total || 0);
+	const cashierRows: CashierBreakdownRow[] = Array.isArray(cashiersBreakdown)
+		? cashiersBreakdown
+		: [];
 	const statusBanner = buildStatusBanner(Boolean(shiftClosed), "a4");
 
 	const renderInsightCards = (cards: InsightCard[]) =>
@@ -518,6 +533,68 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 	};
 
 	const reconcileBody = buildReconciliationRows(reconciliation, formatCurrency);
+
+	// Per-cashier table — answers "who rang what" when multiple cashiers
+	// rotated through the same shift via the in-app Switch Cashier flow.
+	// Skipped on shifts with no cashier-stamped rows so legacy /
+	// pre-rollout shifts don't render an empty table.
+	const cashiersSection = cashierRows.length
+		? (() => {
+				const totalInvoices = cashierRows.reduce(
+					(sum, row) => sum + Number(row.invoice_count || 0),
+					0,
+				);
+				const totalGrand = cashierRows.reduce(
+					(sum, row) => sum + Number(row.grand_total || 0),
+					0,
+				);
+				const body = cashierRows
+					.map(
+						(row) => `<tr>
+							<td>${escapeHtml(row.cashier_name || row.cashier || "—")}</td>
+							<td>${escapeHtml(row.sales_person || "—")}</td>
+							<td class="num">${escapeHtml(String(row.invoice_count || 0))}</td>
+							<td class="num">${escapeHtml(
+								formatCurrencyWithSymbol(
+									Number(row.grand_total || 0),
+									companyCurrency,
+								),
+							)}</td>
+						</tr>`,
+					)
+					.join("");
+				return `<section class="block">
+					<h3>${escapeHtml(tt("Cashiers"))}</h3>
+					<p style="margin: 0 0 6px; color: #6b7280; font-size: 11px;">
+						${escapeHtml(
+							tt(
+								"Per-cashier sales for this shift. Multiple cashiers can rotate via the in-app Switch Cashier flow without ending the shift.",
+							),
+						)}
+					</p>
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>${escapeHtml(tt("Cashier"))}</th>
+								<th>${escapeHtml(tt("Sales Person"))}</th>
+								<th class="num">${escapeHtml(tt("Invoices"))}</th>
+								<th class="num">${escapeHtml(tt("Grand Total"))}</th>
+							</tr>
+						</thead>
+						<tbody>${body}</tbody>
+						<tfoot>
+							<tr>
+								<td colspan="2"><strong>${escapeHtml(tt("Total"))}</strong></td>
+								<td class="num"><strong>${escapeHtml(String(totalInvoices))}</strong></td>
+								<td class="num"><strong>${escapeHtml(
+									formatCurrencyWithSymbol(totalGrand, companyCurrency),
+								)}</strong></td>
+							</tr>
+						</tfoot>
+					</table>
+				</section>`;
+			})()
+		: "";
 
 	// Per-account tax table — surfaces what the shift owes to the
 	// government, broken down per tax account (e.g. "4209 - KSA Expo
@@ -742,6 +819,7 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 		</section>
 
 		${renderCurrencyTable(tt("Multi-Currency Totals"), multiCurrencyTotals)}
+		${cashiersSection}
 		${renderPaymentsTable(paymentsByMode)}
 		${taxesSection}
 		${renderCurrencyTable(tt("Credit Invoices Outstanding"), creditInvoicesByCurrency, { showInvoiceCount: true })}
