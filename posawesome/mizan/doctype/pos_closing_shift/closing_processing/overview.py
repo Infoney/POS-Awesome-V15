@@ -275,12 +275,40 @@ def get_closing_shift_overview(pos_opening_shift):
                     "invoice_count": 0,
                     "grand_total": 0,
                     "net_total": 0,
+                    # Per-cashier invoice drill-down. The closing dialog
+                    # uses this to show "who rang each invoice" so the
+                    # store manager can spot anomalies (a cashier with
+                    # disproportionately many returns, an oddly-large
+                    # ticket on a junior cashier's mini-shift, etc.)
+                    # without bouncing to ERPNext list view. Each entry
+                    # carries just enough to identify the invoice on the
+                    # dialog row — full doc details are one click away
+                    # via the linked-invoices grid.
+                    "invoices": [],
                 },
             )
             cashier_row["invoice_count"] += 1
-            cashier_row["grand_total"] += flt(base_grand_total)
-            cashier_row["net_total"] += flt(
+            net_base = flt(
                 get_base_value(invoice, "net_total", "base_net_total", conversion_rate)
+            )
+            cashier_row["grand_total"] += flt(base_grand_total)
+            cashier_row["net_total"] += net_base
+            cashier_row["invoices"].append(
+                {
+                    "name": invoice.get("name"),
+                    "doctype": invoice.get("doctype") or doctype,
+                    "posting_date": invoice.get("posting_date"),
+                    "posting_time": invoice.get("posting_time"),
+                    "customer": invoice.get("customer"),
+                    "customer_name": invoice.get("customer_name") or invoice.get("customer"),
+                    "currency": invoice_currency,
+                    "grand_total": flt(invoice.get("grand_total") or 0),
+                    "base_grand_total": flt(base_grand_total),
+                    "net_total": flt(invoice.get("net_total") or 0),
+                    "base_net_total": net_base,
+                    "is_return": bool(invoice.get("is_return"))
+                    or flt(base_grand_total) < 0,
+                }
             )
 
         # Tax collected on this invoice. The per-account / per-currency
@@ -915,6 +943,18 @@ def _resolve_cashier_breakdown_rows(cashier_breakdown):
     output = []
     for cashier, totals in cashier_breakdown.items():
         meta = user_meta.get(cashier) or {}
+        # Chronological invoice order per cashier. Cashier shifts run
+        # in real time, so sorting by `(posting_date, posting_time)`
+        # mirrors what the operator saw at the till — easier to spot a
+        # problematic stretch ("4 returns in a row at 14:30").
+        invoices = list(totals.get("invoices") or [])
+        invoices.sort(
+            key=lambda inv: (
+                str(inv.get("posting_date") or ""),
+                str(inv.get("posting_time") or ""),
+                str(inv.get("name") or ""),
+            )
+        )
         output.append(
             {
                 "cashier": cashier,
@@ -923,6 +963,7 @@ def _resolve_cashier_breakdown_rows(cashier_breakdown):
                 "invoice_count": int(totals.get("invoice_count") or 0),
                 "grand_total": flt(totals.get("grand_total") or 0),
                 "net_total": flt(totals.get("net_total") or 0),
+                "invoices": invoices,
             }
         )
     output.sort(key=lambda r: (r.get("cashier_name") or "").lower())
