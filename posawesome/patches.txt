@@ -23,3 +23,4 @@ posawesome.patches.rename_module_to_mizan
 posawesome.patches.rename_workspace_to_mizan
 posawesome.patches.rename_dashboard_labels_to_mizan
 posawesome.patches.rename_pos_profile_section_labels_to_mizan
+posawesome.patches.add_cashier_tracking_fields

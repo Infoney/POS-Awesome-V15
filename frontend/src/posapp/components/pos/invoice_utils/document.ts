@@ -4,9 +4,33 @@ import {
 	isOffline,
 } from "../../../../offline/index";
 import { _getPlcConversionRate } from "./currency";
+import { useEmployeeStore } from "../../../stores/employeeStore";
 
 declare const flt: (_value: unknown, _precision?: number) => number;
 declare const frappe: any;
+
+/**
+ * Resolve the active cashier-of-record from the employee store
+ * (Switch Cashier PIN dialog mutates `currentCashier`). Falls back
+ * through the context's own hints, then to session.user — matching
+ * the server's `_ensure_posa_cashier` precedence.
+ */
+export function resolveActiveCashierUser(context: any): string {
+	try {
+		const employeeStore = useEmployeeStore();
+		const fromStore = employeeStore?.currentCashier?.user;
+		if (typeof fromStore === "string" && fromStore) return fromStore;
+	} catch {
+		/* Pinia not yet ready — keep going */
+	}
+	const fromContext =
+		context?.current_cashier_user
+		|| context?.currentCashier?.user
+		|| context?.user;
+	if (typeof fromContext === "string" && fromContext) return fromContext;
+	const sessionUser = (typeof frappe !== "undefined" && frappe?.session?.user) || "";
+	return typeof sessionUser === "string" ? sessionUser : "";
+}
 
 function normalizeBackendDate(context: any, value: any): string | null {
 	if (value === null || typeof value === "undefined" || value === "") {
@@ -380,6 +404,20 @@ export function get_invoice_doc(context: any) {
 
 	// Add POS specific fields
 	doc.posa_pos_opening_shift = context.pos_opening_shift?.name || null;
+	// `posa_cashier` is the cashier-of-record for this invoice — the
+	// user currently active on the terminal via the Switch Cashier
+	// PIN dialog, NOT necessarily `frappe.session.user` (a supervisor
+	// can be logged in for terminal management while a different
+	// cashier rings the sale). Stamping at doc-build time means every
+	// save path (draft `update_invoice`, final `submit_invoice`,
+	// offline-queue, etc.) carries the same value without each one
+	// having to thread it independently. Falls through the resolver
+	// chain (employeeStore → context → session) so we never overwrite
+	// a deliberately-set value with a less-specific source.
+	const cashierUser = resolveActiveCashierUser(context);
+	if (cashierUser) {
+		doc.posa_cashier = cashierUser;
+	}
 	doc.payments = get_payments(context);
 
 	// Handle return specific fields

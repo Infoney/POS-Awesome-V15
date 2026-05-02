@@ -1,5 +1,10 @@
 import { useItemAddition } from "../../../composables/pos/items/useItemAddition";
-import { get_invoice_doc, get_invoice_items, get_payments } from "./document";
+import {
+	get_invoice_doc,
+	get_invoice_items,
+	get_payments,
+	resolveActiveCashierUser,
+} from "./document";
 import { _logPriceListDebug, _buildPriceListSnapshot } from "./currency";
 import { applyReturnDiscountProration } from "./item_updates";
 
@@ -371,5 +376,12 @@ export async function get_invoice_from_order_doc(context: any) {
 	doc.update_stock = 1;
 	doc.is_pos = 1;
 	doc.payments = get_payments(context);
+	// Stamp `posa_cashier` so the order-conversion path matches
+	// `get_invoice_doc` and the server-side `_ensure_posa_cashier`
+	// fallback never has to fire on a normal POS submit.
+	const cashierUser = resolveActiveCashierUser(context);
+	if (cashierUser) {
+		doc.posa_cashier = cashierUser;
+	}
 	return doc;
 }

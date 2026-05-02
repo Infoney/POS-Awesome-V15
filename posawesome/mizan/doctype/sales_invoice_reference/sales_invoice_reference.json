@@ -7,6 +7,8 @@
  "field_order": [
   "sales_invoice",
   "posting_date",
+  "cashier",
+  "sales_person",
   "column_break_3",
   "customer",
   "grand_total",
@@ -29,6 +31,21 @@
    "in_list_view": 1,
    "label": "Date",
    "reqd": 1
+  },
+  {
+   "fieldname": "cashier",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cashier",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sales_person",
+   "fieldtype": "Link",
+   "label": "Sales Person",
+   "options": "Sales Person",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_3",

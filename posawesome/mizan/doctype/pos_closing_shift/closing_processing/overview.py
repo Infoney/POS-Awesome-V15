@@ -91,6 +91,15 @@ def get_closing_shift_overview(pos_opening_shift):
     tax_company_currency_total = 0
     tax_account_breakdown = {}
     tax_currency_breakdown = {}
+    # Cashier-of-record breakdown. Multiple cashiers can rotate on the
+    # same Opening Shift via the in-app Switch Cashier flow (PIN-based,
+    # doesn't end the shift). Group invoices by `posa_cashier` here so
+    # the dialog + A4 print can show "who rang what" without scanning
+    # every linked invoice. `posa_cashier` is the User who owned the
+    # POS terminal at submit time — see `_ensure_posa_cashier` in
+    # `posawesome/mizan/api/invoice_processing/creation.py`. Falls back
+    # to `owner` for invoices that predate the Custom Field rollout.
+    cashier_breakdown = {}
 
     cash_mode_of_payment = frappe.db.get_value("POS Profile", pos_profile, "posa_cash_mode_of_payment")
     if not cash_mode_of_payment:
@@ -250,6 +259,29 @@ def get_closing_shift_overview(pos_opening_shift):
             returns_count += 1
         invoice_currency = invoice.get("currency") or company_currency
         invoice_total = invoice.get("rounded_total") or invoice.get("grand_total") or 0
+
+        # Tally per-cashier totals. `posa_cashier` is the User-of-record
+        # set when the invoice was submitted (the operator currently
+        # active on the POS terminal — possibly different from `owner`
+        # if a supervisor was logged in). Pre-rollout invoices where the
+        # field is empty fall back to `owner` so legacy shifts still
+        # render a non-empty breakdown.
+        cashier_user = invoice.get("posa_cashier") or invoice.get("owner")
+        if cashier_user:
+            cashier_row = cashier_breakdown.setdefault(
+                cashier_user,
+                {
+                    "cashier": cashier_user,
+                    "invoice_count": 0,
+                    "grand_total": 0,
+                    "net_total": 0,
+                },
+            )
+            cashier_row["invoice_count"] += 1
+            cashier_row["grand_total"] += flt(base_grand_total)
+            cashier_row["net_total"] += flt(
+                get_base_value(invoice, "net_total", "base_net_total", conversion_rate)
+            )
 
         # Tax collected on this invoice. The per-account / per-currency
         # breakdown comes from walking the invoice's `taxes` child
@@ -849,7 +881,52 @@ def get_closing_shift_overview(pos_opening_shift):
             "by_currency": prepare_currency_rows(cash_movement_totals_by_currency),
             "by_type": prepare_movement_type_rows(cash_movement_totals_by_type),
         },
+        "cashiers": _resolve_cashier_breakdown_rows(cashier_breakdown),
     }
+
+
+def _resolve_cashier_breakdown_rows(cashier_breakdown):
+    """
+    Hydrate the per-cashier rollup with `full_name` + optional
+    `posa_sales_person` lookups. Done in a single batched query
+    rather than per-cashier `frappe.db.get_value` calls so a 5-
+    cashier shift doesn't pay 10 round-trips.
+    """
+    if not cashier_breakdown:
+        return []
+    cashier_users = list(cashier_breakdown.keys())
+    user_meta = {}
+    try:
+        # `posa_sales_person` is added via patch — guard against tenants
+        # that haven't migrated yet.
+        has_sales_person = frappe.db.has_column("User", "posa_sales_person")
+    except Exception:
+        has_sales_person = False
+    fields = ["name", "full_name"]
+    if has_sales_person:
+        fields.append("posa_sales_person")
+    rows = frappe.get_all(
+        "User",
+        filters={"name": ["in", cashier_users]},
+        fields=fields,
+    )
+    for row in rows:
+        user_meta[row["name"]] = row
+    output = []
+    for cashier, totals in cashier_breakdown.items():
+        meta = user_meta.get(cashier) or {}
+        output.append(
+            {
+                "cashier": cashier,
+                "cashier_name": meta.get("full_name") or cashier,
+                "sales_person": meta.get("posa_sales_person") or "",
+                "invoice_count": int(totals.get("invoice_count") or 0),
+                "grand_total": flt(totals.get("grand_total") or 0),
+                "net_total": flt(totals.get("net_total") or 0),
+            }
+        )
+    output.sort(key=lambda r: (r.get("cashier_name") or "").lower())
+    return output
 
 @frappe.whitelist()
 def get_payment_reconciliation_details(closing_shift_doc):

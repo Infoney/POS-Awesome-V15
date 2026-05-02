@@ -568,6 +568,48 @@ def _save_draft_with_latest_timestamp(invoice_doc, retries=2):
             invoice_doc = latest_doc
 
 
+def _ensure_posa_cashier(invoice_doc, data):
+    """
+    Stamp `posa_cashier` on the invoice if the client didn't send one.
+
+    Cashier-of-record contract: the POS app's `currentCashier`
+    (employeeStore, set via the Switch Cashier PIN dialog) is the
+    authoritative cashier for an invoice, NOT `frappe.session.user`
+    — a supervisor can be logged in for terminal management while a
+    different cashier is currently active for sales. The frontend
+    sends `posa_cashier` on every invoice payload.
+
+    This server-side fallback handles two edge cases:
+      1. Older / stale offline payloads that pre-date the cashier
+         field. They keep working; we stamp `frappe.session.user`
+         (the actual logged-in user, even if that's a supervisor).
+      2. Calls from CLI / non-POS contexts (tests, repair scripts).
+
+    No-op when the doc already carries a value, so re-saves don't
+    overwrite a deliberately-set cashier. The `posa_cashier` Custom
+    Field is a Link to User; Frappe will validate the value at save
+    time, so we never hard-throw here.
+    """
+    try:
+        meta = invoice_doc.meta if hasattr(invoice_doc, "meta") else None
+        if meta and not meta.has_field("posa_cashier"):
+            return
+    except Exception:
+        pass
+
+    if invoice_doc.get("posa_cashier"):
+        return
+
+    cashier_hint = (data or {}).get("posa_cashier")
+    if cashier_hint and frappe.db.exists("User", cashier_hint):
+        invoice_doc.posa_cashier = cashier_hint
+        return
+
+    fallback_user = getattr(getattr(frappe, "session", None), "user", None)
+    if fallback_user and fallback_user not in ("Administrator", "Guest"):
+        invoice_doc.posa_cashier = fallback_user
+
+
 def _resolve_payment_amounts(payment, conversion_rate=1):
     rate = flt(conversion_rate) or 1
     amount = payment.get("amount")
@@ -609,6 +651,7 @@ def update_invoice(data):
 
     invoice_doc = _get_mutable_invoice_doc(data, doctype)
     set_invoice_client_request_id(invoice_doc, client_request_id)
+    _ensure_posa_cashier(invoice_doc, data)
 
     # Set currency from data before set_missing_values
     # Validate return items if this is a return invoice
@@ -946,6 +989,13 @@ def submit_invoice(invoice, data, submit_in_background=False):
         invoice_doc.update(invoice)
 
     set_invoice_client_request_id(invoice_doc, client_request_id)
+    # Defensive backstop for legacy drafts that were created before the
+    # `posa_cashier` field rollout. The client now stamps it at
+    # doc-build time and `update_invoice` runs `_ensure_posa_cashier`
+    # too, so this is a no-op on freshly created invoices — but a
+    # draft saved months ago and submitted today would otherwise leave
+    # the cashier blank.
+    _ensure_posa_cashier(invoice_doc, invoice)
 
     # Re-attach the cashier-selected payment rows in case ERPNext or any
     # upstream processing dropped them. Keeps the SI Payments grid linked to

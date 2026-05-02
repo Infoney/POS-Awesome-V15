@@ -116,6 +116,12 @@ async function set_form_data(data, frm) {
 		await add_to_payments(d, frm, conversion_rate);
 		add_to_taxes(d, frm, conversion_rate);
 	}
+
+	// Roll up the per-row cashier stamps we just wrote into the
+	// `cashiers` child table. Run after the loop so a cashier who
+	// rang multiple invoices on the same shift collapses to one
+	// row with summed totals.
+	await aggregate_cashiers(frm);
 }
 
 function set_form_payments_data(data, frm) {
@@ -134,12 +140,85 @@ function add_to_pos_transaction(d, frm) {
 		transaction_amount: flt(d.grand_total),
 		customer: d.customer,
 	};
+	// Cashier-of-record for the row. `posa_cashier` is the User who
+	// rang this specific invoice (set at submit time from the POS
+	// app's currentCashier — see `_ensure_posa_cashier` in
+	// `posawesome/mizan/api/invoice_processing/creation.py`). When
+	// the invoice predates the field rollout, fall back to `owner`
+	// so the row is never blank for the operator viewing the form.
+	if (d.posa_cashier) {
+		child.cashier = d.posa_cashier;
+	} else if (d.owner) {
+		child.cashier = d.owner;
+	}
 	if (d.doctype === "POS Invoice") {
 		child.pos_invoice = d.name;
 	} else {
 		child.sales_invoice = d.name;
 	}
 	frm.add_child("pos_transactions", child);
+}
+
+// Walk every `pos_transactions` row that was just stamped with a
+// `cashier` and produce one row per distinct cashier in the
+// `cashiers` child table. The closing report's "Cashiers" section
+// reads this table verbatim — a cashier who handed off mid-shift
+// gets ONE row (not one per mini shift).
+//
+// Sales Person resolution: each cashier User can carry an optional
+// `posa_sales_person` link (added in
+// `posawesome/patches/add_cashier_tracking_fields.py`). When set,
+// we fetch it once and store it on the rollup row so commission
+// reports can group by Sales Person without re-joining User.
+async function aggregate_cashiers(frm) {
+	frm.set_value("cashiers", []);
+	const transactions = Array.isArray(frm.doc.pos_transactions) ? frm.doc.pos_transactions : [];
+	const buckets = new Map();
+	for (const row of transactions) {
+		const cashier = row.cashier;
+		if (!cashier) continue;
+		const bucket = buckets.get(cashier) || {
+			cashier,
+			invoice_count: 0,
+			grand_total: 0,
+			net_total: 0,
+		};
+		bucket.invoice_count += 1;
+		bucket.grand_total += flt(row.grand_total || 0);
+		// `pos_transactions` doesn't carry net_total per row — leave
+		// the rollup field at 0 when summing client-side; the
+		// server-side aggregator (`_collect_cashier_breakdown`) is
+		// the canonical source for net_total when re-rendering a
+		// submitted shift.
+		buckets.set(cashier, bucket);
+	}
+
+	for (const bucket of buckets.values()) {
+		const row = frm.add_child("cashiers", {
+			cashier: bucket.cashier,
+			invoice_count: bucket.invoice_count,
+			grand_total: bucket.grand_total,
+			net_total: bucket.net_total,
+		});
+		const sales_person = await get_value("User", bucket.cashier, "posa_sales_person");
+		if (sales_person) {
+			row.sales_person = sales_person;
+		}
+		// Stamp the optional sales_person back onto every
+		// pos_transactions row this cashier owns so a single
+		// per-cashier sales-person mapping is visible everywhere
+		// the row is shown without another User lookup.
+		if (sales_person) {
+			for (const t of transactions) {
+				if (t.cashier === bucket.cashier && !t.sales_person) {
+					t.sales_person = sales_person;
+				}
+			}
+		}
+	}
+
+	frm.refresh_field("cashiers");
+	frm.refresh_field("pos_transactions");
 }
 
 function add_to_pos_payments(d, frm) {
@@ -214,6 +293,7 @@ function reset_values(frm) {
 	frm.set_value("payment_reconciliation", []);
 	frm.set_value("pos_payments", []);
 	frm.set_value("taxes", []);
+	frm.set_value("cashiers", []);
 	frm.set_value("grand_total", 0);
 	frm.set_value("net_total", 0);
 	frm.set_value("total_quantity", 0);
@@ -224,6 +304,7 @@ function refresh_fields(frm) {
 	frm.refresh_field("payment_reconciliation");
 	frm.refresh_field("pos_payments");
 	frm.refresh_field("taxes");
+	frm.refresh_field("cashiers");
 	frm.refresh_field("grand_total");
 	frm.refresh_field("net_total");
 	frm.refresh_field("total_quantity");

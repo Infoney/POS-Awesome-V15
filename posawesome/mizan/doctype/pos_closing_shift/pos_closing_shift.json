@@ -19,6 +19,8 @@
   "user",
   "section_break_12",
   "pos_transactions",
+  "section_break_cashiers",
+  "cashiers",
   "section_break_9",
   "pos_payments",
   "section_break_if3m1",
@@ -107,6 +109,20 @@
    "fieldtype": "Table",
    "label": "POS Transactions",
    "options": "Sales Invoice Reference"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_cashiers",
+   "fieldtype": "Section Break",
+   "label": "Cashiers"
+  },
+  {
+   "description": "Per-cashier breakdown across this shift. Multiple cashiers can rotate via the in-app Switch Cashier flow without ending the shift; each row aggregates the invoices they personally rang.",
+   "fieldname": "cashiers",
+   "fieldtype": "Table",
+   "label": "Cashiers",
+   "options": "POS Closing Shift Cashier",
+   "read_only": 1
   },
   {
    "fieldname": "section_break_9",
