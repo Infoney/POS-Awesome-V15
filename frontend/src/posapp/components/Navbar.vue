@@ -586,6 +586,20 @@ export default {
 					to: "/purchase-receipt",
 				});
 			}
+			if (this.posProfile?.posa_allow_purchase_invoice) {
+				// One-step Purchase Invoice (with stock update + barcode
+				// label print). Anchor next to Purchase Receipt so the two
+				// receiving flows sit side by side.
+				const anchorIdx = items.findIndex(
+					(entry) => entry.to === "/purchase-receipt",
+				);
+				const insertAt = anchorIdx >= 0 ? anchorIdx + 1 : items.length;
+				items.splice(insertAt, 0, {
+					text: "Purchase Invoice",
+					icon: "mdi-receipt-text-plus-outline",
+					to: "/purchase-invoice",
+				});
+			}
 			if (this.posProfile?.posa_use_gift_cards) {
 				items.splice(2, 0, {
 					text: "Gift Cards",
