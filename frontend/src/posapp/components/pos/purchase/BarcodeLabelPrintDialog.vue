@@ -95,6 +95,7 @@
 				</div>
 				<div v-if="firstLabel" class="barcode-label-preview-wrapper">
 					<div
+						ref="previewRef"
 						class="barcode-label-preview"
 						:style="previewStyle"
 						v-html="previewHtml"
@@ -182,6 +183,45 @@ const LABEL_SIZES = [
 
 const DEFAULT_LABEL_SIZE_KEY = "50x30";
 
+const JSBARCODE_SRC = "/assets/posawesome/dist/js/libs/JsBarcode.all.min.js";
+let _jsBarcodeLoadPromise = null;
+
+/**
+ * Lazy-load JsBarcode into the main document so the preview can
+ * render real bars (not text). Cached after the first call so
+ * reopening the dialog doesn't re-fetch the script. Resolves to the
+ * global `window.JsBarcode` function or `null` on failure.
+ */
+function loadJsBarcode() {
+	if (typeof window === "undefined") return Promise.resolve(null);
+	if (typeof window.JsBarcode === "function") {
+		return Promise.resolve(window.JsBarcode);
+	}
+	if (_jsBarcodeLoadPromise) return _jsBarcodeLoadPromise;
+	_jsBarcodeLoadPromise = new Promise((resolve) => {
+		const existing = document.querySelector(`script[src="${JSBARCODE_SRC}"]`);
+		const handle = (script) => {
+			script.addEventListener("load", () => {
+				resolve(typeof window.JsBarcode === "function" ? window.JsBarcode : null);
+			});
+			script.addEventListener("error", () => {
+				console.warn("[POSA] Failed to load JsBarcode for preview");
+				resolve(null);
+			});
+		};
+		if (existing) {
+			handle(existing);
+			return;
+		}
+		const script = document.createElement("script");
+		script.src = JSBARCODE_SRC;
+		script.async = true;
+		handle(script);
+		document.head.appendChild(script);
+	});
+	return _jsBarcodeLoadPromise;
+}
+
 function escapeHtml(value) {
 	return String(value ?? "")
 		.replace(/&/g, "&amp;")
@@ -228,6 +268,19 @@ function buildLabelStyle(widthMm, heightMm) {
 			display: -webkit-box;
 			-webkit-line-clamp: 2;
 			-webkit-box-orient: vertical;
+		}
+		.label__code {
+			width: 100%;
+			text-align: center;
+			font-family: 'SF Mono', 'Roboto Mono', 'Consolas', monospace;
+			letter-spacing: 0.04em;
+			opacity: 0.75;
+			line-height: 1;
+		}
+		.label__barcode {
+			display: block;
+			width: 100%;
+			max-height: 100%;
 		}
 		.label__price {
 			width: 100%;
@@ -359,6 +412,7 @@ function resolveBarcodeFormat(value) {
 
 function buildSingleLabelHtml(label, fonts) {
 	const itemName = escapeHtml(label.item_name || label.item_code || "");
+	const itemCode = escapeHtml(label.item_code || "");
 	// Cost is intentionally omitted from the customer-facing label.
 	// Only the selling price prints — the cashier still sees cost
 	// in the dialog summary table before printing.
@@ -373,26 +427,29 @@ function buildSingleLabelHtml(label, fonts) {
 	const batchNo = escapeHtml(label.batch_no || "");
 	const batchExpiry = escapeHtml(label.batch_expiry_date || "");
 
+	const codeBlock = itemCode
+		? `<div class="label__code" style="font-size: ${fonts.batch};">${itemCode}</div>`
+		: "";
+
 	const priceBlock = sellHtml
 		? `<div class="label__price" style="font-size: ${fonts.price};">${sellHtml}</div>`
 		: "";
 
 	const barcodeFormat = resolveBarcodeFormat(label.barcode);
+	// SVG output (not <img>) so JsBarcode draws crisp vector bars +
+	// the human-readable value under them in one element. The host
+	// page's renderer (QZ Tray's HTML pixel rasteriser) handles SVG
+	// fine, and SVG scales perfectly when the page is scaled to fit
+	// the printer's exact dpi.
 	const barcodeBlock = barcode
 		? `<div class="label__barcode-wrap">
-				<img class="label__barcode"
-					jsbarcode-format="${barcodeFormat}"
-					jsbarcode-value="${safeBarcode}"
-					jsbarcode-textmargin="0"
-					jsbarcode-margin="0"
-					jsbarcode-fontoptions="bold"
-					jsbarcode-height="${fonts.barcodeHeight}"
-					jsbarcode-width="${fonts.barcodeWidth}"
-					jsbarcode-displayValue="true"
-					jsbarcode-fontSize="${fonts.barcodeFont}"
-					jsbarcode-textposition="bottom"
-					jsbarcode-background="#ffffff"
-					jsbarcode-lineColor="#000000">
+				<svg class="label__barcode"
+					data-barcode-value="${safeBarcode}"
+					data-barcode-format="${barcodeFormat}"
+					data-barcode-height="${fonts.barcodeHeight}"
+					data-barcode-width="${fonts.barcodeWidth}"
+					data-barcode-fontsize="${fonts.barcodeFont}">
+				</svg>
 			</div>`
 		: `<div class="label__barcode-wrap" style="font-size: ${fonts.batch};">
 				${escapeHtml(__("No barcode"))}
@@ -428,12 +485,50 @@ function buildSingleLabelHtml(label, fonts) {
 	return `
 		<div class="label">
 			<div class="label__name" style="font-size: ${fonts.name};">${itemName}</div>
+			${codeBlock}
 			${priceBlock}
 			${barcodeBlock}
 			${batchBlock}
 			${brandBlock}
 		</div>
 	`;
+}
+
+/**
+ * Walk every `<svg class="label__barcode">` inside `root` and call
+ * JsBarcode on it with the per-element data-attributes the renderer
+ * stamped in `buildSingleLabelHtml`. Used by both the in-dialog
+ * preview and the QZ-printed output (the printed body has its own
+ * inline initialiser so this helper isn't called there).
+ */
+function renderBarcodes(root) {
+	if (!root || typeof window === "undefined") return;
+	const JsBarcode = window.JsBarcode;
+	if (typeof JsBarcode !== "function") return;
+	const svgs = root.querySelectorAll("svg.label__barcode");
+	svgs.forEach((svg) => {
+		const value = svg.getAttribute("data-barcode-value") || "";
+		if (!value) return;
+		const format = svg.getAttribute("data-barcode-format") || "CODE128";
+		const height = Number(svg.getAttribute("data-barcode-height")) || 30;
+		const width = Number(svg.getAttribute("data-barcode-width")) || 1.6;
+		const fontSize = Number(svg.getAttribute("data-barcode-fontsize")) || 10;
+		try {
+			JsBarcode(svg, value, {
+				format,
+				height,
+				width,
+				fontSize,
+				margin: 0,
+				textMargin: 1,
+				displayValue: true,
+				background: "#ffffff",
+				lineColor: "#000000",
+			});
+		} catch (err) {
+			console.warn("[POSA] Barcode render failed", { value, format, err });
+		}
+	});
 }
 
 export default {
@@ -453,6 +548,10 @@ export default {
 			loadingPrinters: false,
 			printing: false,
 			labelSizeOptions: LABEL_SIZES,
+			// Bumped after JsBarcode finishes loading so the preview's
+			// computed `previewHtml` re-emits and `updated()` fires
+			// `renderPreviewBars` against the freshly-mounted SVGs.
+			previewBarcodeNonce: 0,
 		};
 	},
 	computed: {
@@ -538,15 +637,18 @@ export default {
 			if (!this.firstLabel) return "";
 			const size = this.previewSize;
 			if (!size) return "";
+			// `previewBarcodeNonce` is reactive — bumping it on every
+			// JsBarcode load forces this computed to re-emit so Vue
+			// re-renders and the post-update hook re-runs the bar
+			// initialisation against the freshly-injected SVG.
+			void this.previewBarcodeNonce;
 			const fonts = resolveFontSizes(size.widthMm);
-			// For the on-screen preview the JsBarcode `<img>` won't
-			// render barcode glyphs (no JsBarcode in this window) — we
-			// substitute a placeholder so the preview still shows the
-			// physical proportions correctly.
-			const innerHtml = buildSingleLabelHtml(this.firstLabel, fonts).replace(
-				/<img class="label__barcode"[\s\S]*?>/,
-				`<div style="border: 1px dashed #888; padding: 4px 8px; font-family: monospace; font-size: ${fonts.barcodeFont}px;">${escapeHtml(this.firstLabel.barcode)}</div>`,
-			);
+			// SVGs are rendered directly here; `renderPreviewBars` (in
+			// `updated()`) walks the preview after Vue commits and calls
+			// JsBarcode on each one. If JsBarcode hasn't loaded yet the
+			// SVGs render empty for one frame, then fill in once the
+			// loader resolves.
+			const innerHtml = buildSingleLabelHtml(this.firstLabel, fonts);
 			// Inline the per-label CSS scaled up for the preview. Fonts
 			// are derived from the physical width so a 50mm preview
 			// renders proportional-feeling text without needing a
@@ -599,12 +701,25 @@ export default {
 					.barcode-label-preview .label__batch-sep {
 						opacity: 0.55;
 					}
+					.barcode-label-preview .label__code {
+						width: 100%;
+						text-align: center;
+						font-family: 'SF Mono', 'Roboto Mono', 'Consolas', monospace;
+						font-size: ${size.widthMm * 0.05}px;
+						letter-spacing: 0.04em;
+						opacity: 0.7;
+					}
 					.barcode-label-preview .label__brand {
 						font-size: ${size.widthMm * 0.07}px;
 						width: 100%;
 						text-align: center;
 						direction: rtl;
 						font-weight: 600;
+					}
+					.barcode-label-preview .label__barcode {
+						display: block;
+						width: 100%;
+						max-height: 100%;
 					}
 				</style>
 				${innerHtml}
@@ -648,6 +763,13 @@ export default {
 				.join("\n");
 
 			const style = buildLabelStyle(size.widthMm, size.heightMm);
+			// The body's <script> walks every `svg.label__barcode`
+			// and calls JsBarcode imperatively with the per-element
+			// data attributes (matches the in-dialog `renderBarcodes`
+			// helper). This shape is required because the labels use
+			// SVG (not <img jsbarcode-*>), so the legacy
+			// `JsBarcode('.label__barcode').init()` auto-attribute
+			// initialiser doesn't apply.
 			return `<!DOCTYPE html>
 <html>
 <head>
@@ -658,9 +780,33 @@ export default {
 <body>
 ${labelHtml}
 <script>
-	if (typeof JsBarcode === 'function') {
-		try { JsBarcode('.label__barcode').init(); } catch (e) { console.error(e); }
-	}
+	(function () {
+		if (typeof JsBarcode !== 'function') return;
+		var svgs = document.querySelectorAll('svg.label__barcode');
+		svgs.forEach(function (svg) {
+			var value = svg.getAttribute('data-barcode-value') || '';
+			if (!value) return;
+			var format = svg.getAttribute('data-barcode-format') || 'CODE128';
+			var height = Number(svg.getAttribute('data-barcode-height')) || 30;
+			var width = Number(svg.getAttribute('data-barcode-width')) || 1.6;
+			var fontSize = Number(svg.getAttribute('data-barcode-fontsize')) || 10;
+			try {
+				JsBarcode(svg, value, {
+					format: format,
+					height: height,
+					width: width,
+					fontSize: fontSize,
+					margin: 0,
+					textMargin: 1,
+					displayValue: true,
+					background: '#ffffff',
+					lineColor: '#000000'
+				});
+			} catch (err) {
+				console.error('Barcode render failed', value, format, err);
+			}
+		});
+	})();
 <\/script>
 </body>
 </html>`;
@@ -714,9 +860,28 @@ ${labelHtml}
 		close() {
 			this.isOpen = false;
 		},
+		renderPreviewBars() {
+			const root = this.$refs?.previewRef;
+			if (root) renderBarcodes(root);
+		},
 	},
 	mounted() {
 		this.refreshPrinters();
+		// Lazy-load JsBarcode then bump the nonce so the preview
+		// re-renders with real bars (the first paint shows empty SVGs
+		// until the script lands; bumping the nonce triggers the
+		// `updated()` hook below which calls `renderPreviewBars`).
+		loadJsBarcode().then((lib) => {
+			if (lib) {
+				this.previewBarcodeNonce += 1;
+			}
+		});
+	},
+	updated() {
+		// Vue commits the new SVG into the DOM before this hook fires.
+		// Render bars on every preview re-render so size/printer/label
+		// changes always reflect in the preview.
+		this.renderPreviewBars();
 	},
 };
 </script>

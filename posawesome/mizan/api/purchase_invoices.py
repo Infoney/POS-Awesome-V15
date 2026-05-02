@@ -127,29 +127,86 @@ def _fetch_item_metadata(item_codes):
     return by_code
 
 
+_SCANNABLE_LENGTHS = {8, 12, 13}
+
+
+def _is_scannable_1d(value):
+    """
+    True for "easy to scan with a cheap 1D scanner" barcodes —
+    i.e. 8 / 12 / 13 digit numerics (EAN8 / UPC / EAN13). These
+    print at high contrast and read reliably even on small (38mm)
+    label rolls.
+
+    Pharmacies often have BOTH a short EAN13 on the unit AND a long
+    GS1 Application-Identifier string (`(01)0629...`(17)260605(10)…)
+    encoded in a 2D DataMatrix on the same SKU. The long GS1 string
+    is unscannable as a 1D CODE128 on a 50mm label, so we want to
+    prefer the EAN13 when the SKU has both.
+    """
+    text = str(value or "").strip()
+    return bool(text) and text.isdigit() and len(text) in _SCANNABLE_LENGTHS
+
+
+def _pick_best_barcode(rows):
+    """
+    Among a list of `Item Barcode` rows, return the value most likely
+    to scan reliably as a 1D barcode. Preference order:
+      1. A scannable EAN13 / UPC / EAN8 (numeric, fixed length)
+      2. The first row's barcode (whatever it is)
+      3. Empty string
+    """
+    if not rows:
+        return ""
+    for row in rows:
+        if _is_scannable_1d(row.get("barcode")):
+            return str(row.get("barcode") or "").strip()
+    return str((rows[0] or {}).get("barcode") or "").strip()
+
+
 def _resolve_item_barcode(meta, uom, stock_uom):
     """
-    Pick the barcode to print for this line. Prefer a barcode whose
-    `posa_uom` (or stock-table `uom`) matches the line's UOM — many
-    pharmacies have separate barcodes for "1 box of 24" vs "single
-    blister" and printing the wrong one causes scan-checkout
-    mismatches at sale time. Fall back to any barcode if none match.
+    Pick the barcode to print for this line. Cascade:
+      1. Among barcodes scoped to this UOM, pick the most scannable
+         (EAN13 etc. preferred over a 47-char GS1 string).
+      2. Same, scoped to the stock UOM (when the line is on a
+         purchase UOM and there's no per-purchase-UOM barcode).
+      3. Globally on the item: prefer a scannable EAN13/UPC/EAN8
+         over anything else, then fall back to the first barcode.
+
+    Many pharmacies have:
+      * a UOM-tagged GS1 DataMatrix string per pack-size (long,
+        encodes batch + expiry + serial)
+      * a single short EAN13 on the consumer unit (reliably
+        scannable by a $20 USB laser scanner)
+    Without UOM-aware scannable preference we'd print the GS1 string
+    on a 50mm label and the cashier would have to type the digits
+    by hand — defeating the purpose of the label. Step 1 + 3 below
+    make sure the short scannable barcode wins when one exists.
     """
     if not meta:
         return ""
     rows = meta.get("barcodes") or []
-    for row in rows:
-        row_uom = row.get("posa_uom") or row.get("uom")
-        if row_uom and uom and row_uom == uom:
-            return row.get("barcode") or ""
+
+    def matches_uom(row, target):
+        return target and (row.get("posa_uom") or row.get("uom")) == target
+
+    # Step 1 — barcodes for this exact UOM, prefer scannable.
+    uom_rows = [row for row in rows if matches_uom(row, uom)]
+    picked = _pick_best_barcode(uom_rows)
+    if picked:
+        return picked
+
+    # Step 2 — stock-UOM scoped barcodes (when line is on a purchase
+    # UOM but only stock-UOM barcodes exist).
     if uom and uom != stock_uom:
-        for row in rows:
-            row_uom = row.get("posa_uom") or row.get("uom")
-            if row_uom and row_uom == stock_uom:
-                return row.get("barcode") or ""
-    if rows:
-        return rows[0].get("barcode") or ""
-    return ""
+        stock_rows = [row for row in rows if matches_uom(row, stock_uom)]
+        picked = _pick_best_barcode(stock_rows)
+        if picked:
+            return picked
+
+    # Step 3 — global preference for any scannable barcode on the
+    # item, falling through to whatever's on row 0.
+    return _pick_best_barcode(rows)
 
 
 def _resolve_selling_price(item_code, price_list, uom, stock_uom):
