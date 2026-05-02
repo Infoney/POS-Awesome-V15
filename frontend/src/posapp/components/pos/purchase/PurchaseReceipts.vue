@@ -248,6 +248,13 @@
 			@created="handleSupplierCreated"
 			@error="(msg) => toastStore.show({ title: msg, color: 'error' })"
 		/>
+
+		<!-- Barcode Label Print Dialog (auto-opens after PR submit). -->
+		<BarcodeLabelPrintDialog
+			v-model="labelDialog"
+			:labels="pendingLabels"
+			@close="onLabelDialogClose"
+		/>
 	</div>
 </template>
 
@@ -260,6 +267,7 @@ import { usePurchaseReceipt } from "../../../composables/pos/purchase/usePurchas
 import SupplierDialog from "../dialogs/purchase/SupplierDialog.vue";
 import PurchaseReceiptItemsTable from "./PurchaseReceiptItemsTable.vue";
 import PurchaseReceiptConfirmDialog from "./PurchaseReceiptConfirmDialog.vue";
+import BarcodeLabelPrintDialog from "./BarcodeLabelPrintDialog.vue";
 import { ref, watch, onMounted } from "vue";
 
 export default {
@@ -268,6 +276,7 @@ export default {
 		SupplierDialog,
 		PurchaseReceiptItemsTable,
 		PurchaseReceiptConfirmDialog,
+		BarcodeLabelPrintDialog,
 	},
 	setup() {
 		const uiStore = useUIStore();
@@ -315,6 +324,8 @@ export default {
 		const costCenterOptions = ref([]);
 		const costCenterLoading = ref(false);
 		const confirmDialog = ref(false);
+		const labelDialog = ref(false);
+		const pendingLabels = ref([]);
 
 		// Inline item search
 		const itemSearchSelection = ref(null);
@@ -516,7 +527,20 @@ export default {
 						color: "success",
 					});
 					confirmDialog.value = false;
-					resetForm();
+					// Mirror the PI flow — server returns a `labels[]`
+					// array (one entry per unit purchased) and we open
+					// the BarcodeLabelPrintDialog so the operator can
+					// print labels via QZ Tray. When nothing came back
+					// (no batched/labelled items), fall through to the
+					// plain reset.
+					pendingLabels.value = Array.isArray(result.labels)
+						? result.labels
+						: [];
+					if (pendingLabels.value.length) {
+						labelDialog.value = true;
+					} else {
+						resetForm();
+					}
 				}
 			} catch (error) {
 				const msg =
@@ -526,6 +550,11 @@ export default {
 				errorMessage.value = msg;
 				toastStore.show({ title: msg, color: "error" });
 			}
+		};
+
+		const onLabelDialogClose = () => {
+			pendingLabels.value = [];
+			resetForm();
 		};
 
 		onMounted(async () => {
@@ -612,12 +641,15 @@ export default {
 			costCenterOptions,
 			costCenterLoading,
 			confirmDialog,
+			labelDialog,
+			pendingLabels,
 			handleSupplierSearch,
 			handleSupplierCreated,
 			onUpdateSerial,
 			onSetBatchExpiry,
 			openConfirmDialog,
 			handleConfirmedSubmit,
+			onLabelDialogClose,
 			toastStore,
 			itemSearchSelection,
 			itemSearchResults,
