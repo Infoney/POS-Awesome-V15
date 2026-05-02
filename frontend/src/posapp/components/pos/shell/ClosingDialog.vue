@@ -452,6 +452,11 @@ export default {
 				taxesCollectedByAccount:
 					summary.taxesCollectedByAccount?.value || [],
 				cashiersBreakdown: summary.cashiersBreakdown?.value || [],
+				// Saved child-table fallback — populated by the
+				// server-side `validate` hook on every save so the
+				// print can render Cashiers even if the overview API
+				// returned an empty / stale `cashiers` array.
+				cashiersFromDoc: Array.isArray(data.cashiers) ? data.cashiers : [],
 				cashMovementCompanyTotal,
 				formatCurrencyWithSymbol: summaryFormatters.formatCurrencyWithSymbol,
 				formatCurrency,

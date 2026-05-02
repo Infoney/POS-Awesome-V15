@@ -92,6 +92,14 @@ export interface PrintClosingShiftPayload {
 	taxesCollectedByAccount?: TaxAccountRow[];
 	/** Per-cashier rollup (one row per User who rang an invoice on this shift). */
 	cashiersBreakdown?: CashierBreakdownRow[];
+	/**
+	 * Fallback for environments where the overview API didn't return
+	 * `cashiers` (older server build, or a shift that hasn't been
+	 * re-fetched after a re-aggregation). Comes straight from the
+	 * closing shift doc's `cashiers` child table — the same one the
+	 * `before_save` validator populates.
+	 */
+	cashiersFromDoc?: CashierBreakdownRow[];
 	cashMovementCompanyTotal: number;
 	/**
 	 * Whether the shift had already been submitted (closed) when the
@@ -228,17 +236,31 @@ const buildReconciliationRows = (
 	if (!Array.isArray(rows) || !rows.length) return "";
 	return rows
 		.map((row) => {
+			// Recompute Difference + Variance fresh from the live
+			// `expected_amount` / `closing_amount` cells. Stored
+			// `row.difference` and `row.variance_percent` can lag the
+			// user's last closing-amount edit (the Save validator only
+			// recomputes on submit, and the print payload is built from
+			// the same `dialog_data` whose JS state might have been
+			// captured pre-submit). Computing here also lets us pick the
+			// "Difference = Expected − Closing" sign convention the
+			// user expects (positive when the cashier is SHORT — i.e.,
+			// owes money) regardless of what the saved field happened
+			// to store.
+			const expected = Number(row.expected_amount || 0);
+			const closing = Number(row.closing_amount || 0);
+			const difference = expected - closing;
+			const varianceValue = expected ? (difference / expected) * 100 : null;
 			const variance =
-				row.variance_percent !== undefined &&
-				row.variance_percent !== null
-					? `${formatCurrency(row.variance_percent || 0, 2)}%`
+				varianceValue !== null && Number.isFinite(varianceValue)
+					? `${formatCurrency(varianceValue, 2)}%`
 					: "—";
 			return `<tr>
 				<td>${escapeHtml(row.mode_of_payment || "")}</td>
 				<td class="num">${escapeHtml(formatCurrency(row.opening_amount || 0))}</td>
-				<td class="num">${escapeHtml(formatCurrency(row.closing_amount || 0))}</td>
-				<td class="num">${escapeHtml(formatCurrency(row.expected_amount || 0))}</td>
-				<td class="num">${escapeHtml(formatCurrency(row.difference || 0))}</td>
+				<td class="num">${escapeHtml(formatCurrency(closing))}</td>
+				<td class="num">${escapeHtml(formatCurrency(expected))}</td>
+				<td class="num">${escapeHtml(formatCurrency(difference))}</td>
 				<td class="num">${escapeHtml(variance)}</td>
 			</tr>`;
 		})
@@ -283,10 +305,17 @@ export function printReceiptClosingShift(payload: PrintClosingShiftPayload) {
 
 	const reconcileRows = (reconciliation || [])
 		.map((row) => {
+			// Compute Difference fresh (Expected − Closing), same
+			// reasoning as in `buildReconciliationRows` — the stored
+			// `row.difference` can be stale on a print captured right
+			// after the user typed the closing amount but before the
+			// Save validator recomputed it.
+			const expectedNum = Number(row.expected_amount || 0);
+			const closingNum = Number(row.closing_amount || 0);
 			const opening = formatCurrency(row.opening_amount || 0);
-			const closing = formatCurrency(row.closing_amount || 0);
-			const expected = formatCurrency(row.expected_amount || 0);
-			const difference = formatCurrency(row.difference || 0);
+			const closing = formatCurrency(closingNum);
+			const expected = formatCurrency(expectedNum);
+			const difference = formatCurrency(expectedNum - closingNum);
 			return `<div class="reconcile-block">
 				<div class="reconcile-mode">${escapeHtml(row.mode_of_payment || "—")}</div>
 				${formatRow(tt("Opening"), opening, { muted: true })}
@@ -410,6 +439,7 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 		taxesCollectedSummary,
 		taxesCollectedByAccount,
 		cashiersBreakdown,
+		cashiersFromDoc,
 		cashMovementCompanyTotal,
 		formatCurrency,
 		formatCurrencyWithSymbol,
@@ -421,9 +451,23 @@ export function printA4ClosingShift(payload: PrintClosingShiftPayload) {
 			? taxesCollectedSummary?.by_account || []
 			: [];
 	const taxCompanyTotal = Number(taxesCollectedSummary?.company_currency_total || 0);
-	const cashierRows: CashierBreakdownRow[] = Array.isArray(cashiersBreakdown)
+	// Cashier rollup source resolution — prefer the freshly-aggregated
+	// API payload, fall back to the saved child table on the closing
+	// shift doc. This matters when the dialog opens, the user submits,
+	// and prints in quick succession before the overview API is re-
+	// fetched against the now-submitted shift; the doc's `cashiers`
+	// table has been populated by the server-side `validate` hook so it
+	// is always available post-submit even when the overview cache is
+	// stale.
+	const apiCashierRows: CashierBreakdownRow[] = Array.isArray(cashiersBreakdown)
 		? cashiersBreakdown
 		: [];
+	const docCashierRows: CashierBreakdownRow[] = Array.isArray(cashiersFromDoc)
+		? cashiersFromDoc
+		: [];
+	const cashierRows: CashierBreakdownRow[] = apiCashierRows.length
+		? apiCashierRows
+		: docCashierRows;
 	const statusBanner = buildStatusBanner(Boolean(shiftClosed), "a4");
 
 	const renderInsightCards = (cards: InsightCard[]) =>
