@@ -22,7 +22,6 @@
 
 import { ref, computed, type Ref } from "vue";
 import { useItemsStore } from "../../../stores/itemsStore";
-import { formatUtils } from "../../../format";
 
 declare const frappe: any;
 declare const __: (_str: string, _args?: any[]) => string;
@@ -379,9 +378,13 @@ export function usePurchaseInvoice(options: {
 			posProfile.value?.cost_center ||
 			posProfile.value?.posa_cost_center ||
 			null;
-		postingDate.value = formatUtils.toArabicNumerals(
-			frappe.datetime.nowdate(),
-		);
+		// Seed posting date as today (YYYY-MM-DD). The PI page's
+		// VueDatePicker uses `model-type="yyyy-MM-dd"` so this raw ISO
+		// string parses straight in and the picker shows today's date
+		// auto-filled. No locale-digit conversion here — the display
+		// `format="dd-MM-yyyy"` handles localised digits internally
+		// when the picker renders.
+		postingDate.value = frappe.datetime.nowdate();
 	};
 
 	const validate = (): string | null => {

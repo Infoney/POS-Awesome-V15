@@ -408,19 +408,19 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
-	min-width: 240px;
+	min-width: 280px;
 	padding: 4px 0;
 }
 
 .pr-batch-cell__row {
 	display: flex;
-	gap: 6px;
+	gap: 8px;
 	align-items: center;
 }
 
 .pr-batch-cell__field {
-	flex: 1 1 60%;
-	min-width: 0;
+	flex: 1 1 50%;
+	min-width: 100px;
 }
 
 .pr-batch-cell__field :deep(.v-field__input) {
@@ -429,21 +429,27 @@ export default {
 	padding-bottom: 4px;
 }
 
+/* Expiry date sized to fit `dd/MM/yyyy` plus the calendar icon and
+   the clear (×) affordance without clipping. Was 130px / 0.72rem
+   which truncated to "10/03/20×" — visibly broken. 170px @
+   0.82rem reads cleanly on the typical 50% items-table width. */
 .pr-batch-cell__expiry {
-	flex: 0 0 130px;
+	flex: 0 0 170px;
 	min-width: 0;
 }
 
 .pr-mini-date {
 	width: 100%;
 	min-width: 0;
-	font-size: 0.72rem;
-	padding: 4px 8px;
+	font-size: 0.82rem;
+	padding: 5px 10px;
 	border-radius: 6px;
 	border: 1px solid rgba(139, 92, 246, 0.28);
 	background: rgba(139, 92, 246, 0.06);
 	color: var(--pos-text-primary, #e7ebf3);
 	color-scheme: dark;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.01em;
 	transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
 }
 .pr-mini-date:hover,

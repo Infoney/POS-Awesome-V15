@@ -151,9 +151,19 @@
 							<v-icon size="18" class="pi-field-icon pi-date-icon">
 								mdi-calendar-month-outline
 							</v-icon>
+							<!--
+								`model-type="yyyy-MM-dd"` (instead of "format")
+								makes the v-model an ISO date string. The
+								composable's `resetForm` seeds today via
+								`frappe.datetime.nowdate()` which is already
+								YYYY-MM-DD, so the picker now auto-fills the
+								creation-day date without needing a
+								re-format. Display stays dd-MM-yyyy via the
+								`format` prop.
+							-->
 							<VueDatePicker
 								v-model="postingDate"
-								model-type="format"
+								model-type="yyyy-MM-dd"
 								format="dd-MM-yyyy"
 								:enable-time-picker="false"
 								auto-apply
@@ -550,6 +560,11 @@ export default {
 		};
 
 		const formatDateForBackend = (date) => {
+			// Posting date model is now `yyyy-MM-dd` (ISO) per the
+			// VueDatePicker config — this normaliser is mostly a
+			// passthrough now, kept defensively to handle any edge
+			// case where the picker emits a Date object or a stale
+			// localised string.
 			if (!date) return null;
 			const western = formatUtils.fromArabicNumerals(String(date));
 			if (/^\d{4}-\d{2}-\d{2}$/.test(western)) return western;
@@ -704,16 +719,21 @@ export default {
 			return this.invoiceItems.some((row) => row.has_serial_no);
 		},
 		itemHeaders() {
+			// Column widths sum to ~100% (items table is fluid).
+			// Batch/Expiry column gets the extra real estate when
+			// shown — it's a two-input cell (combobox + date picker)
+			// and needs ~30% to keep the date readable as
+			// `dd/MM/yyyy` after selection.
 			const headers = [
-				{ title: __("Item"), key: "item_name", align: "start", width: "20%" },
-				{ title: __("UOM"), key: "uom", align: "center", width: "9%" },
+				{ title: __("Item"), key: "item_name", align: "start", width: "18%" },
+				{ title: __("UOM"), key: "uom", align: "center", width: "8%" },
 			];
 			if (this.anyItemHasBatch) {
 				headers.push({
 					title: __("Batch / Expiry"),
 					key: "batch",
 					align: "start",
-					width: "22%",
+					width: "30%",
 					sortable: false,
 				});
 			}
@@ -722,18 +742,18 @@ export default {
 					title: __("Serials"),
 					key: "serial_no",
 					align: "start",
-					width: "16%",
+					width: "14%",
 					sortable: false,
 				});
 			}
 			headers.push(
 				{ title: __("Qty"), key: "qty", align: "center", width: "10%" },
-				{ title: __("Rate"), key: "rate", align: "center", width: "10%" },
+				{ title: __("Rate"), key: "rate", align: "center", width: "9%" },
 				{
 					title: __("Disc %"),
 					key: "discount_percentage",
 					align: "center",
-					width: "8%",
+					width: "7%",
 				},
 				{ title: __("Amount"), key: "amount", align: "end", width: "10%" },
 				{
