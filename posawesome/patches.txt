@@ -25,3 +25,4 @@ posawesome.patches.rename_dashboard_labels_to_mizan
 posawesome.patches.rename_pos_profile_section_labels_to_mizan
 posawesome.patches.add_cashier_tracking_fields
 posawesome.patches.backfill_cashier_tracking
+posawesome.patches.add_pos_hide_drawer_brand_setting
