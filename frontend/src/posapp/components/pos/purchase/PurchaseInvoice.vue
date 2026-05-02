@@ -1,173 +1,313 @@
 <!--
   One-step Purchase Invoice page.
 
-  Layout mirrors `PurchaseOrders.vue` (item picker on the left, cart-
-  style form on the right) but the right column is intentionally
-  trimmed:
-    - No warehouse picker — warehouse comes from the active POS
-      Profile and is stamped server-side.
-    - No cost-center picker — same reason.
-    - No "Receive Now" / "Create Invoice" toggles — this flow IS the
-      invoice, with `update_stock = 1` always on.
-    - Schedule date dropped; posting_date defaults to today server-
-      side.
+  Mirrors `PurchaseReceipts.vue` layout 1:1 — full-width single
+  column with an inline item search bar and the same items table
+  (`PurchaseReceiptItemsTable.vue` reused, not cloned, so the batch /
+  expiry / serial UI stays identical). The two screens are siblings:
+    - PR receives stock without booking the payable
+    - PI receives stock AND books the payable (`update_stock = 1`)
 
-  After the server returns, we open `BarcodeLabelPrintDialog` with
-  the `labels` array (one entry per unit purchased) so the operator
-  can route them to a thermal label printer via QZ Tray.
+  Warehouse + cost center default from the POS Profile but stay
+  operator-editable so multi-warehouse / multi-cost-centre stores can
+  override per shipment. Same pattern as PR.
+
+  Post-submit, opens `BarcodeLabelPrintDialog` with the `labels[]`
+  payload so the operator can print barcode labels for each unit of
+  the just-received stock via QZ Tray.
 -->
 <template>
-	<div class="pa-0 h-100">
-		<v-row class="h-100 ma-0">
-			<!-- Left Column: Item Selector -->
-			<v-col cols="12" md="5" class="h-100 pa-0 border-e">
-				<ItemsSelector context="purchase" @add-item="onAddItem" />
-			</v-col>
+	<div class="pa-0 h-100 pi-shell">
+		<v-card class="h-100 d-flex flex-column purchase-invoice-card" flat>
+			<div class="purchase-invoice-header">
+				<div class="purchase-invoice-header__icon-wrap">
+					<v-icon class="purchase-invoice-header__icon">
+						mdi-receipt-text-plus-outline
+					</v-icon>
+				</div>
+				<div class="purchase-invoice-header__copy">
+					<span class="purchase-invoice-header__eyebrow">
+						{{ __("Stock-update purchase") }}
+					</span>
+					<h3 class="purchase-invoice-header__title">
+						{{ __("New Purchase Invoice") }}
+					</h3>
+				</div>
+				<v-spacer></v-spacer>
+				<button
+					type="button"
+					class="purchase-invoice-header__clear"
+					@click="resetForm"
+					:title="__('Clear All')"
+					:aria-label="__('Clear all purchase invoice items')"
+				>
+					<v-icon size="20">mdi-trash-can-outline</v-icon>
+				</button>
+			</div>
 
-			<!-- Right Column: Purchase Invoice Form -->
-			<v-col cols="12" md="7" class="h-100 pa-0">
-				<v-card class="h-100 d-flex flex-column purchase-invoice-card" flat>
-					<div class="purchase-invoice-header">
-						<div class="purchase-invoice-header__icon-wrap">
-							<v-icon class="purchase-invoice-header__icon">
-								mdi-receipt-text-plus-outline
-							</v-icon>
-						</div>
-						<div class="purchase-invoice-header__copy">
-							<span class="purchase-invoice-header__eyebrow">
-								{{ __("Stock-update purchase") }}
-							</span>
-							<h3 class="purchase-invoice-header__title">
-								{{ __("Create Purchase Invoice") }}
-							</h3>
-						</div>
-						<v-spacer></v-spacer>
-						<button
-							type="button"
-							class="purchase-invoice-header__clear"
-							@click="resetForm"
-							:title="__('Clear All')"
-							:aria-label="__('Clear all purchase invoice items')"
+			<v-card-text
+				class="flex-grow-1 overflow-y-auto pa-4 purchase-invoice-card__body"
+			>
+				<!-- Form header (supplier / warehouse / cost center / posting date / bill no) -->
+				<div class="pi-form-grid">
+					<div class="pi-form-field">
+						<v-autocomplete
+							v-model="supplier"
+							:items="supplierOptions"
+							item-title="supplier_name"
+							item-value="name"
+							:label="__('Supplier')"
+							density="compact"
+							variant="outlined"
+							color="primary"
+							hide-details="auto"
+							:loading="supplierLoading"
+							@update:search="handleSupplierSearch"
+							:custom-filter="() => true"
+							:no-data-text="
+								supplierLoading
+									? __('Loading suppliers...')
+									: __('Suppliers not found')
+							"
+							class="pos-themed-input pi-themed-field"
+							menu-icon="mdi-chevron-down"
+							clearable
 						>
-							<v-icon size="20">mdi-trash-can-outline</v-icon>
-						</button>
+							<template #prepend-inner>
+								<v-icon size="18" class="pi-field-icon">
+									mdi-account-tie-outline
+								</v-icon>
+							</template>
+							<template #append-inner>
+								<v-tooltip
+									v-if="allowCreateSupplier"
+									:text="__('Add new supplier')"
+								>
+									<template #activator="{ props }">
+										<v-icon
+											v-bind="props"
+											class="cursor-pointer pi-field-add"
+											@mousedown.prevent.stop
+											@click.stop="supplierDialog = true"
+										>
+											mdi-plus-circle-outline
+										</v-icon>
+									</template>
+								</v-tooltip>
+							</template>
+						</v-autocomplete>
 					</div>
 
-					<v-card-text
-						class="flex-grow-1 overflow-y-auto pa-4 purchase-invoice-card__body"
-					>
-						<!-- Profile-stamped facts: cashier sees what'll be on
-						     the invoice but cannot edit it. Source of truth
-						     is the POS Profile. -->
-						<div class="profile-facts mb-4">
-							<div class="profile-fact">
-								<v-icon size="16" color="primary" class="mr-2">
+					<div class="pi-form-field">
+						<v-autocomplete
+							v-model="warehouse"
+							:items="warehouseOptions"
+							item-title="warehouse_name"
+							item-value="name"
+							:label="__('Warehouse')"
+							density="compact"
+							variant="outlined"
+							color="primary"
+							hide-details="auto"
+							clearable
+							:loading="warehouseLoading"
+							class="pos-themed-input pi-themed-field"
+							menu-icon="mdi-chevron-down"
+						>
+							<template #prepend-inner>
+								<v-icon size="18" class="pi-field-icon">
 									mdi-warehouse
 								</v-icon>
-								<span class="profile-fact__label">{{ __("Warehouse") }}:</span>
-								<span class="profile-fact__value">
-									{{ pos_profile.warehouse || __("(profile missing)") }}
-								</span>
-							</div>
-							<div v-if="pos_profile.cost_center" class="profile-fact">
-								<v-icon size="16" color="primary" class="mr-2">
+							</template>
+						</v-autocomplete>
+					</div>
+
+					<div class="pi-form-field">
+						<v-autocomplete
+							v-model="costCenter"
+							:items="costCenterOptions"
+							item-title="cost_center_name"
+							item-value="name"
+							:label="__('Cost Center')"
+							density="compact"
+							variant="outlined"
+							color="primary"
+							hide-details="auto"
+							clearable
+							:loading="costCenterLoading"
+							class="pos-themed-input pi-themed-field"
+							menu-icon="mdi-chevron-down"
+						>
+							<template #prepend-inner>
+								<v-icon size="18" class="pi-field-icon">
 									mdi-bank-outline
 								</v-icon>
-								<span class="profile-fact__label">{{ __("Cost Center") }}:</span>
-								<span class="profile-fact__value">
-									{{ pos_profile.cost_center }}
-								</span>
-							</div>
+							</template>
+						</v-autocomplete>
+					</div>
+
+					<div class="pi-form-field">
+						<div class="pi-date-wrap">
+							<v-icon size="18" class="pi-field-icon pi-date-icon">
+								mdi-calendar-month-outline
+							</v-icon>
+							<VueDatePicker
+								v-model="postingDate"
+								model-type="format"
+								format="dd-MM-yyyy"
+								:enable-time-picker="false"
+								auto-apply
+								text-input
+								:text-input-options="{
+									format: ['dd-MM-yyyy', 'dd/MM/yyyy', 'd/M/yyyy'],
+									enterSubmit: true,
+									tabSubmit: true,
+								}"
+								:placeholder="__('Posting Date')"
+								hide-input-icon
+								class="pos-themed-input pi-date-picker"
+							/>
 						</div>
+					</div>
+				</div>
 
-						<!-- Supplier picker + bill-no shortcut. -->
-						<v-row dense>
-							<v-col cols="12" md="7">
-								<v-autocomplete
-									v-model="supplier"
-									:items="supplierOptions"
-									item-title="supplier_name"
-									item-value="name"
-									:label="__('Supplier')"
-									density="compact"
-									variant="outlined"
-									hide-details
-									:loading="supplierLoading"
-									@update:search="handleSupplierSearch"
-									class="pos-themed-input"
-								>
-									<template #append>
-										<v-btn
-											v-if="allowCreateSupplier"
-											size="small"
-											variant="text"
-											@click="supplierDialog = true"
-											:title="__('New Supplier')"
-										>
-											<v-icon>mdi-plus</v-icon>
-										</v-btn>
-									</template>
-								</v-autocomplete>
-							</v-col>
-							<v-col cols="12" md="5">
-								<v-text-field
-									v-model="billNo"
-									:label="__('Supplier Invoice No (optional)')"
-									density="compact"
-									variant="outlined"
-									hide-details
-									class="pos-themed-input"
-								></v-text-field>
-							</v-col>
-						</v-row>
+				<!-- Bill No (supplier's invoice reference) — optional, full-width row -->
+				<div class="pi-bill-row">
+					<v-text-field
+						v-model="billNo"
+						:label="__('Supplier Invoice No (optional)')"
+						density="compact"
+						variant="outlined"
+						hide-details
+						class="pos-themed-input pi-themed-field"
+					>
+						<template #prepend-inner>
+							<v-icon size="18" class="pi-field-icon">
+								mdi-file-document-outline
+							</v-icon>
+						</template>
+					</v-text-field>
+				</div>
 
-						<v-divider class="my-4 purchase-invoice-divider"></v-divider>
+				<!-- Buying-price-list pill -->
+				<div class="pi-meta-row">
+					<div
+						class="pi-meta-pill"
+						:class="{ 'pi-meta-pill--muted': !supplierPriceList }"
+					>
+						<v-icon size="14">mdi-tag-outline</v-icon>
+						<span v-if="supplierPriceList">
+							{{ __("Buying price list:") }}
+							<strong>{{ supplierPriceList }}</strong>
+						</span>
+						<span v-else>{{ __("No buying price list resolved.") }}</span>
+					</div>
+				</div>
 
-						<PurchaseItemsTable
-							:headers="itemHeaders"
-							:items="purchaseItems"
-							:currencySymbol="
-								currencySymbol(priceListCurrency || supplierCurrency)
-							"
-							:totalAmount="totalAmount"
-							:receiveNow="false"
-							:formatCurrency="formatCurrency"
-							:formatNumber="formatNumber"
-							@update-uom="({ item, value }) => updateItemUom(item, value)"
-							@update-qty="({ item, value }) => updateItemQty(item, value)"
-							@update-rate="({ item, value }) => updateItemRate(item, value)"
-							@remove-item="removeItem"
-						/>
+				<v-divider class="my-3 purchase-invoice-divider"></v-divider>
 
-						<v-alert
-							v-if="errorMessage"
-							type="error"
-							density="compact"
-							class="mt-4"
-						>
-							{{ errorMessage }}
-						</v-alert>
-					</v-card-text>
+				<!-- Inline item search bar -->
+				<div class="pi-search-bar">
+					<v-autocomplete
+						v-model="itemSearchSelection"
+						:items="itemSearchResults"
+						item-title="item_name"
+						item-value="item_code"
+						:label="__('Search & add an item (name or code)')"
+						density="compact"
+						variant="outlined"
+						hide-details="auto"
+						return-object
+						clearable
+						:loading="itemSearchLoading"
+						@update:search="handleItemSearch"
+						@update:model-value="onItemSelected"
+						:custom-filter="() => true"
+						:no-data-text="
+							itemSearchLoading
+								? __('Searching items...')
+								: __('Type to search items')
+						"
+						class="pos-themed-input pi-themed-field pi-search-bar__input"
+						menu-icon=""
+					>
+						<template #prepend-inner>
+							<v-icon size="20" class="pi-field-icon">mdi-magnify</v-icon>
+						</template>
+						<template #item="{ props, item: opt }">
+							<v-list-item
+								v-bind="props"
+								:title="opt.raw.item_name"
+								:subtitle="opt.raw.item_code"
+							>
+								<template #append>
+									<span class="pi-search-bar__rate">
+										{{
+											currencySymbol(
+												priceListCurrency || supplierCurrency,
+											)
+										}}{{ formatNumber(opt.raw.standard_rate || 0) }}
+									</span>
+								</template>
+							</v-list-item>
+						</template>
+					</v-autocomplete>
+				</div>
 
-					<v-card-actions class="pa-4 purchase-invoice-actions">
-						<v-spacer></v-spacer>
-						<v-btn
-							:loading="submitLoading"
-							:disabled="submitLoading || !purchaseItems.length"
-							@click="submitInvoice"
-							class="purchase-invoice-submit-btn"
-							size="large"
-							block
-						>
-							<v-icon start>mdi-check-circle-outline</v-icon>
-							{{ __("Submit & Print Labels") }}
-						</v-btn>
-					</v-card-actions>
-				</v-card>
-			</v-col>
-		</v-row>
+				<!-- Reuse the PR items table — same batch/expiry/serial UI. -->
+				<PurchaseReceiptItemsTable
+					:headers="itemHeaders"
+					:items="invoiceItems"
+					:currencySymbol="
+						currencySymbol(priceListCurrency || supplierCurrency)
+					"
+					:totalAmount="totalAmount"
+					:formatCurrency="formatCurrency"
+					:formatNumber="formatNumber"
+					@update-uom="({ item, value }) => updateItemUom(item, value)"
+					@update-qty="({ item, value }) => updateItemQty(item, value)"
+					@update-rate="({ item, value }) => updateItemRate(item, value)"
+					@update-discount="
+						({ item, value }) => updateItemDiscount(item, value)
+					"
+					@update-serial="({ item, value }) => onUpdateSerial(item, value)"
+					@set-batch="({ item, value }) => setBatch(item, value)"
+					@set-batch-expiry="
+						({ item, value }) => onSetBatchExpiry(item, value)
+					"
+					@ensure-batches="(item) => loadBatchOptions(item)"
+					@remove-item="removeItem"
+				/>
 
-		<!-- Supplier Dialog (reuse existing one). -->
+				<v-alert
+					v-if="errorMessage"
+					type="error"
+					density="compact"
+					class="mt-4"
+				>
+					{{ errorMessage }}
+				</v-alert>
+			</v-card-text>
+
+			<v-card-actions class="pa-4 purchase-invoice-actions">
+				<v-spacer></v-spacer>
+				<v-btn
+					:loading="submitLoading"
+					:disabled="
+						submitLoading || !invoiceItems.length || !supplier || !warehouse
+					"
+					@click="onSubmit"
+					class="purchase-invoice-submit-btn"
+					size="large"
+					block
+				>
+					<v-icon start>mdi-check-circle-outline</v-icon>
+					{{ __("Submit & Print Labels") }}
+				</v-btn>
+			</v-card-actions>
+		</v-card>
+
+		<!-- Supplier Dialog -->
 		<SupplierDialog
 			v-model="supplierDialog"
 			:groups="supplierGroups"
@@ -186,64 +326,86 @@
 </template>
 
 <script>
-import format from "../../../format";
+import format, { formatUtils } from "../../../format";
 import { useUIStore } from "../../../stores/uiStore.js";
 import { getOpeningStorage } from "../../../../offline/index";
-import { useItemsStore } from "../../../stores/itemsStore";
 import { useToastStore } from "../../../stores/toastStore";
 import { usePurchaseInvoice } from "../../../composables/pos/payments/usePurchaseInvoice";
-import ItemsSelector from "../items/ItemsSelector.vue";
 import SupplierDialog from "../dialogs/purchase/SupplierDialog.vue";
-import PurchaseItemsTable from "./PurchaseItemsTable.vue";
+import PurchaseReceiptItemsTable from "./PurchaseReceiptItemsTable.vue";
 import BarcodeLabelPrintDialog from "./BarcodeLabelPrintDialog.vue";
-import { ref, watch, onMounted, onBeforeUnmount, inject } from "vue";
+import { ref, watch, onMounted } from "vue";
 
 export default {
 	mixins: [format],
 	components: {
-		ItemsSelector,
 		SupplierDialog,
-		PurchaseItemsTable,
+		PurchaseReceiptItemsTable,
 		BarcodeLabelPrintDialog,
 	},
 	setup() {
 		const uiStore = useUIStore();
 		const toastStore = useToastStore();
-		const itemsStore = useItemsStore();
-		const eventBus = inject("eventBus");
 
 		const pos_profile = ref({});
 
 		const {
-			purchaseItems,
+			invoiceItems,
 			supplier,
+			warehouse,
+			costCenter,
+			postingDate,
+			billNo,
 			supplierCurrency,
 			supplierPriceList,
 			priceListCurrency,
-			billNo,
+			updatePriceList,
 			totalAmount,
 			submitLoading,
 			errorMessage,
 			onAddItem,
 			fetchSupplierInfo,
+			loadBatchOptions,
+			setBatch,
 			updateItemUom,
 			updateItemQty,
 			updateItemRate,
+			updateItemDiscount,
 			removeItem,
 			resetForm: resetComposableForm,
-		} = usePurchaseInvoice({ posProfile: pos_profile });
+			submitInvoice,
+		} = usePurchaseInvoice({
+			posProfile: pos_profile,
+			formatFloat: (val, prec) =>
+				format.methods.formatFloat.call(
+					{ currency_precision: 2 },
+					val,
+					prec,
+				),
+		});
 
 		const supplierOptions = ref([]);
 		const supplierLoading = ref(false);
 		const supplierDialog = ref(false);
 		const supplierGroups = ref([]);
+		const warehouseOptions = ref([]);
+		const warehouseLoading = ref(false);
+		const costCenterOptions = ref([]);
+		const costCenterLoading = ref(false);
 		const labelDialog = ref(false);
 		const pendingLabels = ref([]);
+
+		// Inline item search ---------------------------------------------------
+		const itemSearchSelection = ref(null);
+		const itemSearchResults = ref([]);
+		const itemSearchLoading = ref(false);
+		const itemSearchTimeout = ref(null);
 
 		const supplierSearchTimeout = ref(null);
 
 		const handleSupplierSearch = (term) => {
-			if (supplierSearchTimeout.value) clearTimeout(supplierSearchTimeout.value);
+			if (supplierSearchTimeout.value)
+				clearTimeout(supplierSearchTimeout.value);
 			supplierSearchTimeout.value = setTimeout(
 				() => searchSuppliers(term),
 				300,
@@ -254,16 +416,18 @@ export default {
 			supplierLoading.value = true;
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.mizan.api.purchase_orders.search_suppliers",
+					method:
+						"posawesome.mizan.api.purchase_orders.search_suppliers",
 					args: { search_text: searchText, limit: 20 },
 				});
 				supplierOptions.value = Array.isArray(message) ? message : [];
 				if (supplier.value) {
 					const s = supplierOptions.value.find(
-						(opt) => opt.name === supplier.value,
+						(item) => item.name === supplier.value,
 					);
-					supplierCurrency.value =
-						s?.default_currency || pos_profile.value.currency;
+					if (s)
+						supplierCurrency.value =
+							s.default_currency || pos_profile.value.currency || null;
 				}
 			} catch (error) {
 				console.error("Failed to fetch suppliers:", error);
@@ -285,7 +449,56 @@ export default {
 				});
 				supplierGroups.value = (message || []).map((row) => row.name);
 			} catch (error) {
-				console.error("Failed to load groups:", error);
+				console.error("Failed to load supplier groups:", error);
+			}
+		};
+
+		const loadWarehouses = async () => {
+			warehouseLoading.value = true;
+			try {
+				const { message } = await frappe.call({
+					method: "frappe.client.get_list",
+					args: {
+						doctype: "Warehouse",
+						fields: ["name", "warehouse_name"],
+						filters: {
+							company: pos_profile.value.company,
+							is_group: 0,
+							disabled: 0,
+						},
+						limit_page_length: 500,
+					},
+				});
+				warehouseOptions.value = message || [];
+			} catch (error) {
+				console.error("Failed to load warehouses:", error);
+			} finally {
+				warehouseLoading.value = false;
+			}
+		};
+
+		const loadCostCenters = async () => {
+			costCenterLoading.value = true;
+			try {
+				const { message } = await frappe.call({
+					method: "frappe.client.get_list",
+					args: {
+						doctype: "Cost Center",
+						fields: ["name", "cost_center_name"],
+						filters: {
+							company: pos_profile.value.company,
+							is_group: 0,
+							disabled: 0,
+						},
+						limit_page_length: 500,
+						order_by: "cost_center_name asc",
+					},
+				});
+				costCenterOptions.value = message || [];
+			} catch (error) {
+				console.error("Failed to load cost centers:", error);
+			} finally {
+				costCenterLoading.value = false;
 			}
 		};
 
@@ -295,87 +508,73 @@ export default {
 			supplierDialog.value = false;
 		};
 
-		const extractServerError = (error) => {
-			const parseServerMessages = (raw) => {
-				if (!raw) return "";
-				try {
-					const parsed = JSON.parse(raw);
-					if (Array.isArray(parsed) && parsed.length) {
-						const first = parsed[0];
-						if (typeof first === "string") {
-							return first.replace(/<[^>]*>/g, "").trim();
-						}
-					}
-				} catch {
-					return String(raw);
-				}
-				return "";
-			};
-
-			return (
-				parseServerMessages(error?._server_messages) ||
-				parseServerMessages(error?.responseJSON?._server_messages) ||
-				error?.message ||
-				error?.responseJSON?.message ||
-				__("Unable to create purchase invoice")
-			);
+		const onUpdateSerial = (row, value) => {
+			row.serial_no = value || "";
 		};
 
-		const submitInvoice = async () => {
-			if (!supplier.value) {
-				errorMessage.value = __("Supplier is required.");
-				return;
-			}
-			if (!purchaseItems.value.length) {
-				errorMessage.value = __("Please add at least one item.");
-				return;
-			}
-			if (!pos_profile.value?.warehouse) {
-				errorMessage.value = __(
-					"POS Profile has no warehouse. Set one before submitting purchase invoices.",
-				);
-				return;
-			}
-			errorMessage.value = "";
-			submitLoading.value = true;
+		const onSetBatchExpiry = (row, value) => {
+			row.batch_expiry_date = value || null;
+		};
 
+		// Inline item search ---------------------------------------------------
+		const handleItemSearch = (term) => {
+			if (itemSearchTimeout.value) clearTimeout(itemSearchTimeout.value);
+			itemSearchTimeout.value = setTimeout(() => searchItems(term), 250);
+		};
+
+		const searchItems = async (searchText = "") => {
+			if (!searchText || searchText.trim().length < 1) {
+				itemSearchResults.value = [];
+				return;
+			}
+			itemSearchLoading.value = true;
 			try {
-				const resolvedSupplier =
-					typeof supplier.value === "object" && supplier.value !== null
-						? supplier.value.name || supplier.value.supplier_name || ""
-						: supplier.value;
-
-				const payload = {
-					supplier: resolvedSupplier,
-					company: pos_profile.value.company,
-					currency: supplierCurrency.value,
-					bill_no: billNo.value || null,
-					pos_profile: pos_profile.value,
-					items: purchaseItems.value.map((item) => ({
-						item_code: item.item_code,
-						item_name: item.item_name,
-						stock_uom: item.stock_uom,
-						uom: item.uom,
-						conversion_factor: item.conversion_factor,
-						qty: item.qty,
-						rate: item.rate,
-					})),
-				};
-
 				const { message } = await frappe.call({
-					method: "posawesome.mizan.api.purchase_invoices.create_purchase_invoice",
-					args: { data: payload },
+					method: "posawesome.mizan.api.purchase_orders.search_items",
+					args: { search_text: searchText, limit: 20 },
 				});
+				itemSearchResults.value = Array.isArray(message) ? message : [];
+			} catch (error) {
+				console.error("Failed to search items:", error);
+				itemSearchResults.value = [];
+			} finally {
+				itemSearchLoading.value = false;
+			}
+		};
 
-				if (message?.purchase_invoice) {
+		const onItemSelected = async (selected) => {
+			if (!selected) return;
+			await onAddItem(selected);
+			itemSearchSelection.value = null;
+			itemSearchResults.value = [];
+		};
+
+		const formatDateForBackend = (date) => {
+			if (!date) return null;
+			const western = formatUtils.fromArabicNumerals(String(date));
+			if (/^\d{4}-\d{2}-\d{2}$/.test(western)) return western;
+			const m = western.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+			if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+			const d = new Date(western);
+			if (isNaN(d.getTime())) return western;
+			return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+		};
+
+		const onSubmit = async () => {
+			try {
+				postingDate.value = postingDate.value
+					? formatDateForBackend(postingDate.value)
+					: null;
+				const result = await submitInvoice();
+				if (result?.purchase_invoice) {
 					toastStore.show({
 						title: __("Purchase Invoice {0} created", [
-							message.purchase_invoice,
+							result.purchase_invoice,
 						]),
 						color: "success",
 					});
-					pendingLabels.value = Array.isArray(message.labels)
-						? message.labels
+					pendingLabels.value = Array.isArray(result.labels)
+						? result.labels
 						: [];
 					if (pendingLabels.value.length) {
 						labelDialog.value = true;
@@ -384,18 +583,16 @@ export default {
 					}
 				}
 			} catch (error) {
-				errorMessage.value = extractServerError(error);
-				toastStore.show({ title: errorMessage.value, color: "error" });
-			} finally {
-				submitLoading.value = false;
+				const msg =
+					error?.message ||
+					error?.responseJSON?.message ||
+					__("Unable to create purchase invoice");
+				errorMessage.value = msg;
+				toastStore.show({ title: msg, color: "error" });
 			}
 		};
 
 		const onLabelDialogClose = () => {
-			// After the user closes the label dialog (whether they
-			// printed or not), wipe the form so the next purchase
-			// starts blank. Keeping the cart around after submit
-			// risks a re-submit of the same line set.
 			pendingLabels.value = [];
 			resetForm();
 		};
@@ -415,84 +612,139 @@ export default {
 				},
 				{ immediate: true },
 			);
+
 			watch(supplier, async (val) => {
 				if (val) {
-					const info = await fetchSupplierInfo(val);
-					if (info?.buying_price_list) {
-						await itemsStore.updatePriceList(info.buying_price_list);
-					}
-					eventBus?.emit?.("update_buying_price_list", {
-						price_list: info?.buying_price_list || null,
-						supplier: val,
-					});
+					await fetchSupplierInfo(val);
 				} else {
-					supplierCurrency.value = pos_profile.value.currency;
-					eventBus?.emit?.("update_buying_price_list", null);
+					supplierCurrency.value = pos_profile.value.currency || null;
+					supplierPriceList.value = null;
+					priceListCurrency.value = null;
 				}
 			});
 
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.mizan.api.purchase_orders.get_buying_price_list",
+					method:
+						"posawesome.mizan.api.purchase_orders.get_buying_price_list",
 				});
-				if (message) await itemsStore.updatePriceList(message);
+				if (message && !supplierPriceList.value) {
+					supplierPriceList.value = message;
+				}
 			} catch (e) {
-				console.error("Failed price list load", e);
+				console.error("Failed to load buying price list", e);
 			}
 
 			resetForm();
-			await Promise.all([searchSuppliers(""), loadSupplierGroups()]);
-		});
-
-		onBeforeUnmount(() => {
-			eventBus?.emit?.("update_buying_price_list", null);
-			if (pos_profile.value?.selling_price_list)
-				itemsStore.updatePriceList(pos_profile.value.selling_price_list);
+			await Promise.all([
+				searchSuppliers(""),
+				loadSupplierGroups(),
+				loadWarehouses(),
+				loadCostCenters(),
+			]);
 		});
 
 		return {
 			pos_profile,
-			purchaseItems,
+			invoiceItems,
 			supplier,
+			warehouse,
+			costCenter,
+			postingDate,
+			billNo,
 			supplierCurrency,
 			supplierPriceList,
 			priceListCurrency,
-			billNo,
+			updatePriceList,
 			totalAmount,
 			submitLoading,
 			errorMessage,
 			onAddItem,
+			fetchSupplierInfo,
+			loadBatchOptions,
+			setBatch,
 			updateItemUom,
 			updateItemQty,
 			updateItemRate,
+			updateItemDiscount,
 			removeItem,
 			resetForm,
 			supplierOptions,
 			supplierLoading,
 			supplierDialog,
 			supplierGroups,
-			handleSupplierSearch,
-			handleSupplierCreated,
-			submitInvoice,
-			toastStore,
+			warehouseOptions,
+			warehouseLoading,
+			costCenterOptions,
+			costCenterLoading,
 			labelDialog,
 			pendingLabels,
+			handleSupplierSearch,
+			handleSupplierCreated,
+			onUpdateSerial,
+			onSetBatchExpiry,
+			onSubmit,
 			onLabelDialogClose,
+			toastStore,
+			itemSearchSelection,
+			itemSearchResults,
+			itemSearchLoading,
+			handleItemSearch,
+			onItemSelected,
 		};
 	},
 	computed: {
 		allowCreateSupplier() {
 			return !!this.pos_profile?.posa_allow_create_purchase_suppliers;
 		},
+		anyItemHasBatch() {
+			return this.invoiceItems.some((row) => row.has_batch_no);
+		},
+		anyItemHasSerial() {
+			return this.invoiceItems.some((row) => row.has_serial_no);
+		},
 		itemHeaders() {
-			return [
-				{ title: __("Item"), key: "item_name", align: "start", width: "38%" },
-				{ title: __("UOM"), key: "uom", align: "center", width: "16%" },
-				{ title: __("Qty"), key: "qty", align: "center", width: "16%" },
-				{ title: __("Rate"), key: "rate", align: "center", width: "16%" },
-				{ title: __("Amount"), key: "amount", align: "end", width: "10%" },
-				{ title: "", key: "actions", align: "center", width: "50px" },
+			const headers = [
+				{ title: __("Item"), key: "item_name", align: "start", width: "20%" },
+				{ title: __("UOM"), key: "uom", align: "center", width: "9%" },
 			];
+			if (this.anyItemHasBatch) {
+				headers.push({
+					title: __("Batch / Expiry"),
+					key: "batch",
+					align: "start",
+					width: "22%",
+					sortable: false,
+				});
+			}
+			if (this.anyItemHasSerial) {
+				headers.push({
+					title: __("Serials"),
+					key: "serial_no",
+					align: "start",
+					width: "16%",
+					sortable: false,
+				});
+			}
+			headers.push(
+				{ title: __("Qty"), key: "qty", align: "center", width: "10%" },
+				{ title: __("Rate"), key: "rate", align: "center", width: "10%" },
+				{
+					title: __("Disc %"),
+					key: "discount_percentage",
+					align: "center",
+					width: "8%",
+				},
+				{ title: __("Amount"), key: "amount", align: "end", width: "10%" },
+				{
+					title: "",
+					key: "actions",
+					align: "center",
+					width: "50px",
+					sortable: false,
+				},
+			);
+			return headers;
 		},
 	},
 	methods: {
@@ -500,25 +752,37 @@ export default {
 			return this.formatFloat(v, 2);
 		},
 		currencySymbol(c) {
-			return get_currency_symbol(c || this.pos_profile.currency);
+			try {
+				return get_currency_symbol(c || this.pos_profile?.currency);
+			} catch {
+				return "";
+			}
 		},
 	},
 };
 </script>
 
 <style scoped>
-.purchase-invoice-card {
-	background: var(--pos-card-bg, #0e131e) !important;
-	border-left: 1px solid rgba(139, 92, 246, 0.18);
-	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
-	color: var(--pos-text-primary, #e7ebf3);
+.cursor-pointer {
+	cursor: pointer;
 }
 
+.pi-shell {
+	background: var(--pos-surface-bg, #0a0e17);
+}
+
+.purchase-invoice-card {
+	background: var(--pos-card-bg, #0e131e) !important;
+	border: 1px solid rgba(139, 92, 246, 0.18);
+	border-radius: 14px !important;
+	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
+	color: var(--pos-text-primary, #e7ebf3);
+	overflow: hidden;
+}
 .purchase-invoice-card,
 .purchase-invoice-card :deep(*) {
 	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
 }
-
 .purchase-invoice-card__body {
 	background: var(--pos-card-bg, #0e131e);
 }
@@ -602,16 +866,178 @@ export default {
 		color 0.18s ease,
 		box-shadow 0.18s ease;
 }
-
 .purchase-invoice-header__clear:hover {
 	background: rgba(244, 63, 94, 0.18);
 	color: #fb7185;
 	box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.14);
 }
 
+/* Form metadata grid: supplier | warehouse | cost center | posting date */
+.pi-form-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+	margin-bottom: 8px;
+}
+@media (max-width: 1280px) {
+	.pi-form-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+@media (max-width: 700px) {
+	.pi-form-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+.pi-form-field {
+	min-width: 0;
+}
+
+.pi-bill-row {
+	margin-top: 10px;
+}
+
+.pi-field-icon {
+	color: #c4b5fd !important;
+	margin-right: 6px;
+}
+.pi-field-add {
+	color: #c4b5fd !important;
+	transition: transform 0.18s ease, color 0.18s ease;
+}
+.pi-field-add:hover {
+	color: #fb7185 !important;
+	transform: scale(1.1);
+}
+
+/* Themed field — purple/pink border + glow on focus */
+.pi-themed-field :deep(.v-field) {
+	border-radius: 10px !important;
+	background: rgba(139, 92, 246, 0.05) !important;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease,
+		background-color 0.18s ease;
+}
+.pi-themed-field :deep(.v-field__outline__start),
+.pi-themed-field :deep(.v-field__outline__end),
+.pi-themed-field :deep(.v-field__outline__notch::before),
+.pi-themed-field :deep(.v-field__outline__notch::after) {
+	border-color: rgba(139, 92, 246, 0.32) !important;
+}
+.pi-themed-field :deep(.v-field--focused) {
+	background: rgba(139, 92, 246, 0.10) !important;
+	box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.22) !important;
+}
+.pi-themed-field :deep(.v-field--focused .v-field__outline__start),
+.pi-themed-field :deep(.v-field--focused .v-field__outline__end),
+.pi-themed-field :deep(.v-field--focused .v-field__outline__notch::before),
+.pi-themed-field :deep(.v-field--focused .v-field__outline__notch::after) {
+	border-color: #e23670 !important;
+}
+.pi-themed-field :deep(.v-label) {
+	color: rgba(231, 235, 243, 0.7) !important;
+}
+.pi-themed-field :deep(.v-field--focused .v-label) {
+	color: #f5d0fe !important;
+}
+
+/* Posting Date wrapper to give it the same chrome */
+.pi-date-wrap {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 10px;
+	background: rgba(139, 92, 246, 0.05);
+	border: 1px solid rgba(139, 92, 246, 0.32);
+	min-height: 40px;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease,
+		background-color 0.18s ease;
+}
+.pi-date-wrap:focus-within {
+	background: rgba(139, 92, 246, 0.10);
+	border-color: #e23670;
+	box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.22);
+}
+.pi-date-icon {
+	margin-right: 0;
+}
+.pi-date-picker {
+	flex: 1;
+	min-width: 0;
+}
+.pi-date-picker :deep(.dp__input) {
+	border: none !important;
+	background: transparent !important;
+	color: var(--pos-text-primary, #e7ebf3) !important;
+	font-family: var(--posa-font-family, "Space Grotesk", sans-serif);
+	font-size: 0.875rem;
+	padding-left: 4px !important;
+}
+.pi-date-picker :deep(.dp__input_icon),
+.pi-date-picker :deep(.dp__input_icon_pad) {
+	display: none !important;
+	padding-left: 0 !important;
+}
+.pi-date-picker :deep(.dp__input:focus) {
+	box-shadow: none !important;
+	outline: none !important;
+}
+
+/* Buying-price-list pill */
+.pi-meta-row {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: 4px;
+}
+.pi-meta-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.72rem;
+	color: #f5d0fe;
+	background: rgba(139, 92, 246, 0.12);
+	border: 1px solid rgba(139, 92, 246, 0.28);
+	padding: 4px 10px;
+	border-radius: 999px;
+}
+.pi-meta-pill--muted {
+	color: rgba(231, 235, 243, 0.6);
+	background: rgba(255, 255, 255, 0.03);
+	border-color: rgba(255, 255, 255, 0.08);
+}
+
 .purchase-invoice-divider {
 	border-color: rgba(139, 92, 246, 0.18) !important;
 	opacity: 1 !important;
+}
+
+.pi-search-bar {
+	margin-bottom: 12px;
+}
+.pi-search-bar__input :deep(.v-field) {
+	border-radius: 12px !important;
+	background: linear-gradient(
+		180deg,
+		rgba(139, 92, 246, 0.10),
+		rgba(226, 54, 112, 0.06)
+	) !important;
+	border: 1px solid rgba(139, 92, 246, 0.32) !important;
+}
+.pi-search-bar__input :deep(.v-field--focused) {
+	background: linear-gradient(
+		180deg,
+		rgba(139, 92, 246, 0.18),
+		rgba(226, 54, 112, 0.10)
+	) !important;
+	border-color: #e23670 !important;
+	box-shadow: 0 0 0 3px rgba(226, 54, 112, 0.22) !important;
+}
+.pi-search-bar__rate {
+	font-size: 0.72rem;
+	color: #c4b5fd;
+	font-weight: 600;
 }
 
 .purchase-invoice-actions {
@@ -635,7 +1061,6 @@ export default {
 		box-shadow 0.18s ease,
 		transform 0.18s ease !important;
 }
-
 .purchase-invoice-submit-btn:hover:not(:disabled) {
 	filter: brightness(1.08);
 	box-shadow:
@@ -643,38 +1068,10 @@ export default {
 		0 0 0 1px rgba(244, 114, 182, 0.42) inset !important;
 	transform: translateY(-1px);
 }
-
 .purchase-invoice-submit-btn:disabled,
 .purchase-invoice-submit-btn.v-btn--disabled {
 	opacity: 0.55 !important;
 	background: linear-gradient(135deg, #4c4561 0%, #5b3149 100%) !important;
 	box-shadow: none !important;
-}
-
-.profile-facts {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 16px;
-	padding: 10px 14px;
-	background: rgba(139, 92, 246, 0.06);
-	border: 1px solid rgba(139, 92, 246, 0.18);
-	border-radius: 10px;
-	font-size: 0.85rem;
-}
-
-.profile-fact {
-	display: inline-flex;
-	align-items: center;
-}
-
-.profile-fact__label {
-	color: rgba(231, 235, 243, 0.65);
-	margin-right: 6px;
-	letter-spacing: 0.02em;
-}
-
-.profile-fact__value {
-	color: #e7ebf3;
-	font-weight: 600;
 }
 </style>

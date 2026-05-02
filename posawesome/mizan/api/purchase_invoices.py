@@ -15,10 +15,18 @@ single document creates Stock Ledger entries directly (same as a
 Purchase Receipt would) AND books the payable, so the cashier
 walks away with one document name to keep.
 
-Warehouse + cost center are NOT operator inputs here — they come
-from the active POS Profile. The profile is the cashier's
-authority for "where to receive into" and "which cost center to
-hit", so re-asking at the till adds friction with no upside.
+Warehouse + cost center default from the POS Profile but stay
+operator-editable (mirroring the Purchase Receipt screen) — for
+multi-warehouse / multi-cost-centre stores the cashier needs to
+override per shipment.
+
+Batch + serial handling mirrors `purchase_receipts.py` end-to-end:
+each line can carry `batch_no` (existing or freshly typed) plus a
+`batch_expiry_date` for new batches, and `serial_no` (newline /
+comma list) for serial-tracked items. Server uses
+`_resolve_or_create_batch` from purchase_receipts.py so a Batch
+created via the PI page is identical to one created via the PR
+page.
 
 Companion frontend: `frontend/src/posapp/components/pos/purchase/
 PurchaseInvoice.vue` builds the payload; this module accepts it.
@@ -40,6 +48,12 @@ from .purchase_orders import (
     _resolve_pos_profile,
     _resolve_supplier,
     _resolve_supplier_buying_price_list,
+    _upsert_item_price,
+)
+from .purchase_receipts import (
+    _normalize_serial_payload,
+    _resolve_or_create_batch,
+    get_item_meta,
 )
 from .utils import get_default_warehouse
 
@@ -245,21 +259,34 @@ def create_purchase_invoice(data):
 
     Required payload fields:
       * `supplier` — Supplier name (will resolve case-insensitively).
-      * `items[]` — `[{item_code, qty, rate, uom?, conversion_factor?}]`.
+      * `items[]` — see below.
       * `pos_profile` — full POS Profile dict (from the client store),
          falls back to `get_active_pos_profile()` when missing.
 
-    Optional payload fields:
-      * `posting_date` — defaults to today.
-      * `due_date`     — defaults to posting_date.
-      * `bill_no` / `bill_date` — supplier's invoice reference.
-      * `payments[]` — for cash-paid receipts. NOT yet wired through —
-         user can still record a Payment Entry against the PI from
-         desk if they need a paid-on-the-spot trail.
+    Per-line `items[]` shape (extended to match the Purchase Receipt
+    screen so the operator can land batch / expiry / serial data in
+    the same submit):
+      * item_code, qty, rate (required)
+      * uom, stock_uom, conversion_factor
+      * discount_percentage
+      * warehouse — overrides the parent warehouse for split shipments
+      * cost_center — same idea
+      * batch_no, batch_expiry_date, batch_manufacturing_date —
+        existing batch is matched, otherwise a new Batch is created
+        (expiry required for new batches)
+      * serial_no — list / newline / comma string
 
-    Warehouse + cost_center are read from the POS Profile and stamped
-    on every line and on the parent. The cashier never sees these
-    fields; they're tied to where the till physically lives.
+    Optional payload fields:
+      * `warehouse` — defaults to `posa_purchase_warehouse` →
+        `warehouse` → company default. Operator can override.
+      * `cost_center` — defaults to POS Profile then Company.
+      * `posting_date`, `due_date`, `bill_no`, `bill_date`.
+      * `update_price_list` — when truthy, every line's rate is upserted
+        into the resolved buying price list (matches the PR screen's
+        "Save as buying price list" toggle).
+
+    Returns the new PI name + a `labels[]` array (one entry per unit
+    purchased) for the post-submit label-print dialog.
     """
     payload = json.loads(data) if isinstance(data, str) else data
     profile = _resolve_pos_profile(payload.get("pos_profile"))
@@ -281,21 +308,41 @@ def create_purchase_invoice(data):
     if not company:
         frappe.throw(_("Company is required."))
 
+    # Warehouse — operator-overridable (mirror PR). Priority:
+    #   1. payload (cashier's explicit pick)
+    #   2. POS Profile `posa_purchase_warehouse` (PR's preferred field)
+    #   3. POS Profile `warehouse` (sales warehouse, fallback)
+    #   4. Stock Settings default warehouse
     warehouse = (
-        profile.get("warehouse")
-        or payload.get("warehouse")
+        payload.get("warehouse")
+        or profile.get("posa_purchase_warehouse")
+        or profile.get("warehouse")
         or get_default_warehouse(company)
     )
     if not warehouse:
+        frappe.throw(_("Warehouse is required to receive stock."))
+
+    # Cost Center — same priority chain as PR. Stamped on the parent
+    # AND on every line; ERPNext's accounting submit pipeline reads
+    # `parent.cost_center` for "Stock Received But Not Billed" GL
+    # entries and throws a mandatory-field error if it's missing,
+    # even when every line has one.
+    cost_center = (
+        payload.get("cost_center")
+        or profile.get("cost_center")
+        or profile.get("posa_cost_center")
+        or frappe.get_cached_value("Company", company, "cost_center")
+        or None
+    )
+    if cost_center and not frappe.db.exists("Cost Center", cost_center):
+        frappe.throw(_("Cost Center {0} was not found.").format(cost_center))
+    if not cost_center:
         frappe.throw(
             _(
-                "POS Profile {0} has no warehouse set. Set a warehouse "
-                "on the profile before submitting purchase invoices "
-                "from the till."
-            ).format(profile.get("name") or "")
+                "No Cost Center could be resolved for this Purchase Invoice. "
+                "Pick one in the dialog or set a default on the POS Profile / Company."
+            )
         )
-
-    cost_center = profile.get("cost_center") or payload.get("cost_center")
 
     items = payload.get("items") or []
     if not items:
@@ -324,12 +371,15 @@ def create_purchase_invoice(data):
             "buying_price_list": buying_price_list,
             "update_stock": 1,
             "set_warehouse": warehouse,
+            "cost_center": cost_center,
             "bill_no": payload.get("bill_no"),
             "bill_date": payload.get("bill_date") or posting_date,
+            "ignore_pricing_rule": 1,
         }
     )
-    if cost_center:
-        invoice_doc.cost_center = cost_center
+
+    update_price_list = cint(payload.get("update_price_list"))
+    rows_for_price_update: list[tuple[str, str | None, float]] = []
 
     for row in items:
         item_code = row.get("item_code")
@@ -340,26 +390,46 @@ def create_purchase_invoice(data):
         if qty <= 0:
             continue
 
-        stock_uom = row.get("stock_uom") or frappe.db.get_value(
-            "Item", item_code, "stock_uom"
+        # Pull the same item meta the PR page uses so batch/serial
+        # flags drive `_resolve_or_create_batch` consistently.
+        item_meta = get_item_meta(item_code) or {}
+        stock_uom = row.get("stock_uom") or item_meta.get("stock_uom")
+        item_name = (
+            row.get("item_name") or item_meta.get("item_name") or item_code
         )
         uom = row.get("uom") or stock_uom
         conversion_factor = flt(row.get("conversion_factor") or 1) or 1
         rate = flt(row.get("rate"))
+        discount_percentage = flt(row.get("discount_percentage"))
+
+        batch_no = _resolve_or_create_batch(row, item_meta, supplier)
+        serial_no = (
+            _normalize_serial_payload(row.get("serial_no"))
+            if cint(item_meta.get("has_serial_no"))
+            else None
+        )
 
         line = {
             "item_code": item_code,
-            "item_name": row.get("item_name"),
+            "item_name": item_name,
             "qty": qty,
             "uom": uom,
             "stock_uom": stock_uom,
             "conversion_factor": conversion_factor,
             "rate": rate,
+            "price_list_rate": rate,
+            "discount_percentage": discount_percentage,
             "warehouse": row.get("warehouse") or warehouse,
         }
-        if cost_center:
-            line["cost_center"] = cost_center
+        line_cost_center = row.get("cost_center") or cost_center
+        if line_cost_center:
+            line["cost_center"] = line_cost_center
+        if batch_no:
+            line["batch_no"] = batch_no
+        if serial_no:
+            line["serial_no"] = serial_no
         invoice_doc.append("items", line)
+        rows_for_price_update.append((item_code, uom, rate))
 
     if not invoice_doc.items:
         frappe.throw(_("Purchase invoice requires at least one item with quantity."))
@@ -387,6 +457,24 @@ def create_purchase_invoice(data):
                     "failed: {1}"
                 ).format(invoice_doc.name, str(err))
             )
+
+    if update_price_list and buying_price_list:
+        for item_code, uom, rate in rows_for_price_update:
+            if rate <= 0:
+                continue
+            try:
+                _upsert_item_price(
+                    item_code,
+                    buying_price_list,
+                    rate,
+                    uom=uom,
+                    buying=True,
+                )
+            except Exception:
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    "POS Awesome PI price-list update failed",
+                )
 
     label_payload = _build_label_payload(invoice_doc, profile)
 
