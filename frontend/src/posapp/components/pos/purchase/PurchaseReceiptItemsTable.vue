@@ -152,45 +152,55 @@
 		</template>
 
 		<template v-slot:item.qty="{ item }">
-			<div class="pos-table__qty-counter">
-				<v-btn
-					size="small"
-					variant="flat"
-					class="pos-table__qty-btn minus-btn qty-control-btn"
-					@click.stop="$emit('update-qty', { item, value: Math.max(0, (Number(item.qty) || 0) - 1) })"
+			<!--
+				Always-editable shadcn-style number stepper. Single
+				container with a continuous border + focus ring; the
+				minus / plus buttons sit inside the border at the
+				edges, the native <input> takes the middle. No more
+				"click to edit, click out to commit" two-mode dance —
+				one keystroke is one update via @input.
+			-->
+			<div class="qty-stepper" @click.stop>
+				<button
+					type="button"
+					class="qty-stepper__btn qty-stepper__btn--dec"
 					:aria-label="__('Decrease quantity')"
+					@click.stop="
+						$emit('update-qty', {
+							item,
+							value: Math.max(0, (Number(item.qty) || 0) - 1),
+						})
+					"
 				>
-					<v-icon size="small">mdi-minus</v-icon>
-				</v-btn>
-				<div
-					v-if="!item._isEditingQty"
-					class="pos-table__qty-display"
-					@click.stop="openQtyEdit(item)"
-				>
-					{{ formatNumber(item.qty) }}
-				</div>
-				<v-text-field
-					v-else
-					v-model="item._editingQtyValue"
-					density="compact"
-					variant="outlined"
-					class="pos-table__qty-input"
-					@blur="closeQtyEdit(item)"
-					@keydown.enter.prevent="closeQtyEdit(item)"
-					@click.stop
-					autofocus
+					<v-icon size="14">mdi-minus</v-icon>
+				</button>
+				<input
 					type="number"
 					min="0"
-				></v-text-field>
-				<v-btn
-					size="small"
-					variant="flat"
-					class="pos-table__qty-btn plus-btn qty-control-btn"
-					@click.stop="$emit('update-qty', { item, value: (Number(item.qty) || 0) + 1 })"
+					inputmode="decimal"
+					class="qty-stepper__input"
+					:value="item.qty"
+					@input="
+						$emit('update-qty', {
+							item,
+							value: ($event.target && $event.target.value) || 0,
+						})
+					"
+					@click.stop
+				/>
+				<button
+					type="button"
+					class="qty-stepper__btn qty-stepper__btn--inc"
 					:aria-label="__('Increase quantity')"
+					@click.stop="
+						$emit('update-qty', {
+							item,
+							value: (Number(item.qty) || 0) + 1,
+						})
+					"
 				>
-					<v-icon size="small">mdi-plus</v-icon>
-				</v-btn>
+					<v-icon size="14">mdi-plus</v-icon>
+				</button>
 			</div>
 		</template>
 
@@ -676,5 +686,126 @@ export default {
 .dp__action_button.dp__action_cancel {
 	background: transparent !important;
 	color: rgba(231, 235, 243, 0.7) !important;
+}
+
+/* ── Qty stepper (shadcn-inspired, CC themed) ─────────────────────────
+   Shape lifted from the user's reference Input component:
+     - rounded-lg (10px)
+     - subtle border + bg
+     - 3px focus ring
+     - smooth transitions
+   Translated to plain CSS with CC purple/pink tokens. The minus and
+   plus buttons sit INSIDE the bordered container at the edges so the
+   whole control reads as a single unified field, not a "button +
+   input + button" cluster. */
+.qty-stepper {
+	display: inline-flex;
+	align-items: stretch;
+	width: 100%;
+	max-width: 132px;
+	min-width: 96px;
+	height: 32px;
+	border-radius: 10px;
+	background: rgba(139, 92, 246, 0.05);
+	border: 1px solid rgba(139, 92, 246, 0.32);
+	overflow: hidden;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+	transition:
+		border-color 0.18s ease,
+		box-shadow 0.18s ease,
+		background-color 0.18s ease;
+	margin: 0 auto;
+	box-sizing: border-box;
+}
+
+.qty-stepper:hover {
+	border-color: rgba(139, 92, 246, 0.55);
+	background: rgba(139, 92, 246, 0.10);
+}
+
+.qty-stepper:focus-within {
+	border-color: #e23670;
+	background: rgba(139, 92, 246, 0.12);
+	box-shadow:
+		0 0 0 3px rgba(226, 54, 112, 0.22),
+		0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.qty-stepper__btn {
+	all: unset;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	flex: 0 0 28px;
+	cursor: pointer;
+	color: rgba(231, 235, 243, 0.85);
+	background: transparent;
+	transition:
+		background-color 0.15s ease,
+		color 0.15s ease;
+	user-select: none;
+}
+
+.qty-stepper__btn:hover {
+	background: rgba(139, 92, 246, 0.20);
+	color: #ffffff;
+}
+
+.qty-stepper__btn:active {
+	background: linear-gradient(135deg, #8b5cf6 0%, #e23670 100%);
+	color: #ffffff;
+}
+
+.qty-stepper__btn--dec {
+	border-right: 1px solid rgba(139, 92, 246, 0.22);
+}
+
+.qty-stepper__btn--inc {
+	border-left: 1px solid rgba(139, 92, 246, 0.22);
+}
+
+.qty-stepper__input {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+	height: 100%;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--pos-text-primary, #e7ebf3);
+	text-align: center;
+	font-family:
+		var(--posa-font-family, "Space Grotesk", "SF Pro Display", "Segoe UI",
+		"Roboto", "Helvetica Neue", "Arial", "Noto Sans Arabic", "Tahoma",
+		sans-serif);
+	font-variant-numeric: lining-nums tabular-nums;
+	font-size: 0.9rem;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	padding: 0 4px;
+	-moz-appearance: textfield;
+	appearance: textfield;
+	box-sizing: border-box;
+}
+
+.qty-stepper__input::-webkit-outer-spin-button,
+.qty-stepper__input::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	appearance: none;
+	margin: 0;
+}
+
+.qty-stepper__input::placeholder {
+	color: rgba(231, 235, 243, 0.45);
+}
+
+.qty-stepper__input:focus {
+	outline: none;
+}
+
+.qty-stepper__input:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
 }
 </style>
