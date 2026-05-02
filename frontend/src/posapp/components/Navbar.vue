@@ -115,6 +115,7 @@
 			:menu-logo="menuLogo"
 			:items="items"
 			:footer-action="drawerFooterAction"
+			:hide-brand="hideDrawerBrand"
 			@open-settings="openSettingsPanel"
 			@change-page="changePage"
 		/>
@@ -391,6 +392,19 @@ export default {
 		menuLogo() {
 			const raw = this.posProfile?.posa_menu_logo;
 			return typeof raw === "string" ? raw.trim() : "";
+		},
+		// Hide the top-of-drawer brand block (logo + company name) per
+		// POS Profile via `posa_hide_drawer_brand`. Sibling of
+		// `posa_hide_brand_text` (used in NavbarAppBar) — kept separate
+		// so a tenant can hide one surface without the other.
+		hideDrawerBrand() {
+			const raw = this.posProfile?.posa_hide_drawer_brand;
+			if (raw === true || raw === 1) return true;
+			if (typeof raw === "string") {
+				const normalized = raw.trim().toLowerCase();
+				return normalized === "1" || normalized === "true";
+			}
+			return false;
 		},
 		offlineStatusState() {
 			return {

@@ -564,6 +564,20 @@ export function useClosingSummary(
 	const taxesCollectedByAccount = computed(() => taxesCollectedSummary.value.by_account);
 	const taxesCollectedByCurrency = computed(() => taxesCollectedSummary.value.by_currency);
 
+	// ── Cashiers ───────────────────────────────────────────────────────
+	// Per-cashier breakdown for the shift. Driven by `overview.cashiers`
+	// (added on the server side in
+	// `posawesome/mizan/doctype/pos_closing_shift/closing_processing/
+	// overview.py::_resolve_cashier_breakdown_rows`). Each row carries
+	// `{cashier, cashier_name, sales_person, invoice_count, grand_total,
+	// net_total}`. The dialog's "Cashiers" section + the A4 print read
+	// from this directly. Empty array on shifts that pre-date the
+	// rollout — the section/table just doesn't render in that case.
+	const cashiersBreakdown = computed(() => {
+		const ov: any = unref(overview);
+		return Array.isArray(ov?.cashiers) ? ov.cashiers : [];
+	});
+
 	return {
 		overviewCompanyCurrency,
 		companyCurrencySymbol,
@@ -579,6 +593,7 @@ export function useClosingSummary(
 		taxesCollectedSummary,
 		taxesCollectedByAccount,
 		taxesCollectedByCurrency,
+		cashiersBreakdown,
 		shouldShowCompanyEquivalent,
 		showExchangeRates,
 		formatExchangeRates,

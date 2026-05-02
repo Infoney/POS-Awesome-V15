@@ -104,6 +104,7 @@
 									:taxes-collected-summary="taxesCollectedSummary"
 									:taxes-collected-by-account="taxesCollectedByAccount"
 									:taxes-collected-by-currency="taxesCollectedByCurrency"
+									:cashiers-breakdown="cashiersBreakdown"
 									:overview-company-currency="overviewCompanyCurrency"
 									:format-currency-with-symbol="formatCurrencyWithSymbol"
 									:should-show-company-equivalent="shouldShowCompanyEquivalent"
@@ -450,6 +451,12 @@ export default {
 				},
 				taxesCollectedByAccount:
 					summary.taxesCollectedByAccount?.value || [],
+				cashiersBreakdown: summary.cashiersBreakdown?.value || [],
+				// Saved child-table fallback — populated by the
+				// server-side `validate` hook on every save so the
+				// print can render Cashiers even if the overview API
+				// returned an empty / stale `cashiers` array.
+				cashiersFromDoc: Array.isArray(data.cashiers) ? data.cashiers : [],
 				cashMovementCompanyTotal,
 				formatCurrencyWithSymbol: summaryFormatters.formatCurrencyWithSymbol,
 				formatCurrency,
