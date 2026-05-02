@@ -147,6 +147,35 @@ def _is_scannable_1d(value):
     return bool(text) and text.isdigit() and len(text) in _SCANNABLE_LENGTHS
 
 
+def _resolve_barcode_symbology(value):
+    """
+    Pick the JsBarcode format string for a given barcode value.
+    Used in the server-side label payload so the client renders
+    the bars deterministically (vs JsBarcode's `format="auto"`,
+    which has been observed to pick wrong on edge cases).
+
+    Decision tree (1D only — DataMatrix / GS1 paths intentionally
+    not supported per user spec; the operator always picks an
+    EAN/UPC barcode for the SKU):
+      * 13 digits, numeric → EAN13
+      * 12 digits, numeric → UPC
+      * 8  digits, numeric → EAN8
+      * Anything else      → CODE128 (covers alphanumeric SKU
+                              codes and any non-EAN strings)
+    """
+    text = str(value or "").strip()
+    if not text:
+        return "CODE128"
+    if text.isdigit():
+        if len(text) == 13:
+            return "EAN13"
+        if len(text) == 12:
+            return "UPC"
+        if len(text) == 8:
+            return "EAN8"
+    return "CODE128"
+
+
 def _pick_best_barcode(rows):
     """
     Among a list of `Item Barcode` rows, return the value most likely
@@ -165,48 +194,57 @@ def _pick_best_barcode(rows):
 
 def _resolve_item_barcode(meta, uom, stock_uom):
     """
-    Pick the barcode to print for this line. Cascade:
-      1. Among barcodes scoped to this UOM, pick the most scannable
-         (EAN13 etc. preferred over a 47-char GS1 string).
-      2. Same, scoped to the stock UOM (when the line is on a
-         purchase UOM and there's no per-purchase-UOM barcode).
-      3. Globally on the item: prefer a scannable EAN13/UPC/EAN8
-         over anything else, then fall back to the first barcode.
+    Pick the barcode to print for this line.
 
-    Many pharmacies have:
-      * a UOM-tagged GS1 DataMatrix string per pack-size (long,
-        encodes batch + expiry + serial)
-      * a single short EAN13 on the consumer unit (reliably
-        scannable by a $20 USB laser scanner)
-    Without UOM-aware scannable preference we'd print the GS1 string
-    on a 50mm label and the cashier would have to type the digits
-    by hand — defeating the purpose of the label. Step 1 + 3 below
-    make sure the short scannable barcode wins when one exists.
+    Per user spec (2026-05-03): when an item has multiple barcodes,
+    ALWAYS prefer the EAN/UPC/EAN8 (scannable 1D, fixed-length
+    numeric) over any other format, regardless of UOM tagging.
+    Pharmacy use case: SKUs often have a long pharma string AND a
+    short EAN13 — the EAN13 is always the right choice for the
+    label printer + checkout scanner.
+
+    Cascade:
+      1. ANY scannable EAN13 / UPC / EAN8 on the item → win.
+         (Global, not UOM-scoped — short scannable barcodes are the
+         operator's preference no matter where they're tagged.)
+      2. UOM-tagged barcode (any format) — the line's UOM wins,
+         falling back to stock_uom for purchase-UOM lines that have
+         only stock-UOM barcodes.
+      3. First barcode on the item.
     """
     if not meta:
         return ""
     rows = meta.get("barcodes") or []
+    if not rows:
+        return ""
 
+    # Step 1 — global EAN / UPC / EAN8 preference.
+    for row in rows:
+        if _is_scannable_1d(row.get("barcode")):
+            return str(row.get("barcode") or "").strip()
+
+    # Step 2 — UOM-tagged fallback. No EAN exists on the item, so
+    # fall back to the per-UOM barcode the operator tagged.
     def matches_uom(row, target):
         return target and (row.get("posa_uom") or row.get("uom")) == target
 
-    # Step 1 — barcodes for this exact UOM, prefer scannable.
-    uom_rows = [row for row in rows if matches_uom(row, uom)]
-    picked = _pick_best_barcode(uom_rows)
-    if picked:
-        return picked
+    for target in (uom, stock_uom):
+        if not target:
+            continue
+        for row in rows:
+            if matches_uom(row, target):
+                value = str(row.get("barcode") or "").strip()
+                if value:
+                    return value
 
-    # Step 2 — stock-UOM scoped barcodes (when line is on a purchase
-    # UOM but only stock-UOM barcodes exist).
-    if uom and uom != stock_uom:
-        stock_rows = [row for row in rows if matches_uom(row, stock_uom)]
-        picked = _pick_best_barcode(stock_rows)
-        if picked:
-            return picked
+    # Step 3 — last resort, first barcode whatever it is.
+    return str((rows[0] or {}).get("barcode") or "").strip()
 
-    # Step 3 — global preference for any scannable barcode on the
-    # item, falling through to whatever's on row 0.
-    return _pick_best_barcode(rows)
+
+# `_pick_best_barcode` was an earlier helper kept for backwards
+# compatibility — `_resolve_item_barcode` no longer calls it but
+# external callers might. Left in place so nothing breaks; safe to
+# delete in a future refactor.
 
 
 def _resolve_selling_price(item_code, price_list, uom, stock_uom):
@@ -355,6 +393,11 @@ def _build_label_payload(invoice_doc, profile):
                 "qty": qty_to_print,
                 "selling_rate": flt(selling_rate),
                 "barcode": barcode,
+                # Resolved server-side so the client renders without
+                # a second analysis pass. See `_resolve_barcode_symbology`
+                # for the decision tree (1D EAN13 / UPC / EAN8 →
+                # GS1 DataMatrix → DataMatrix → CODE128 fallback).
+                "barcode_format": _resolve_barcode_symbology(barcode),
                 "batch_no": batch_info.get("batch_no", ""),
                 "batch_expiry_date": batch_info.get("batch_expiry_date", ""),
                 "batch_manufacturing_date": batch_info.get(

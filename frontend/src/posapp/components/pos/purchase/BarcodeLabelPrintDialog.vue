@@ -183,7 +183,14 @@ const LABEL_SIZES = [
 
 const DEFAULT_LABEL_SIZE_KEY = "50x30";
 
-const JSBARCODE_SRC = "/assets/posawesome/dist/js/libs/JsBarcode.all.min.js";
+// jsdelivr CDN (matches the proven Order Pick print pattern). Local
+// asset routing through `/assets/posawesome/dist/js/libs/...` was
+// flaky on some bench setups; pinning a known-good version on a
+// global CDN gives the same JsBarcode artifact regardless of the
+// site's static-asset config. Pinned to 3.11.6 — same version Order
+// Pick is happy with in production.
+const JSBARCODE_SRC =
+	"https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js";
 let _jsBarcodeLoadPromise = null;
 
 /**
@@ -775,7 +782,7 @@ export default {
 <head>
 <meta charset="UTF-8">
 <style>${style}</style>
-<script src="/assets/posawesome/dist/js/libs/JsBarcode.all.min.js"><\/script>
+<script src="${JSBARCODE_SRC}"><\/script>
 </head>
 <body>
 ${labelHtml}
