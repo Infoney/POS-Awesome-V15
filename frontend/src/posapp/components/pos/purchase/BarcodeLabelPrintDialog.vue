@@ -119,9 +119,6 @@
 					:items-per-page="-1"
 					hide-default-footer
 				>
-					<template #item.cost_rate="{ item }">
-						{{ formatLabelCurrency(item.cost_rate, item.currency) }}
-					</template>
 					<template #item.selling_rate="{ item }">
 						{{ formatLabelCurrency(item.selling_rate, item.currency) }}
 					</template>
@@ -232,27 +229,12 @@ function buildLabelStyle(widthMm, heightMm) {
 			-webkit-line-clamp: 2;
 			-webkit-box-orient: vertical;
 		}
-		.label__prices {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
+		.label__price {
 			width: 100%;
-			line-height: 1;
-		}
-		.label__price-block {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
+			text-align: center;
+			font-weight: 800;
+			letter-spacing: 0.02em;
 			line-height: 1.05;
-		}
-		.label__price-tag {
-			font-weight: 600;
-			letter-spacing: 0.04em;
-			text-transform: uppercase;
-			opacity: 0.85;
-		}
-		.label__price-value {
-			font-weight: 700;
 		}
 		.label__barcode-wrap {
 			width: 100%;
@@ -267,6 +249,32 @@ function buildLabelStyle(widthMm, heightMm) {
 			max-width: 100%;
 			max-height: 100%;
 			object-fit: contain;
+		}
+		.label__batch {
+			width: 100%;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			gap: 4px;
+			line-height: 1.05;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.label__batch-tag {
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.04em;
+			opacity: 0.85;
+		}
+		.label__batch-sep {
+			opacity: 0.55;
+			padding: 0 2px;
+		}
+		.label__batch-piece {
+			display: inline-flex;
+			gap: 3px;
+			align-items: baseline;
 		}
 		.label__brand {
 			width: 100%;
@@ -283,100 +291,135 @@ function buildLabelStyle(widthMm, heightMm) {
 }
 
 function resolveFontSizes(widthMm) {
+	// Larger barcode + bar width than the previous build — the
+	// dense scrambled output the user reported was the result of
+	// CODE128 packed into ~30mm width with width=1.4. Bumping the
+	// bar width to 1.8/1.6 and the barcode height to 36/30 gives a
+	// scanner-readable rendering on a 203 dpi thermal head while
+	// still leaving room for the item name above and batch + brand
+	// below.
 	if (widthMm >= 50) {
 		return {
 			name: "9pt",
-			price: "8pt",
-			tag: "5.5pt",
-			brand: "7pt",
-			barcodeHeight: 30,
-			barcodeFont: 10,
+			price: "10pt",
+			batch: "6.5pt",
+			brand: "7.5pt",
+			barcodeHeight: 36,
+			barcodeWidth: 1.8,
+			barcodeFont: 11,
 		};
 	}
 	if (widthMm >= 40) {
 		return {
 			name: "8pt",
-			price: "7pt",
-			tag: "5pt",
-			brand: "6.5pt",
-			barcodeHeight: 26,
-			barcodeFont: 9,
+			price: "9pt",
+			batch: "6pt",
+			brand: "7pt",
+			barcodeHeight: 30,
+			barcodeWidth: 1.6,
+			barcodeFont: 10,
 		};
 	}
 	if (widthMm >= 38) {
 		return {
 			name: "7.5pt",
-			price: "6.5pt",
-			tag: "4.5pt",
-			brand: "6pt",
-			barcodeHeight: 22,
-			barcodeFont: 8,
+			price: "8pt",
+			batch: "5.5pt",
+			brand: "6.5pt",
+			barcodeHeight: 26,
+			barcodeWidth: 1.4,
+			barcodeFont: 9,
 		};
 	}
 	return {
 		name: "7pt",
-		price: "6pt",
-		tag: "4.5pt",
-		brand: "5.5pt",
-		barcodeHeight: 20,
-		barcodeFont: 7,
+		price: "7.5pt",
+		batch: "5pt",
+		brand: "6pt",
+		barcodeHeight: 22,
+		barcodeWidth: 1.3,
+		barcodeFont: 8,
 	};
+}
+
+/**
+ * Pick the safest JsBarcode format for a given value. We default to
+ * CODE128 (handles arbitrary alphanumeric) and only fall through to
+ * EAN13 when the value looks unambiguously like a 13-digit numeric
+ * EAN — this stops `format="auto"` from picking a marginal format
+ * that scanners struggle with.
+ */
+function resolveBarcodeFormat(value) {
+	const text = String(value || "").trim();
+	if (/^\d{13}$/.test(text)) return "EAN13";
+	if (/^\d{12}$/.test(text)) return "UPC";
+	if (/^\d{8}$/.test(text)) return "EAN8";
+	return "CODE128";
 }
 
 function buildSingleLabelHtml(label, fonts) {
 	const itemName = escapeHtml(label.item_name || label.item_code || "");
-	const cost =
-		label.cost_rate != null
-			? `${Number(label.cost_rate).toFixed(2)} ${escapeHtml(label.currency || "")}`
-			: "";
-	const sell =
+	// Cost is intentionally omitted from the customer-facing label.
+	// Only the selling price prints — the cashier still sees cost
+	// in the dialog summary table before printing.
+	const sellRaw =
 		label.selling_rate != null && Number(label.selling_rate) > 0
-			? `${Number(label.selling_rate).toFixed(2)} ${escapeHtml(label.currency || "")}`
+			? `${Number(label.selling_rate).toFixed(2)} ${label.currency || ""}`.trim()
 			: "";
-	const barcode = escapeHtml(label.barcode || "");
+	const sellHtml = escapeHtml(sellRaw);
+	const barcode = String(label.barcode || "").trim();
+	const safeBarcode = escapeHtml(barcode);
 	const brand = escapeHtml(label.brand_name || "");
+	const batchNo = escapeHtml(label.batch_no || "");
+	const batchExpiry = escapeHtml(label.batch_expiry_date || "");
 
-	// Skip the cost/sell row entirely when both are zero so the
-	// barcode can take more of the limited vertical room.
-	const pricesBlock =
-		cost || sell
-			? `
-				<div class="label__prices" style="font-size: ${fonts.price};">
-					${
-						cost
-							? `<div class="label__price-block">
-								<div class="label__price-tag" style="font-size: ${fonts.tag};">${escapeHtml(__("Cost"))}</div>
-								<div class="label__price-value">${escapeHtml(cost)}</div>
-							</div>`
-							: ""
-					}
-					${
-						sell
-							? `<div class="label__price-block">
-								<div class="label__price-tag" style="font-size: ${fonts.tag};">${escapeHtml(__("Sell"))}</div>
-								<div class="label__price-value">${escapeHtml(sell)}</div>
-							</div>`
-							: ""
-					}
-				</div>
-			`
-			: "";
+	const priceBlock = sellHtml
+		? `<div class="label__price" style="font-size: ${fonts.price};">${sellHtml}</div>`
+		: "";
 
+	const barcodeFormat = resolveBarcodeFormat(label.barcode);
 	const barcodeBlock = barcode
 		? `<div class="label__barcode-wrap">
 				<img class="label__barcode"
-					jsbarcode-format="auto"
-					jsbarcode-value="${barcode}"
+					jsbarcode-format="${barcodeFormat}"
+					jsbarcode-value="${safeBarcode}"
 					jsbarcode-textmargin="0"
+					jsbarcode-margin="0"
 					jsbarcode-fontoptions="bold"
 					jsbarcode-height="${fonts.barcodeHeight}"
-					jsbarcode-width="1.4"
+					jsbarcode-width="${fonts.barcodeWidth}"
 					jsbarcode-displayValue="true"
-					jsbarcode-fontSize="${fonts.barcodeFont}">
+					jsbarcode-fontSize="${fonts.barcodeFont}"
+					jsbarcode-textposition="bottom"
+					jsbarcode-background="#ffffff"
+					jsbarcode-lineColor="#000000">
 			</div>`
-		: `<div class="label__barcode-wrap" style="font-size: ${fonts.tag};">
+		: `<div class="label__barcode-wrap" style="font-size: ${fonts.batch};">
 				${escapeHtml(__("No barcode"))}
 			</div>`;
+
+	// Batch + Expiry line — only renders when at least one is present.
+	// Compact "Batch: X | EXP: Y" so it never wraps onto two rows.
+	const batchPieces = [];
+	if (batchNo) {
+		batchPieces.push(
+			`<span class="label__batch-piece"><span class="label__batch-tag">${escapeHtml(
+				__("Batch"),
+			)}:</span> ${batchNo}</span>`,
+		);
+	}
+	if (batchExpiry) {
+		batchPieces.push(
+			`<span class="label__batch-piece"><span class="label__batch-tag">${escapeHtml(
+				__("EXP"),
+			)}:</span> ${batchExpiry}</span>`,
+		);
+	}
+	const batchBlock = batchPieces.length
+		? `<div class="label__batch" style="font-size: ${fonts.batch};">${batchPieces.join(
+				'<span class="label__batch-sep">|</span>',
+			)}</div>`
+		: "";
 
 	const brandBlock = brand
 		? `<div class="label__brand" style="font-size: ${fonts.brand};">${brand}</div>`
@@ -385,8 +428,9 @@ function buildSingleLabelHtml(label, fonts) {
 	return `
 		<div class="label">
 			<div class="label__name" style="font-size: ${fonts.name};">${itemName}</div>
-			${pricesBlock}
+			${priceBlock}
 			${barcodeBlock}
+			${batchBlock}
 			${brandBlock}
 		</div>
 	`;
@@ -450,10 +494,14 @@ export default {
 			return this.printableLabels[0] || null;
 		},
 		summaryHeaders() {
+			// Cost intentionally absent — the customer-facing label
+			// only carries the selling price, so the print dialog's
+			// summary mirrors that.
 			return [
 				{ title: __("Item"), key: "item_name", align: "start" },
 				{ title: __("Barcode"), key: "barcode", align: "start" },
-				{ title: __("Cost"), key: "cost_rate", align: "end" },
+				{ title: __("Batch"), key: "batch_no", align: "start" },
+				{ title: __("Expiry"), key: "batch_expiry_date", align: "start" },
 				{ title: __("Sell"), key: "selling_rate", align: "end" },
 				{ title: __("Labels"), key: "qty", align: "end" },
 			];
@@ -465,7 +513,8 @@ export default {
 			return (this.labels || []).map((label) => ({
 				item_name: label.item_name,
 				barcode: label.barcode || __("(missing)"),
-				cost_rate: label.cost_rate,
+				batch_no: label.batch_no || "—",
+				batch_expiry_date: label.batch_expiry_date || "—",
 				selling_rate: label.selling_rate,
 				qty: label.qty,
 				currency: label.currency,
@@ -498,14 +547,16 @@ export default {
 				/<img class="label__barcode"[\s\S]*?>/,
 				`<div style="border: 1px dashed #888; padding: 4px 8px; font-family: monospace; font-size: ${fonts.barcodeFont}px;">${escapeHtml(this.firstLabel.barcode)}</div>`,
 			);
-			// Inline the per-label CSS scaled up for the preview.
+			// Inline the per-label CSS scaled up for the preview. Fonts
+			// are derived from the physical width so a 50mm preview
+			// renders proportional-feeling text without needing a
+			// per-size styled rule for each one.
 			return `
 				<style>
 					.barcode-label-preview .label {
 						width: 100%;
 						height: 100%;
 						padding: ${size.widthMm * 0.08}px ${size.widthMm * 0.1}px;
-						font-size: ${size.widthMm}px;
 						display: flex;
 						flex-direction: column;
 						justify-content: space-between;
@@ -519,17 +570,12 @@ export default {
 						line-height: 1.1;
 						font-size: ${size.widthMm * 0.09}px;
 					}
-					.barcode-label-preview .label__prices {
-						display: flex;
-						justify-content: space-between;
+					.barcode-label-preview .label__price {
 						width: 100%;
-						font-size: ${size.widthMm * 0.07}px;
-					}
-					.barcode-label-preview .label__price-tag {
-						font-size: ${size.widthMm * 0.05}px;
-					}
-					.barcode-label-preview .label__price-value {
-						font-weight: 700;
+						text-align: center;
+						font-weight: 800;
+						font-size: ${size.widthMm * 0.10}px;
+						line-height: 1.05;
 					}
 					.barcode-label-preview .label__barcode-wrap {
 						display: flex;
@@ -538,11 +584,27 @@ export default {
 						width: 100%;
 						flex: 1;
 					}
+					.barcode-label-preview .label__batch {
+						width: 100%;
+						display: flex;
+						justify-content: center;
+						gap: 4px;
+						font-size: ${size.widthMm * 0.06}px;
+					}
+					.barcode-label-preview .label__batch-tag {
+						font-weight: 600;
+						text-transform: uppercase;
+						opacity: 0.85;
+					}
+					.barcode-label-preview .label__batch-sep {
+						opacity: 0.55;
+					}
 					.barcode-label-preview .label__brand {
 						font-size: ${size.widthMm * 0.07}px;
 						width: 100%;
 						text-align: center;
 						direction: rtl;
+						font-weight: 600;
 					}
 				</style>
 				${innerHtml}

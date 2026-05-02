@@ -61,22 +61,28 @@ from .utils import get_default_warehouse
 def _resolve_pharmacy_brand_name(profile, company):
     """
     Pick the most user-meaningful "brand name" to print at the foot
-    of every barcode label. Fallback chain mirrors the navbar's
-    `customBrandName` resolver:
+    of every barcode label. Fallback chain (in order):
 
-        1. POS Profile.posa_brand_name (operator-set custom label —
-           often already in Arabic on AL-KHANSA tenants).
-        2. Company.company_name (fallback to legal name, may be
-           latin).
+        1. POS Profile.custom_shop_name — pharmacy operators add this
+           via Frappe Customize Form to hold the storefront name in
+           Arabic (separate from `company_name`, which holds the
+           legal entity name in English). Frappe auto-prefixes UI-
+           added Custom Fields with `custom_`.
+        2. POS Profile.posa_brand_name — older POSAwesome custom
+           field, kept as a fallback so existing tenants aren't
+           silently broken if they only configured this one.
+        3. Company.company_name — last-ditch fallback to the legal
+           entity name.
 
     Returning empty string is fine — the label dialog hides the
     footer line when blank.
     """
-    candidate = (profile or {}).get("posa_brand_name")
-    if candidate:
-        candidate = str(candidate).strip()
+    for fieldname in ("custom_shop_name", "posa_brand_name"):
+        candidate = (profile or {}).get(fieldname)
         if candidate:
-            return candidate
+            candidate = str(candidate).strip()
+            if candidate:
+                return candidate
     if company:
         company_name = frappe.db.get_value("Company", company, "company_name")
         if company_name:
@@ -188,21 +194,67 @@ def _resolve_selling_price(item_code, price_list, uom, stock_uom):
     return flt(standard_rate or 0)
 
 
+def _format_iso_date(value):
+    """Coerce a date/datetime/str to YYYY-MM-DD for label printing."""
+    if not value:
+        return ""
+    try:
+        from frappe.utils import getdate
+
+        return str(getdate(value))
+    except Exception:
+        return str(value)
+
+
+def _resolve_batch_meta(batch_no):
+    """
+    Fetch expiry + manufacturing date for a Batch row, with a tiny
+    in-call cache so the same batch on multiple lines costs one
+    lookup. Empty/None batch returns blank meta.
+    """
+    if not batch_no:
+        return {"batch_no": "", "batch_expiry_date": "", "batch_manufacturing_date": ""}
+    if not frappe.db.exists("Batch", batch_no):
+        return {"batch_no": batch_no, "batch_expiry_date": "", "batch_manufacturing_date": ""}
+    row = frappe.db.get_value(
+        "Batch",
+        batch_no,
+        ["expiry_date", "manufacturing_date"],
+        as_dict=True,
+    )
+    return {
+        "batch_no": batch_no,
+        "batch_expiry_date": _format_iso_date(row.get("expiry_date")) if row else "",
+        "batch_manufacturing_date": (
+            _format_iso_date(row.get("manufacturing_date")) if row else ""
+        ),
+    }
+
+
 def _build_label_payload(invoice_doc, profile):
     """
     Expand each Purchase Invoice line into one entry per unit
     purchased — three boxes of Panadol come back as three separate
     `labels` entries, so the print dialog doesn't have to re-multiply
-    by qty client-side. Each entry carries the four printable fields
-    (item name, cost rate, selling price, barcode) plus the brand
-    name footer.
+    by qty client-side.
 
-    Quantity is rounded to nearest int because labels are physical
-    objects: a fractional qty (e.g. 1.5 kg of weighed goods) gets
-    rounded UP to 2 labels so every receivable unit has a label.
-    For pharmacies the qty is integer in 99% of cases so this is a
-    no-op; the rare scale-weighed line just leans toward over-print
-    rather than under-print.
+    Per-label fields (matches the dialog's renderer):
+      * item_name      — the printable item label
+      * selling_rate   — what the customer will pay (no cost shown
+                          on the customer-facing label, per user
+                          request)
+      * barcode        — UOM-aware pick from `Item Barcode`
+      * batch_no       — Batch ID on the PI line, when present
+      * batch_expiry_date — pulled from the Batch doc, formatted
+                          as YYYY-MM-DD; printed under the barcode
+                          for pharmacy expiry traceability
+      * brand_name     — `custom_shop_name` → `posa_brand_name` →
+                          Company name fallback; printed at the
+                          foot of the label
+
+    Quantity is rounded UP because labels are physical objects: 1.5
+    kg of weighed goods → 2 labels. Pharmacy use case is integer
+    99% of the time so this is normally a no-op.
     """
     item_codes = {
         row.item_code for row in (invoice_doc.items or []) if row.item_code
@@ -213,6 +265,10 @@ def _build_label_payload(invoice_doc, profile):
         "Company", invoice_doc.company, "default_currency"
     )
     brand_name = _resolve_pharmacy_brand_name(profile, invoice_doc.company)
+
+    # Cache batch lookups across lines — same batch on multiple
+    # lines costs ONE Batch.get_value, not N.
+    batch_meta_cache: dict[str, dict] = {}
 
     labels = []
     for row in invoice_doc.items or []:
@@ -225,9 +281,13 @@ def _build_label_payload(invoice_doc, profile):
             row.item_code, selling_price_list, printed_uom, stock_uom
         )
 
-        # Round qty up so partial units never lose a label. Pharmacy
-        # use case is integer 99% of the time, so this is normally
-        # a no-op.
+        batch_no = (row.get("batch_no") or "").strip() if hasattr(row, "get") else (
+            getattr(row, "batch_no", "") or ""
+        ).strip()
+        if batch_no not in batch_meta_cache:
+            batch_meta_cache[batch_no] = _resolve_batch_meta(batch_no)
+        batch_info = batch_meta_cache[batch_no]
+
         qty_to_print = max(1, int(flt(row.qty) + 0.999))
 
         labels.append(
@@ -236,9 +296,13 @@ def _build_label_payload(invoice_doc, profile):
                 "item_name": row.item_name or meta.get("item_name") or row.item_code,
                 "uom": printed_uom,
                 "qty": qty_to_print,
-                "cost_rate": flt(row.rate),
                 "selling_rate": flt(selling_rate),
                 "barcode": barcode,
+                "batch_no": batch_info.get("batch_no", ""),
+                "batch_expiry_date": batch_info.get("batch_expiry_date", ""),
+                "batch_manufacturing_date": batch_info.get(
+                    "batch_manufacturing_date", ""
+                ),
                 "brand_name": brand_name,
                 "currency": invoice_doc.currency or company_currency,
             }
