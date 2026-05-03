@@ -83,6 +83,16 @@ const routes = [
 		},
 	},
 	{
+		path: "/mizan-barcode-print",
+		component: () =>
+			import("../components/pos/shell/MizanBarcodePrint.vue"),
+		meta: {
+			title: "Mizan Barcode Print",
+			layout: "default",
+			loadingMessage: "Loading Mizan barcode print...",
+		},
+	},
+	{
 		path: "/cash-movement",
 		component: () => import("../components/pos/cash/CashMovementView.vue"),
 		meta: {

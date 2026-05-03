@@ -599,18 +599,60 @@ export default {
 		firstLabel() {
 			return this.printableLabels[0] || null;
 		},
+		anySummaryHasBatch() {
+			return (this.labels || []).some((label) =>
+				String(label?.batch_no || "").trim(),
+			);
+		},
+		anySummaryHasExpiry() {
+			return (this.labels || []).some((label) =>
+				String(label?.batch_expiry_date || "").trim(),
+			);
+		},
+		anySummaryHasSell() {
+			return (this.labels || []).some(
+				(label) => Number(label?.selling_rate || 0) > 0,
+			);
+		},
 		summaryHeaders() {
 			// Cost intentionally absent — the customer-facing label
 			// only carries the selling price, so the print dialog's
-			// summary mirrors that.
-			return [
+			// summary mirrors that. Batch / Expiry / Sell columns are
+			// dynamically hidden when no row has data, so the
+			// standalone Mizan Barcode Print flow (where most rows
+			// have no batch/expiry) doesn't show two empty columns
+			// of "—" placeholders.
+			const headers = [
 				{ title: __("Item"), key: "item_name", align: "start" },
 				{ title: __("Barcode"), key: "barcode", align: "start" },
-				{ title: __("Batch"), key: "batch_no", align: "start" },
-				{ title: __("Expiry"), key: "batch_expiry_date", align: "start" },
-				{ title: __("Sell"), key: "selling_rate", align: "end" },
-				{ title: __("Labels"), key: "qty", align: "end" },
 			];
+			if (this.anySummaryHasBatch) {
+				headers.push({
+					title: __("Batch"),
+					key: "batch_no",
+					align: "start",
+				});
+			}
+			if (this.anySummaryHasExpiry) {
+				headers.push({
+					title: __("Expiry"),
+					key: "batch_expiry_date",
+					align: "start",
+				});
+			}
+			if (this.anySummaryHasSell) {
+				headers.push({
+					title: __("Sell"),
+					key: "selling_rate",
+					align: "end",
+				});
+			}
+			headers.push({
+				title: __("Labels"),
+				key: "qty",
+				align: "end",
+			});
+			return headers;
 		},
 		summaryRows() {
 			// Server already expanded qty per line, but we surface ONE
