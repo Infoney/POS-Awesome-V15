@@ -187,15 +187,56 @@
 					</template>
 
 					<template v-slot:item.batch_no="{ item }">
-						<v-text-field
-							v-model="item.batch_no"
-							:placeholder="__('Optional')"
+						<v-combobox
+							:model-value="item.batch_no"
+							@update:model-value="(val) => setBatch(item, val)"
+							:items="batchOptionLabels(item)"
+							:placeholder="__('Pick or type new batch')"
 							density="compact"
 							variant="outlined"
 							hide-details
+							clearable
 							class="pos-themed-input"
+							menu-icon=""
 							@click.stop
-						></v-text-field>
+							@focus="ensureBatches(item)"
+						>
+							<template #append-inner>
+								<v-progress-circular
+									v-if="item.batch_options_loading"
+									indeterminate
+									size="14"
+									width="2"
+								/>
+							</template>
+							<template #item="{ props: itemProps, item: opt }">
+								<v-list-item
+									v-bind="itemProps"
+									:title="opt.title"
+									:subtitle="opt.subtitle"
+								>
+									<template #append>
+										<v-chip
+											v-if="opt.raw && opt.raw.is_expired"
+											size="x-small"
+											color="error"
+											variant="tonal"
+										>
+											{{ __("Expired") }}
+										</v-chip>
+									</template>
+								</v-list-item>
+							</template>
+						</v-combobox>
+						<div
+							v-if="item.batch_is_new && item.batch_no"
+							class="mbp-batch-hint"
+						>
+							<v-icon size="x-small" class="mbp-batch-hint__icon">
+								mdi-tag-plus-outline
+							</v-icon>
+							{{ __("New batch — type expiry manually") }}
+						</div>
 					</template>
 
 					<template v-slot:item.batch_expiry_date="{ item }">
@@ -357,10 +398,72 @@ export default {
 				standard_rate: Number(itemDetails.standard_rate || 0),
 				qty: Math.max(1, Number(qty) || 1),
 				batch_no: "",
+				batch_is_new: false,
 				batch_expiry_date: null,
+				// Lazy-loaded list of existing Batch records for
+				// this item (matches the PR / PI batch-picker
+				// pattern). Filled on first focus of the combobox
+				// via `ensureBatches`.
+				batch_options: [],
+				batch_options_loaded: false,
+				batch_options_loading: false,
 			};
 			rows.value.unshift(row);
 			return row;
+		};
+
+		// ── Batch picker (mirrors usePurchaseReceipt.loadBatchOptions
+		//    + setBatch). Items can have existing Batch records; the
+		//    combobox lets the operator pick one (auto-fills expiry)
+		//    or type a new one (operator fills expiry manually).
+		const ensureBatches = async (row, { force = false } = {}) => {
+			if (!row || (!force && row.batch_options_loaded)) return;
+			row.batch_options_loading = true;
+			try {
+				const { message } = await frappe.call({
+					method:
+						"posawesome.mizan.api.purchase_receipts.get_existing_batches",
+					args: { item_code: row.item_code },
+				});
+				row.batch_options = Array.isArray(message) ? message : [];
+				row.batch_options_loaded = true;
+			} catch (error) {
+				console.warn("Failed to load batches", error);
+				row.batch_options = [];
+			} finally {
+				row.batch_options_loading = false;
+			}
+		};
+
+		const setBatch = (row, value) => {
+			// v-combobox emits either a raw string (free text) or
+			// the full item object (when picked from the list). Coerce
+			// both shapes to a clean string before normalising.
+			let raw = value;
+			if (raw && typeof raw === "object") {
+				raw =
+					raw.value ??
+					raw.batch_id ??
+					raw.name ??
+					raw.title ??
+					raw.raw?.batch_id ??
+					raw.raw?.name ??
+					"";
+			}
+			const batchId = String(raw ?? "").trim();
+			row.batch_no = batchId;
+			const match = (row.batch_options || []).find(
+				(opt) => opt.batch_id === batchId || opt.name === batchId,
+			);
+			if (match) {
+				row.batch_is_new = false;
+				row.batch_expiry_date = match.expiry_date || null;
+			} else {
+				row.batch_is_new = !!batchId;
+				if (!batchId) {
+					row.batch_expiry_date = null;
+				}
+			}
 		};
 
 		const onItemSelected = (selected) => {
@@ -533,6 +636,8 @@ export default {
 			resetForm,
 			onPrint,
 			onLabelDialogClose,
+			ensureBatches,
+			setBatch,
 			toastStore,
 		};
 	},
@@ -582,6 +687,23 @@ export default {
 	methods: {
 		formatNumber(v) {
 			return this.formatFloat(v, 2);
+		},
+		batchOptionLabels(item) {
+			const opts = Array.isArray(item.batch_options)
+				? item.batch_options
+				: [];
+			return opts.map((opt) => {
+				const expiry = opt.expiry_date
+					? __("expires {0}", [opt.expiry_date])
+					: __("no expiry");
+				const supplier = opt.supplier ? ` · ${opt.supplier}` : "";
+				return {
+					title: opt.batch_id || opt.name,
+					subtitle: `${expiry}${supplier}`,
+					value: opt.batch_id || opt.name,
+					raw: opt,
+				};
+			});
 		},
 	},
 };
@@ -869,6 +991,24 @@ export default {
 
 .mbp-date-cell {
 	min-width: 0;
+}
+
+.mbp-batch-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 4px;
+	font-size: 0.65rem;
+	color: #fcd34d;
+	letter-spacing: 0.04em;
+	background: rgba(252, 211, 77, 0.08);
+	border: 1px solid rgba(252, 211, 77, 0.25);
+	padding: 2px 8px;
+	border-radius: 999px;
+	width: fit-content;
+}
+.mbp-batch-hint__icon {
+	color: #fcd34d !important;
 }
 
 .mbp-mini-date :deep(.dp__input) {
