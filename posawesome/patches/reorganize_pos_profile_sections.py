@@ -47,7 +47,7 @@ SECTION_FIELDS = [
     },
     {
         "fieldname": "posa_section_awesome_dashboard",
-        "label": "Awesome Dashboard",
+        "label": "Mizan Dashboard",
         "fieldtype": "Section Break",
         "collapsible": 1,
     },

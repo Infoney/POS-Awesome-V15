@@ -289,7 +289,7 @@ export function useItemCreation() {
 		if (!variants.length) {
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_item_variants",
+					method: "posawesome.mizan.api.items.get_item_variants",
 					args: {
 						pos_profile: JSON.stringify(pos_profile),
 						parent_item_code: item.item_code,

@@ -1,5 +1,10 @@
 import { useItemAddition } from "../../../composables/pos/items/useItemAddition";
-import { get_invoice_doc, get_invoice_items, get_payments } from "./document";
+import {
+	get_invoice_doc,
+	get_invoice_items,
+	get_payments,
+	resolveActiveCashierUser,
+} from "./document";
 import { _logPriceListDebug, _buildPriceListSnapshot } from "./currency";
 import { applyReturnDiscountProration } from "./item_updates";
 
@@ -147,7 +152,7 @@ export async function cancel_invoice(context: any) {
 	if (doc.name && context.pos_profile.posa_allow_delete) {
 		const cancelledName = doc.name;
 		await frappe.call({
-			method: "posawesome.posawesome.api.invoices.delete_invoice",
+			method: "posawesome.mizan.api.invoices.delete_invoice",
 			args: { invoice: doc.name },
 			async: true,
 			callback: function (r) {
@@ -308,7 +313,7 @@ export async function get_invoice_from_order_doc(context: any) {
 	let doc: any = {};
 	if (context.invoice_doc.doctype == "Sales Order") {
 		await frappe.call({
-			method: "posawesome.posawesome.api.invoices.create_sales_invoice_from_order",
+			method: "posawesome.mizan.api.invoices.create_sales_invoice_from_order",
 			args: {
 				sales_order: context.invoice_doc.name,
 			},
@@ -371,5 +376,12 @@ export async function get_invoice_from_order_doc(context: any) {
 	doc.update_stock = 1;
 	doc.is_pos = 1;
 	doc.payments = get_payments(context);
+	// Stamp `posa_cashier` so the order-conversion path matches
+	// `get_invoice_doc` and the server-side `_ensure_posa_cashier`
+	// fallback never has to fire on a normal POS submit.
+	const cashierUser = resolveActiveCashierUser(context);
+	if (cashierUser) {
+		doc.posa_cashier = cashierUser;
+	}
 	return doc;
 }

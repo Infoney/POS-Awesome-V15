@@ -142,7 +142,7 @@ export default {
 			}
 			const vm = this;
 			frappe.call({
-				method: "posawesome.posawesome.api.offers.get_pos_coupon",
+				method: "posawesome.mizan.api.offers.get_pos_coupon",
 				args: {
 					coupon: normalizedCoupon,
 					customer: vm.customer,
@@ -177,7 +177,7 @@ export default {
 			if (!this.customer) return;
 			const vm = this;
 			frappe.call({
-				method: "posawesome.posawesome.api.offers.get_active_gift_coupons",
+				method: "posawesome.mizan.api.offers.get_active_gift_coupons",
 				args: {
 					customer: vm.customer,
 					company: vm.pos_profile.company,

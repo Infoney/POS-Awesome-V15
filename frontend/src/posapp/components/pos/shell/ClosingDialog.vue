@@ -77,8 +77,14 @@
 									:headers="headers"
 									:items-per-page="itemsPerPage"
 									:company-currency-symbol="companyCurrencySymbol"
+									:company-currency="overviewCompanyCurrency"
+									:closing-currency="closingCurrency"
+									:closing-currency-symbol="closingCurrencySymbolDisplay"
+									:closing-exchange-rate="closingExchangeRate"
+									:available-closing-currencies="availableClosingCurrencies"
 									:format-currency="formatCurrency"
 									:format-float="formatFloat"
+									@update:closing-currency="(value) => (closingCurrency = value)"
 								/>
 							</v-col>
 						</v-row>
@@ -95,6 +101,10 @@
 									:cash-expected-by-currency="cashExpectedByCurrency"
 									:cash-movement-summary="cashMovementSummary"
 									:payments-by-mode="paymentsByMode"
+									:taxes-collected-summary="taxesCollectedSummary"
+									:taxes-collected-by-account="taxesCollectedByAccount"
+									:taxes-collected-by-currency="taxesCollectedByCurrency"
+									:cashiers-breakdown="cashiersBreakdown"
 									:overview-company-currency="overviewCompanyCurrency"
 									:format-currency-with-symbol="formatCurrencyWithSymbol"
 									:should-show-company-equivalent="shouldShowCompanyEquivalent"
@@ -188,7 +198,7 @@
 <script>
 import { useUIStore } from "../../../stores/uiStore.js";
 import { useToastStore } from "../../../stores/toastStore.js";
-import { ref, inject, onMounted, onBeforeUnmount, watch } from "vue";
+import { ref, computed, inject, onMounted, onBeforeUnmount, watch } from "vue";
 import { useClosingShift } from "../../../composables/pos/closing/useClosingShift";
 import { useClosingSummary } from "../../../composables/pos/closing/useClosingSummary";
 import {
@@ -296,6 +306,78 @@ export default {
 
 		const summary = useClosingSummary(overview, pos_profile, dialog_data, summaryFormatters);
 
+		// ── Closing currency selector ─────────────────────────────────
+		// When the shift took payments in more than one currency, let
+		// the cashier pick which currency they're CLOSING in (i.e.
+		// counting cash / receipts in). The reconciliation table then
+		// displays Opening / Closing / Expected / Difference in the
+		// selected currency, while the underlying DB field
+		// `closing_amount` is always stored in company currency
+		// (converted on input). Falls back to the company currency
+		// when only one currency is in play.
+		const closingCurrency = ref("");
+		const availableClosingCurrencies = computed(() => {
+			const company = summary.overviewCompanyCurrency.value || "";
+			const seen = new Set();
+			const list = [];
+			if (company) {
+				seen.add(company);
+				list.push(company);
+			}
+			const rows = summary.multiCurrencyTotals.value || [];
+			rows.forEach((row) => {
+				const code = (row && row.currency) || "";
+				if (!code || seen.has(code)) return;
+				seen.add(code);
+				list.push(code);
+			});
+			return list;
+		});
+		// Initialise / re-sync `closingCurrency` to the company currency
+		// whenever the available list changes (dialog opens, profile
+		// switches, fresh shift loaded, etc.). Only nudges when the
+		// current value isn't valid anymore — preserves the user's
+		// choice across re-renders.
+		watch(
+			availableClosingCurrencies,
+			(list) => {
+				if (!list.length) return;
+				if (!closingCurrency.value || !list.includes(closingCurrency.value)) {
+					closingCurrency.value = list[0];
+				}
+			},
+			{ immediate: true },
+		);
+		// Effective rate: `1 unit of company currency = N units of
+		// closing currency`. Derived from the multi-currency totals row
+		// matching the selected currency (`total` is the foreign-
+		// currency aggregate, `company_currency_total` is the same
+		// figure already converted to company currency, so the ratio is
+		// the weighted-average rate the shift actually saw). Defaults
+		// to 1.0 when the cashier is closing in company currency or the
+		// rate can't be derived.
+		const closingExchangeRate = computed(() => {
+			const company = summary.overviewCompanyCurrency.value || "";
+			if (!closingCurrency.value || closingCurrency.value === company) return 1;
+			const rows = summary.multiCurrencyTotals.value || [];
+			const row = rows.find((r) => r && r.currency === closingCurrency.value);
+			if (!row) return 1;
+			const foreign = Number(row.total) || 0;
+			const base = Number(row.company_currency_total) || 0;
+			if (!foreign || !base) return 1;
+			return foreign / base;
+		});
+		const closingCurrencySymbolDisplay = computed(() => {
+			const code = closingCurrency.value;
+			if (!code) return "";
+			try {
+				const sym = currencySymbol(code);
+				return sym || code;
+			} catch {
+				return code;
+			}
+		});
+
 		// ── Print actions ─────────────────────────────────────────────
 		// Build a self-contained payload from the dialog's already-loaded
 		// reactive state. The two print helpers open a new window with
@@ -362,6 +444,19 @@ export default {
 				creditInvoicesByCurrency:
 					summary.creditInvoicesByCurrency.value || [],
 				returnsByCurrency: summary.returnsByCurrency.value || [],
+				taxesCollectedSummary: summary.taxesCollectedSummary?.value || {
+					company_currency_total: 0,
+					by_account: [],
+					by_currency: [],
+				},
+				taxesCollectedByAccount:
+					summary.taxesCollectedByAccount?.value || [],
+				cashiersBreakdown: summary.cashiersBreakdown?.value || [],
+				// Saved child-table fallback — populated by the
+				// server-side `validate` hook on every save so the
+				// print can render Cashiers even if the overview API
+				// returned an empty / stale `cashiers` array.
+				cashiersFromDoc: Array.isArray(data.cashiers) ? data.cashiers : [],
 				cashMovementCompanyTotal,
 				formatCurrencyWithSymbol: summaryFormatters.formatCurrencyWithSymbol,
 				formatCurrency,
@@ -385,47 +480,66 @@ export default {
 			}
 		};
 
-		const headers = ref([]);
-		const baseHeaders = [
-			{
-				title: __("Mode of Payment"),
-				value: "mode_of_payment",
-				align: "start",
-				sortable: true,
-			},
-			{
-				title: __("Opening Amount"),
-				align: "end",
-				sortable: true,
-				value: "opening_amount",
-			},
-			{
-				title: __("Closing Amount"),
-				value: "closing_amount",
-				align: "end",
-				sortable: true,
-			},
-		];
-		const extendedHeaders = [
-			{
-				title: __("Expected Amount (In Company Currency)"),
-				value: "expected_amount",
-				align: "end",
-				sortable: false,
-			},
-			{
-				title: __("Difference (In Company Currency)"),
-				value: "difference",
-				align: "end",
-				sortable: false,
-			},
-			{
-				title: __("Variance %"),
-				value: "variance_percent",
-				align: "end",
-				sortable: false,
-			},
-		];
+		// Headers are computed so the column titles stay in sync with the
+		// active closing currency — switching from KWD to SAR rewrites
+		// the suffix on Expected / Difference from "(In KWD)" to
+		// "(In SAR)" without forcing the cashier to re-mount the table.
+		// The hide-expected-amount POS Profile flag still drops the
+		// last three columns when set.
+		const headers = computed(() => {
+			const baseHeaders = [
+				{
+					title: __("Mode of Payment"),
+					value: "mode_of_payment",
+					align: "start",
+					sortable: true,
+				},
+				{
+					title: __("Opening Amount"),
+					align: "end",
+					sortable: true,
+					value: "opening_amount",
+				},
+				{
+					title: __("Closing Amount"),
+					value: "closing_amount",
+					align: "end",
+					sortable: true,
+				},
+			];
+			const currencySuffix = closingCurrency.value
+				? `(${__("In")} ${closingCurrency.value})`
+				: `(${__("In Company Currency")})`;
+			const extendedHeaders = [
+				{
+					title: `${__("Expected Amount")} ${currencySuffix}`,
+					value: "expected_amount",
+					align: "end",
+					sortable: false,
+				},
+				{
+					title: `${__("Difference")} ${currencySuffix}`,
+					value: "difference",
+					align: "end",
+					sortable: false,
+				},
+				{
+					title: __("Variance %"),
+					value: "variance_percent",
+					align: "end",
+					sortable: false,
+				},
+			];
+			const profile = pos_profile.value || {};
+			const hideExpected =
+				profile.hide_expected_amount === 1 ||
+				profile.hide_expected_amount === "1" ||
+				profile.hide_expected_amount === true ||
+				profile.posa_hide_expected_amount === 1 ||
+				profile.posa_hide_expected_amount === "1" ||
+				profile.posa_hide_expected_amount === true;
+			return hideExpected ? baseHeaders : [...baseHeaders, ...extendedHeaders];
+		});
 
 		// ── Submit / post-submit lifecycle ────────────────────────────
 		// `onSubmit` is the click handler on the Submit button. It
@@ -522,7 +636,8 @@ export default {
 		};
 
 		onMounted(() => {
-			headers.value = [...baseHeaders];
+			// `headers` is now a computed (reactive to closingCurrency +
+			// pos_profile), so no manual seeding is needed at mount.
 			window.addEventListener("keydown", handleKeydown);
 
 			if (eventBus) {
@@ -556,12 +671,10 @@ export default {
 			() => uiStore.posProfile,
 			(profile) => {
 				if (profile) {
+					// Sync the local `pos_profile` ref so the computed
+					// `headers` (and other downstream computed/watch
+					// listeners) pick up the new profile's settings.
 					pos_profile.value = profile;
-					if (!pos_profile.value.hide_expected_amount) {
-						headers.value = [...baseHeaders, ...extendedHeaders];
-					} else {
-						headers.value = [...baseHeaders];
-					}
 				}
 			},
 			{ deep: true, immediate: true },
@@ -580,6 +693,11 @@ export default {
 			submitDialog,
 			printReceipt,
 			printA4,
+			// Closing currency selector state + helpers (template wiring)
+			closingCurrency,
+			availableClosingCurrencies,
+			closingExchangeRate,
+			closingCurrencySymbolDisplay,
 			// Post-submit state + handlers exposed to the template
 			shiftSubmitted,
 			submitInFlight,

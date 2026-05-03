@@ -523,7 +523,7 @@ export default {
 			}
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.parse_scale_barcode",
+					method: "posawesome.mizan.api.items.parse_scale_barcode",
 					args: { barcode: "" },
 				});
 				const settings =
@@ -602,7 +602,7 @@ export default {
 
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.build_scale_barcode",
+					method: "posawesome.mizan.api.items.build_scale_barcode",
 					args: {
 						barcode_template: templateBarcode,
 						item_code: item.item_code,
@@ -884,7 +884,7 @@ export default {
 				try {
 					if (profile.name) {
 						const res = await frappe.call({
-							method: "posawesome.posawesome.api.items.get_items_details",
+							method: "posawesome.mizan.api.items.get_items_details",
 							args: {
 								items_data: JSON.stringify([{ item_code: item.item_code }]),
 								pos_profile: JSON.stringify(profile),

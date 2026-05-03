@@ -14,7 +14,7 @@ export function useDatabaseStats(pollInterval = 10000, windowSize = 60) {
 		error.value = null;
 		try {
 			const res = await frappe.call({
-				method: "posawesome.posawesome.api.utilities.get_database_usage",
+				method: "posawesome.mizan.api.utilities.get_database_usage",
 			});
 			if (res && res.message) {
 				dbStats.value = res.message;

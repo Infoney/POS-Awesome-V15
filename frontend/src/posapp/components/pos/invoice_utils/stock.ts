@@ -145,7 +145,7 @@ export async function fetch_available_qty(context: any, item: any) {
 	const runner = async () => {
 		try {
 			const response = await frappe.call({
-				method: "posawesome.posawesome.api.items.get_available_qty",
+				method: "posawesome.mizan.api.items.get_available_qty",
 				args: {
 					items: JSON.stringify([
 						{

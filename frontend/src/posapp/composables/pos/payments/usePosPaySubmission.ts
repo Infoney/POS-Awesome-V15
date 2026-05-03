@@ -188,7 +188,7 @@ export function usePosPaySubmission({
 
 			const response: any = await new Promise((resolve, reject) => {
 				frappe.call({
-					method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
+					method: "posawesome.mizan.api.payment_entry.process_pos_payment",
 					args: { payload },
 					freeze: true,
 					freeze_message: __("Processing Payment"),

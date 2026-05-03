@@ -27,7 +27,7 @@ export async function fetch_customer_details(context: any) {
 		}
 
 		const r = await frappe.call({
-			method: "posawesome.posawesome.api.customers.get_customer_info",
+			method: "posawesome.mizan.api.customers.get_customer_info",
 			args: {
 				customer,
 				company:

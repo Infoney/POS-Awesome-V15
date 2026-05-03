@@ -115,7 +115,7 @@ export default {
 			this.loading = true;
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.purchase_orders.create_supplier",
+					method: "posawesome.mizan.api.purchase_orders.create_supplier",
 					args: {
 						data: {
 							...this.form,

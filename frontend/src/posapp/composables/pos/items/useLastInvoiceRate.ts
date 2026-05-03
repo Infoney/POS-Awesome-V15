@@ -101,7 +101,7 @@ export function useLastInvoiceRate(context: UseLastInvoiceRateContext = {}) {
 			const profile = unwrapValue(pos_profile);
 			const company = profile?.company;
 			const res = await frappe.call({
-				method: "posawesome.posawesome.api.invoices.get_last_invoice_rates",
+				method: "posawesome.mizan.api.invoices.get_last_invoice_rates",
 				args: {
 					customer: activeCustomer,
 					item_codes: missingCodes,

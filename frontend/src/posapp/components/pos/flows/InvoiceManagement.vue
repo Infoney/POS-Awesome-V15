@@ -1293,7 +1293,7 @@ export default {
 				const responses = await Promise.all(
 					Object.entries(invoicesByDoctype).map(async ([doctype, invoiceNames]) => {
 						const { message } = await frappe.call({
-							method: "posawesome.posawesome.api.payments.repair_overpayment_change_allocations",
+							method: "posawesome.mizan.api.payments.repair_overpayment_change_allocations",
 							args: {
 								doctype,
 								invoice_names: invoiceNames,
@@ -1337,6 +1337,20 @@ export default {
 		},
 		buildInvoiceFilters(baseFilters = {}) {
 			const filters = { ...baseFilters, docstatus: 1 };
+			// Cost-center scope: every Invoice Management tab (History,
+			// Unpaid, Drafts, Returns) is hard-clamped to the cost
+			// center configured on the cashier's POS Profile. So a
+			// user assigned to "AL-KHANSA — KPG" only ever sees
+			// invoices posted against THAT cost center, even when they
+			// also have access to other profiles in the same company.
+			// Returns inherit the filter automatically because they're
+			// derived from the same `historyInvoices` array. Drafts go
+			// through the server-side `get_draft_invoices`, which
+			// applies the same cost_center filter from a separate arg.
+			const costCenter = this.posProfile?.cost_center;
+			if (costCenter) {
+				filters.cost_center = costCenter;
+			}
 			if (this.isSupervisorScope()) {
 				filters.company = this.posProfile.company;
 				const scopedProfile = typeof this.resolveSupervisorProfileScope === "function"
@@ -1475,7 +1489,7 @@ export default {
 		},
 		async runRepairChangeAllocation(invoice, dryRun = true) {
 			const response = await frappe.call({
-				method: "posawesome.posawesome.api.payments.repair_overpayment_change_allocations",
+				method: "posawesome.mizan.api.payments.repair_overpayment_change_allocations",
 				args: {
 					doctype: invoice.doctype || this.currentInvoiceDoctype || "Sales Invoice",
 					invoice_names: [invoice.name],
@@ -1617,7 +1631,7 @@ export default {
 			this.loading = true;
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.invoices.get_draft_invoices",
+					method: "posawesome.mizan.api.invoices.get_draft_invoices",
 					args: {
 						pos_opening_shift: this.posOpeningShift.name,
 						doctype: this.currentInvoiceDoctype,
@@ -1628,6 +1642,14 @@ export default {
 							: null,
 						cashier: null,
 						is_supervisor: this.isSupervisorScope() ? 1 : 0,
+						// Mirror the cost-center clamp from
+						// `buildInvoiceFilters` — the History / Unpaid /
+						// Returns tabs filter via frappe.client.get_list,
+						// the Drafts tab uses a dedicated server method,
+						// so we pass the cost center through as its own
+						// arg to keep all four tabs honouring the same
+						// scope rule.
+						cost_center: this.posProfile?.cost_center || null,
 					},
 				});
 				this.draftInvoices = Array.isArray(message) ? message.map((entry) => ({ ...entry, doctype: entry.doctype || this.currentInvoiceDoctype })) : [];
@@ -1650,7 +1672,7 @@ export default {
 		},
 		async loadDraft(invoice) {
 			try {
-				const { message } = await frappe.call({ method: "posawesome.posawesome.api.invoices.get_draft_invoice_doc", args: { invoice_name: invoice.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
+				const { message } = await frappe.call({ method: "posawesome.mizan.api.invoices.get_draft_invoice_doc", args: { invoice_name: invoice.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
 				if (message) {
 					this.invoiceStore.triggerLoadInvoice(message);
 					this.uiStore.closeInvoiceManagement();
@@ -1663,7 +1685,7 @@ export default {
 		async deleteDraft(invoice) {
 			if (!window.confirm(__("Delete draft invoice {0}?", [invoice.name]))) return;
 			try {
-				await frappe.call({ method: "posawesome.posawesome.api.invoices.delete_invoice", args: { invoice: invoice.name } });
+				await frappe.call({ method: "posawesome.mizan.api.invoices.delete_invoice", args: { invoice: invoice.name } });
 				this.toastStore.show({ title: __("Draft invoice deleted"), color: "success" });
 				await this.loadDrafts();
 			} catch (error) {
@@ -1673,7 +1695,7 @@ export default {
 		},
 		async createReturn(invoice) {
 			try {
-				const { message } = await frappe.call({ method: "posawesome.posawesome.api.invoices.get_invoice_for_return", args: { invoice_name: invoice.name, pos_profile: this.posProfile?.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
+				const { message } = await frappe.call({ method: "posawesome.mizan.api.invoices.get_invoice_for_return", args: { invoice_name: invoice.name, pos_profile: this.posProfile?.name, doctype: invoice.doctype || this.currentInvoiceDoctype } });
 				const returnDoc = message;
 				if (!returnDoc || !Array.isArray(returnDoc.items) || !returnDoc.items.length) {
 					this.toastStore.show({ title: __("No returnable items found for this invoice"), color: "warning" });

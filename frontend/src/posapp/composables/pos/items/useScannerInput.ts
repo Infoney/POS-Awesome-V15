@@ -250,7 +250,7 @@ export function useScannerInput(options: ScannerInputOptions = {}) {
 
 		try {
 			const res = await frappe.call({
-				method: "posawesome.posawesome.api.items.parse_scale_barcode",
+				method: "posawesome.mizan.api.items.parse_scale_barcode",
 				args: { barcode: "" },
 			});
 			const settings = parseScaleBarcodeSettingsResponse(res);

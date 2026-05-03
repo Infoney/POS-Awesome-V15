@@ -143,7 +143,7 @@ async function onDeleteAndRetry() {
 	}
 	try {
 		const resp = await frappe.call(
-			"posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices.delete_open_draft_invoices",
+			"posawesome.mizan.doctype.pos_closing_shift.closing_processing.invoices.delete_open_draft_invoices",
 			{
 				pos_opening_shift: openingShift.value,
 				pos_profile: posProfileName.value,

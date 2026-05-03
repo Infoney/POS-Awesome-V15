@@ -85,7 +85,7 @@ export async function syncOfflinePayments() {
 	for (const entry of claimedEntries) {
 		try {
 			await frappe.call({
-				method: "posawesome.posawesome.api.payment_entry.process_pos_payment",
+				method: "posawesome.mizan.api.payment_entry.process_pos_payment",
 				args: entry.payload.args,
 			});
 			synced += 1;

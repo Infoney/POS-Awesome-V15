@@ -72,7 +72,7 @@ export async function fetch_customer_balance(context: any) {
 
 		// Online mode: fetch from server and cache the result
 		const r = await frappe.call({
-			method: "posawesome.posawesome.api.customer.get_customer_balance",
+			method: "posawesome.mizan.api.customer.get_customer_balance",
 			args: { customer: context.customer },
 		});
 

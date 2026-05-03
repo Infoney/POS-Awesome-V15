@@ -53,7 +53,7 @@ const routes = [
 		path: "/dashboard",
 		component: () => import("@/posapp/components/reports/Reports.vue"),
 		meta: {
-			title: "Awesome Dashboard",
+			title: "Mizan Dashboard",
 			layout: "default",
 			loadingMessage: "Loading dashboard...",
 		},

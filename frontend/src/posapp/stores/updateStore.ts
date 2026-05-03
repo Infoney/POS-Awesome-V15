@@ -423,7 +423,7 @@ export const useUpdateStore = defineStore("update", {
 			if (!frappe?.call) return;
 			try {
 				const r = await frappe.call({
-					method: "posawesome.posawesome.api.utilities.get_remote_update_info",
+					method: "posawesome.mizan.api.utilities.get_remote_update_info",
 				});
 				const buildVersion = r?.message?.build_version;
 				const currentCommit = r?.message?.commit_hash;

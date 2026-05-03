@@ -262,7 +262,7 @@ export const usePricingRulesStore = defineStore("pricing-rules", () => {
 		loading.value = true;
 		try {
 			const response = await (frappe.call as any)({
-				method: "posawesome.posawesome.api.pricing_rules.get_active_pricing_rules",
+				method: "posawesome.mizan.api.pricing_rules.get_active_pricing_rules",
 				args: {
 					company: ctx.company,
 					price_list: ctx.price_list,

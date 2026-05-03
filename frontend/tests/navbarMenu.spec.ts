@@ -25,7 +25,7 @@ describe("NavbarMenu cashier pin management", () => {
 				pos_profile: {},
 			},
 			call: vi.fn(async ({ method }: { method: string }) => {
-				if (method === "posawesome.posawesome.api.utilities.get_current_user_language") {
+				if (method === "posawesome.mizan.api.utilities.get_current_user_language") {
 					return {
 						message: {
 							success: true,
@@ -152,7 +152,7 @@ describe("NavbarMenu cashier pin management", () => {
 		});
 
 		(window as any).frappe.call = vi.fn(async ({ method, args }: { method: string; args: any }) => {
-			if (method === "posawesome.posawesome.api.utilities.get_current_user_language") {
+			if (method === "posawesome.mizan.api.utilities.get_current_user_language") {
 				return {
 					message: {
 						success: true,
@@ -161,7 +161,7 @@ describe("NavbarMenu cashier pin management", () => {
 					},
 				};
 			}
-			if (method === "posawesome.posawesome.api.employees.get_cashier_pin_status") {
+			if (method === "posawesome.mizan.api.employees.get_cashier_pin_status") {
 				return {
 					message: {
 						user: "cashier@example.com",
@@ -170,7 +170,7 @@ describe("NavbarMenu cashier pin management", () => {
 					},
 				};
 			}
-			if (method === "posawesome.posawesome.api.employees.save_cashier_pin") {
+			if (method === "posawesome.mizan.api.employees.save_cashier_pin") {
 				return {
 					message: {
 						user: "cashier@example.com",
@@ -192,7 +192,7 @@ describe("NavbarMenu cashier pin management", () => {
 		await (wrapper.vm as any).saveCashierPin();
 
 		expect((window as any).frappe.call).toHaveBeenCalledWith({
-			method: "posawesome.posawesome.api.employees.save_cashier_pin",
+			method: "posawesome.mizan.api.employees.save_cashier_pin",
 			args: {
 				pos_profile: "Main POS",
 				user: "cashier@example.com",
@@ -211,7 +211,7 @@ describe("NavbarMenu cashier pin management", () => {
 		});
 
 		const frappeCall = vi.fn(async ({ method }: { method: string }) => {
-			if (method === "posawesome.posawesome.api.utilities.get_current_user_language") {
+			if (method === "posawesome.mizan.api.utilities.get_current_user_language") {
 				return {
 					message: {
 						success: true,
@@ -220,7 +220,7 @@ describe("NavbarMenu cashier pin management", () => {
 					},
 				};
 			}
-			if (method === "posawesome.posawesome.api.employees.get_cashier_pin_status") {
+			if (method === "posawesome.mizan.api.employees.get_cashier_pin_status") {
 				return {
 					message: {
 						user: "cashier@example.com",
@@ -245,7 +245,7 @@ describe("NavbarMenu cashier pin management", () => {
 		expect((wrapper.vm as any).pinMessage).toBe("Enter the current PIN first.");
 		expect(frappeCall).not.toHaveBeenCalledWith(
 			expect.objectContaining({
-				method: "posawesome.posawesome.api.employees.save_cashier_pin",
+				method: "posawesome.mizan.api.employees.save_cashier_pin",
 			}),
 		);
 	});

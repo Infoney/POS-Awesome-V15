@@ -393,7 +393,7 @@ export function useInvoiceItems(invoiceType: Ref<string>) {
 		if (!pos_profile.value) return;
 		try {
 			const r = await frappe.call({
-				method: "posawesome.posawesome.api.offers.get_applicable_delivery_charges",
+				method: "posawesome.mizan.api.offers.get_applicable_delivery_charges",
 				args: {
 					company: pos_profile.value.company,
 					pos_profile: pos_profile.value.name,

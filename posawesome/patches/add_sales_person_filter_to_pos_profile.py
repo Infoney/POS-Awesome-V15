@@ -8,7 +8,7 @@ def execute():
             {
                 "doctype": "DocType",
                 "name": "POSA Sales Person Filter",
-                "module": "POSAwesome",
+                "module": "Mizan",
                 "istable": 1,
                 "fields": [
                     {

@@ -27,7 +27,7 @@ export function useOffers() {
 			}
 		}
 		return frappe
-			.call("posawesome.posawesome.api.offers.get_offers", {
+			.call("posawesome.mizan.api.offers.get_offers", {
 				profile: profileName,
 			})
 			.then((r: any) => {

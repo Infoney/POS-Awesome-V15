@@ -72,22 +72,22 @@ describe("cash movement service methods", () => {
 
 		expect(call).toHaveBeenNthCalledWith(
 			1,
-			"posawesome.posawesome.api.cash_movement.service.create_pos_expense",
+			"posawesome.mizan.api.cash_movement.service.create_pos_expense",
 			{ payload: { amount: 50 } },
 		);
 		expect(call).toHaveBeenNthCalledWith(
 			2,
-			"posawesome.posawesome.api.cash_movement.service.create_cash_deposit",
+			"posawesome.mizan.api.cash_movement.service.create_cash_deposit",
 			{ payload: { amount: 75 } },
 		);
 		expect(call).toHaveBeenNthCalledWith(
 			3,
-			"posawesome.posawesome.api.cash_movement.service.cancel_cash_movement",
+			"posawesome.mizan.api.cash_movement.service.cancel_cash_movement",
 			{ name: "POS-CM-.26.-00001" },
 		);
 		expect(call).toHaveBeenNthCalledWith(
 			4,
-			"posawesome.posawesome.api.cash_movement.service.duplicate_cash_movement",
+			"posawesome.mizan.api.cash_movement.service.duplicate_cash_movement",
 			{ name: "POS-CM-.26.-00001", posting_date: "2026-02-17" },
 		);
 	});

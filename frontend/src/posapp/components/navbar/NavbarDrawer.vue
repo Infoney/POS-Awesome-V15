@@ -12,19 +12,31 @@
 	>
 		<div class="drawer-shell">
 			<div>
-				<div v-if="!mini" class="drawer-header">
-					<v-avatar v-if="resolvedMenuLogo" size="56" class="drawer-logo-avatar">
-						<v-img :src="resolvedMenuLogo" alt="Menu logo" cover />
-					</v-avatar>
-					<span class="drawer-company">{{ company }}</span>
-				</div>
-				<div v-else class="drawer-header-mini">
-					<v-avatar v-if="resolvedMenuLogo" size="44" class="drawer-logo-avatar">
-						<v-img :src="resolvedMenuLogo" alt="Menu logo" cover />
-					</v-avatar>
-				</div>
+				<!--
+					Drawer brand header — top-of-drawer logo + company name.
+					Hidden per POS Profile via `posa_hide_drawer_brand`
+					(separate from the navbar's `posa_hide_brand_text`
+					because some operators want the appbar wordmark hidden
+					but the drawer header kept, or vice versa). When
+					hidden, we drop both the expanded and rail headers
+					AND the divider underneath so the menu items sit
+					flush at the top of the drawer.
+				-->
+				<template v-if="!hideBrand">
+					<div v-if="!mini" class="drawer-header">
+						<v-avatar v-if="resolvedMenuLogo" size="56" class="drawer-logo-avatar">
+							<v-img :src="resolvedMenuLogo" alt="Menu logo" cover />
+						</v-avatar>
+						<span class="drawer-company">{{ company }}</span>
+					</div>
+					<div v-else class="drawer-header-mini">
+						<v-avatar v-if="resolvedMenuLogo" size="44" class="drawer-logo-avatar">
+							<v-img :src="resolvedMenuLogo" alt="Menu logo" cover />
+						</v-avatar>
+					</div>
 
-				<v-divider />
+					<v-divider />
+				</template>
 
 				<v-list density="compact" nav v-model:selected="activeItem" selected-class="active-item">
 					<v-list-item
@@ -98,6 +110,15 @@ const props = defineProps({
 	footerAction: {
 		type: Object,
 		default: null,
+	},
+	/**
+	 * Hide the top-of-drawer brand block (logo + company name) when
+	 * the active POS Profile has `posa_hide_drawer_brand` enabled.
+	 * Default false so existing tenants keep the brand header.
+	 */
+	hideBrand: {
+		type: Boolean,
+		default: false,
 	},
 });
 

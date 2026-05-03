@@ -122,7 +122,7 @@ export function usePosShift(openDialog?: () => void) {
 			console.info("LoadPosProfile (bootstrapped from cache)");
 		}
 		return frappe
-			.call("posawesome.posawesome.api.shifts.check_opening_shift", {
+			.call("posawesome.mizan.api.shifts.check_opening_shift", {
 				user: frappe.session.user,
 			})
 			.then((r: any) => {
@@ -198,7 +198,7 @@ export function usePosShift(openDialog?: () => void) {
 		if (profileName) {
 			try {
 				const draftsResp = await frappe.call(
-					"posawesome.posawesome.doctype.pos_closing_shift.closing_processing.invoices.get_open_draft_invoices",
+					"posawesome.mizan.doctype.pos_closing_shift.closing_processing.invoices.get_open_draft_invoices",
 					{
 						pos_opening_shift: pos_opening_shift.value,
 						pos_profile: profileName,
@@ -240,7 +240,7 @@ export function usePosShift(openDialog?: () => void) {
 		// to delete the blocking drafts and retry, or cancel the close.
 		const callMakeClosingShift = (): Promise<any> =>
 			frappe.call(
-				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.make_closing_shift_from_opening",
+				"posawesome.mizan.doctype.pos_closing_shift.pos_closing_shift.make_closing_shift_from_opening",
 				{ opening_shift: pos_opening_shift.value },
 			);
 
@@ -303,7 +303,7 @@ export function usePosShift(openDialog?: () => void) {
 		eventBus?.emit("closing_pos_submit_started");
 		frappe
 			.call(
-				"posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.submit_closing_shift",
+				"posawesome.mizan.doctype.pos_closing_shift.pos_closing_shift.submit_closing_shift",
 				{
 					closing_shift: JSON.stringify(data),
 				},

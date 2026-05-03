@@ -169,7 +169,7 @@ export function useItemDetailFetcher() {
 		});
 
 		const requestPromise = frappe.call({
-			method: "posawesome.posawesome.api.items.get_items_details",
+			method: "posawesome.mizan.api.items.get_items_details",
 			args: {
 				pos_profile: JSON.stringify(ctx.pos_profile),
 				items_data: JSON.stringify(items),

@@ -9,6 +9,7 @@ import {
 import { ensureInvoiceClientRequestId } from "../../../../offline/idempotency";
 import stockCoordinator from "../../../utils/stockCoordinator";
 import { parseNegativeStockMessage as parseNegativeStockMessageShared } from "../../../utils/stock";
+import { useEmployeeStore } from "../../../stores/employeeStore";
 
 declare const frappe: any;
 declare const __: (_str: string, _args?: any[]) => string;
@@ -620,7 +621,7 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		try {
 			const resp = await frappe.call({
 				method:
-					"posawesome.posawesome.api.invoice_processing.stock.check_invoice_availability",
+					"posawesome.mizan.api.invoice_processing.stock.check_invoice_availability",
 				args: { items: payload, pos_profile: profile?.name || null },
 			});
 			response = resp?.message;
@@ -903,9 +904,41 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		return true;
 	};
 
+	/**
+	 * Stamp the active cashier (from `employeeStore.currentCashier`,
+	 * which the Switch Cashier PIN dialog mutates) onto the
+	 * outgoing invoice payload so the server can persist it on the
+	 * `posa_cashier` field. Cashier-of-record contract: this is the
+	 * cashier who actually rang the sale on the terminal — NOT
+	 * `frappe.session.user`, which can be a supervisor logged in
+	 * for terminal management while a different cashier is
+	 * currently active for sales.
+	 *
+	 * No-op when the doc already carries a cashier (preserves
+	 * deliberately-set values, e.g. on a draft re-submit) or when
+	 * no cashier is loaded (fresh session before any switch — the
+	 * server falls back to session.user via `_ensure_posa_cashier`).
+	 */
+	const ensureInvoicePosaCashier = (submissionDoc: any) => {
+		if (!submissionDoc || typeof submissionDoc !== "object") return;
+		if (submissionDoc.posa_cashier) return;
+		try {
+			const employeeStore = useEmployeeStore();
+			const cashierUser = employeeStore?.currentCashier?.user || "";
+			if (cashierUser) {
+				submissionDoc.posa_cashier = cashierUser;
+			}
+		} catch {
+			// Pinia not yet initialised (very early boot, tests) —
+			// let the server-side fallback in `_ensure_posa_cashier`
+			// handle it.
+		}
+	};
+
 	const buildSubmissionInvoiceDoc = (doc: any) => {
 		const submissionDoc = JSON.parse(JSON.stringify(doc || {}));
 		ensureInvoiceClientRequestId(submissionDoc);
+		ensureInvoicePosaCashier(submissionDoc);
 		return submissionDoc;
 	};
 

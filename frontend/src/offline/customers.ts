@@ -87,7 +87,7 @@ export async function syncOfflineCustomers() {
 		const queuedCustomer = entry.payload;
 		try {
 			const result = await frappe.call({
-				method: "posawesome.posawesome.api.customers.create_customer",
+				method: "posawesome.mizan.api.customers.create_customer",
 				args: queuedCustomer.args,
 			});
 			synced += 1;

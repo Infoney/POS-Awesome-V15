@@ -1,7 +1,7 @@
 import { ref, onUnmounted } from "vue";
 
 const API_URL =
-	"/api/method/posawesome.posawesome.api.utilities.get_server_usage";
+	"/api/method/posawesome.mizan.api.utilities.get_server_usage";
 
 export interface ServerUsage {
 	cpu: number | null;

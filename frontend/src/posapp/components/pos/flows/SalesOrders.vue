@@ -247,7 +247,7 @@ export default {
 
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.sales_orders.search_orders",
+					method: "posawesome.mizan.api.sales_orders.search_orders",
 					args: {
 						order_name: this.order_name,
 						company: this.pos_profile.company,
@@ -275,7 +275,7 @@ export default {
 			try {
 				let invoice_doc_for_load = {};
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.invoices.create_sales_invoice_from_order",
+					method: "posawesome.mizan.api.invoices.create_sales_invoice_from_order",
 					args: {
 						sales_order: this.selected[0].name,
 					},
@@ -319,7 +319,7 @@ export default {
 
 				if (invoice_doc_for_load.name) {
 					await frappe.call({
-						method: "posawesome.posawesome.api.invoices.delete_sales_invoice",
+						method: "posawesome.mizan.api.invoices.delete_sales_invoice",
 						args: {
 							sales_invoice: invoice_doc_for_load.name,
 						},

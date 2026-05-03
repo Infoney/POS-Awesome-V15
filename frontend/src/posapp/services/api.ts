@@ -58,7 +58,7 @@ const api = {
    * is passed as the rejection reason.
    *
    * @param method - Dotted Python path to the whitelisted method, e.g.
-   *   `"posawesome.posawesome.api.pos.get_pos_data"`.
+   *   `"posawesome.mizan.api.pos.get_pos_data"`.
    * @param args - Keyword arguments forwarded to the Python method.
    * @param options - Optional Frappe call flags. `async` defaults to `true`,
    *   `freeze` defaults to `false`.

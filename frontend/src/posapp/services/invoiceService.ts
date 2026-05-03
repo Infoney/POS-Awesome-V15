@@ -5,10 +5,10 @@ const invoiceService = {
 	submitInvoice(data: any, invoiceDoc: InvoiceDoc | string, invoiceType: string, posProfile: POSProfile) {
 		const method =
 			invoiceType === "Order" && posProfile.posa_create_only_sales_order
-				? "posawesome.posawesome.api.sales_orders.submit_sales_order"
+				? "posawesome.mizan.api.sales_orders.submit_sales_order"
 				: invoiceType === "Quotation"
-					? "posawesome.posawesome.api.quotations.submit_quotation"
-					: "posawesome.posawesome.api.invoices.submit_invoice";
+					? "posawesome.mizan.api.quotations.submit_quotation"
+					: "posawesome.mizan.api.invoices.submit_invoice";
 
 		const args = {
 			data: data,

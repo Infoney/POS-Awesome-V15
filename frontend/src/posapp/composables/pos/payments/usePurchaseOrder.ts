@@ -66,7 +66,7 @@ export function usePurchaseOrder(options: {
 		}
 		try {
 			const { message } = await frappe.call({
-				method: "posawesome.posawesome.api.purchase_orders.get_supplier_info",
+				method: "posawesome.mizan.api.purchase_orders.get_supplier_info",
 				args: { supplier: supplierName },
 			});
 			if (message) {
@@ -125,7 +125,7 @@ export function usePurchaseOrder(options: {
 			if (activePriceList) {
 				try {
 					const { message } = await frappe.call({
-						method: "posawesome.posawesome.api.items.get_price_for_uom",
+						method: "posawesome.mizan.api.items.get_price_for_uom",
 						args: {
 							item_code: item.item_code,
 							price_list: activePriceList,
@@ -181,7 +181,7 @@ export function usePurchaseOrder(options: {
 			const priceList = supplierPriceList.value || itemsStore.activePriceList;
 			if (priceList) {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_price_for_uom",
+					method: "posawesome.mizan.api.items.get_price_for_uom",
 					args: {
 						item_code: item.item_code,
 						price_list: priceList,

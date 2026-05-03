@@ -105,7 +105,7 @@ describe("useScanProcessor serial scan handling", () => {
 		(globalThis as any).__ = (text: string) => text;
 		(globalThis as any).frappe = {
 			call: vi.fn(async ({ method }: { method: string }) => {
-				if (method === "posawesome.posawesome.api.items.parse_scale_barcode") {
+				if (method === "posawesome.mizan.api.items.parse_scale_barcode") {
 					return { message: null };
 				}
 				return { message: null };
@@ -149,12 +149,12 @@ describe("useScanProcessor serial scan handling", () => {
 
 		(globalThis as any).frappe.call = vi.fn(
 			async ({ method, args }: { method: string; args: any }) => {
-				if (method === "posawesome.posawesome.api.items.parse_scale_barcode") {
+				if (method === "posawesome.mizan.api.items.parse_scale_barcode") {
 					return { message: null };
 				}
 				if (
 					method ===
-					"posawesome.posawesome.api.items.search_serial_or_batch_or_barcode_number"
+					"posawesome.mizan.api.items.search_serial_or_batch_or_barcode_number"
 				) {
 					expect(args.search_value).toBe("SER-SERVER-002");
 					expect(args.search_serial_no).toBe(1);
@@ -165,7 +165,7 @@ describe("useScanProcessor serial scan handling", () => {
 						},
 					};
 				}
-				if (method === "posawesome.posawesome.api.items.get_items") {
+				if (method === "posawesome.mizan.api.items.get_items") {
 					expect(args.search_value).toBe("ITEM-SERVER");
 					return {
 						message: [

@@ -778,7 +778,7 @@ const checkGiftCardBalance = async () => {
 	giftCardError.value = "";
 	try {
 		const response = await frappe.call({
-			method: "posawesome.posawesome.api.gift_cards.check_gift_card_balance",
+			method: "posawesome.mizan.api.gift_cards.check_gift_card_balance",
 			args: {
 				gift_card_code: giftCardCode.value,
 				company: pos_profile.value.company,
@@ -847,7 +847,7 @@ const issueGiftCard = async () => {
 	giftCardError.value = "";
 	try {
 		const response = await frappe.call({
-			method: "posawesome.posawesome.api.gift_cards.issue_gift_card",
+			method: "posawesome.mizan.api.gift_cards.issue_gift_card",
 			args: {
 				pos_profile: pos_profile.value?.name,
 				cashier: currentCashier.value?.user,
@@ -877,7 +877,7 @@ const topUpGiftCard = async () => {
 	giftCardError.value = "";
 	try {
 		const response = await frappe.call({
-			method: "posawesome.posawesome.api.gift_cards.top_up_gift_card",
+			method: "posawesome.mizan.api.gift_cards.top_up_gift_card",
 			args: {
 				pos_profile: pos_profile.value?.name,
 				cashier: currentCashier.value?.user,
@@ -907,7 +907,7 @@ const get_print_formats = async () => {
 		const responses = await Promise.all(
 			doctypes.map((doctype) =>
 				frappe.call({
-					method: "posawesome.posawesome.api.print_formats.get_print_formats",
+					method: "posawesome.mizan.api.print_formats.get_print_formats",
 					args: { doctype },
 				}),
 			),

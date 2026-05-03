@@ -452,7 +452,7 @@ async function fetchPrintFormats() {
 	try {
 		const doctype = printInvoice.value ? "Purchase Invoice" : "Purchase Order";
 		const { message } = await frappe.call({
-			method: "posawesome.posawesome.api.print_formats.get_print_formats",
+			method: "posawesome.mizan.api.print_formats.get_print_formats",
 			args: {
 				doctype: doctype,
 			},

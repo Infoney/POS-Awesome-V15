@@ -626,7 +626,7 @@ export default {
 			}
 
 			frappe.call({
-				method: "posawesome.posawesome.api.customers.create_customer",
+				method: "posawesome.mizan.api.customers.create_customer",
 				args: apiArgs,
 				callback: async (r) => {
 					if (!r.exc && r.message.name) {

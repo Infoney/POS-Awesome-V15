@@ -685,7 +685,7 @@ export default {
 			};
 
 			frappe.call({
-				method: "posawesome.posawesome.api.invoices.search_invoices_for_return",
+				method: "posawesome.mizan.api.invoices.search_invoices_for_return",
 				args: this.current_search_params,
 				callback: function (r) {
 					vm.loading_more = false;
@@ -753,7 +753,7 @@ export default {
 				let return_doc = null;
 				try {
 					const { message } = await frappe.call({
-						method: "posawesome.posawesome.api.invoices.get_invoice_for_return",
+						method: "posawesome.mizan.api.invoices.get_invoice_for_return",
 						args: {
 							invoice_name: selectedInvoice.name,
 							pos_profile: this.pos_profile?.name,

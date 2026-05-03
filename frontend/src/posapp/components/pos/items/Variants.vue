@@ -242,7 +242,7 @@ export default {
 		async fetchVariants(code, profile) {
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_item_variants",
+					method: "posawesome.mizan.api.items.get_item_variants",
 					args: {
 						pos_profile: JSON.stringify(profile || this.pos_profile || {}),
 						parent_item_code: code,
@@ -327,7 +327,7 @@ export default {
 			if (!this.pos_profile.warehouse) {
 				try {
 					const res = await frappe.call({
-						method: "posawesome.posawesome.api.utils.get_default_warehouse",
+						method: "posawesome.mizan.api.utils.get_default_warehouse",
 						args: { company: this.pos_profile.company },
 					});
 					if (res.message) {
@@ -339,7 +339,7 @@ export default {
 			}
 			try {
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_item_detail",
+					method: "posawesome.mizan.api.items.get_item_detail",
 					args: {
 						warehouse: item.warehouse || this.pos_profile.warehouse,
 						price_list: this.pos_profile.selling_price_list,

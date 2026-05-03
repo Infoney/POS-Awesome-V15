@@ -710,7 +710,7 @@ export default {
 				offline: isOffline(),
 				fetcher: async () => {
 					const r = await frappe.call({
-						method: "posawesome.posawesome.api.payment_processing.utils.get_mode_of_payment_accounts",
+						method: "posawesome.mizan.api.payment_processing.utils.get_mode_of_payment_accounts",
 						args: { company: company.value, mode_of_payments: modes },
 					});
 					return { ...(r.message || {}) };
@@ -747,7 +747,7 @@ export default {
 				await applyOpeningData(cachedOpening);
 			}
 			try {
-				const r = await frappe.call("posawesome.posawesome.api.shifts.check_opening_shift", {
+				const r = await frappe.call("posawesome.mizan.api.shifts.check_opening_shift", {
 					user: frappe.session.user,
 				});
 				if (r.message) {
@@ -805,7 +805,7 @@ export default {
 			partySearchLoading.value = true;
 			try {
 				const r = await frappe.call({
-					method: "posawesome.posawesome.api.purchase_orders.search_suppliers",
+					method: "posawesome.mizan.api.purchase_orders.search_suppliers",
 					args: {
 						search_text: searchText || "",
 						limit: 20,

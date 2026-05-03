@@ -216,7 +216,7 @@ function setupSecurity() {
 			return;
 		}
 
-		callServer<string>("posawesome.posawesome.api.qz.get_certificate")
+		callServer<string>("posawesome.mizan.api.qz.get_certificate")
 			.then((certificate) => {
 				if (certificate) {
 					cachedCertificate = certificate;
@@ -240,7 +240,7 @@ function setupSecurity() {
 	qz.security.setSignatureAlgorithm("SHA512");
 	qz.security.setSignaturePromise((toSign) => {
 		return (resolve) => {
-			callServer<string>("posawesome.posawesome.api.qz.sign_message", {
+			callServer<string>("posawesome.mizan.api.qz.sign_message", {
 				message: toSign,
 			})
 				.then((signature) => {
@@ -408,7 +408,7 @@ export async function checkQzCertificateOnce() {
 	}
 
 	try {
-		const certificate = await callServer<string>("posawesome.posawesome.api.qz.get_certificate");
+		const certificate = await callServer<string>("posawesome.mizan.api.qz.get_certificate");
 		if (certificate) {
 			cachedCertificate = certificate;
 			qzCertReady.value = true;
@@ -426,7 +426,7 @@ export async function setupQzCertificate() {
 		status: "exists" | "created";
 		message?: string;
 		cert_path?: string;
-	}>("posawesome.posawesome.api.qz.setup_qz_certificate");
+	}>("posawesome.mizan.api.qz.setup_qz_certificate");
 
 	qzCertReady.value = true;
 	saveCertReady(true);
@@ -435,7 +435,7 @@ export async function setupQzCertificate() {
 
 export async function getQzCertificateDownload() {
 	const result = await callServer<{ pem?: string; company?: string }>(
-		"posawesome.posawesome.api.qz.get_certificate_download",
+		"posawesome.mizan.api.qz.get_certificate_download",
 	);
 	if (!result?.pem) {
 		throw new Error("QZ certificate is not available.");

@@ -47,7 +47,7 @@ describe("offline cash movements", () => {
 
 	it("syncs queued movements and clears the active queue when online", async () => {
 		await saveOfflineCashMovement({
-			method: "posawesome.posawesome.api.cash_movement.service.create_pos_expense",
+			method: "posawesome.mizan.api.cash_movement.service.create_pos_expense",
 			args: { payload: { amount: 10, client_request_id: "cm-2" } },
 		});
 		(globalThis as any).frappe.call.mockResolvedValue({ message: { ok: 1 } });

@@ -100,24 +100,24 @@ after_migrate = [
 
 doc_events = {
     "Sales Invoice": {
-        "validate": "posawesome.posawesome.api.invoice.validate",
-        "before_submit": "posawesome.posawesome.api.invoice.before_submit",
-        "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
-        "on_cancel": "posawesome.posawesome.api.invoice.on_cancel",
+        "validate": "posawesome.mizan.api.invoice.validate",
+        "before_submit": "posawesome.mizan.api.invoice.before_submit",
+        "before_cancel": "posawesome.mizan.api.invoice.before_cancel",
+        "on_cancel": "posawesome.mizan.api.invoice.on_cancel",
     },
     "POS Invoice": {
-        "validate": "posawesome.posawesome.api.invoice.validate",
-        "before_submit": "posawesome.posawesome.api.invoice.before_submit",
-        "before_cancel": "posawesome.posawesome.api.invoice.before_cancel",
-        "on_cancel": "posawesome.posawesome.api.invoice.on_cancel",
+        "validate": "posawesome.mizan.api.invoice.validate",
+        "before_submit": "posawesome.mizan.api.invoice.before_submit",
+        "before_cancel": "posawesome.mizan.api.invoice.before_cancel",
+        "on_cancel": "posawesome.mizan.api.invoice.on_cancel",
     },
     "Customer": {
-        "validate": "posawesome.posawesome.api.customer.validate",
-        "after_insert": "posawesome.posawesome.api.customer.after_insert",
+        "validate": "posawesome.mizan.api.customer.validate",
+        "after_insert": "posawesome.mizan.api.customer.after_insert",
     },
     "Bin": {
-        "after_insert": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
-        "on_update": "posawesome.posawesome.stock_realtime.publish_bin_stock_change",
+        "after_insert": "posawesome.mizan.stock_realtime.publish_bin_stock_change",
+        "on_update": "posawesome.mizan.stock_realtime.publish_bin_stock_change",
     },
 }
 
@@ -163,8 +163,8 @@ doc_events = {
 
 # Override standard DocTypes with custom classes
 override_doctype_class = {
-    "POS Invoice": "posawesome.posawesome.overrides.pos_invoice.CustomPOSInvoice",
-    "POS Invoice Merge Log": "posawesome.posawesome.overrides.pos_invoice_merge_log.CustomPOSInvoiceMergeLog",
+    "POS Invoice": "posawesome.mizan.overrides.pos_invoice.CustomPOSInvoice",
+    "POS Invoice Merge Log": "posawesome.mizan.overrides.pos_invoice_merge_log.CustomPOSInvoiceMergeLog",
 }
 
 # exempt linked doctypes from being automatically cancelled

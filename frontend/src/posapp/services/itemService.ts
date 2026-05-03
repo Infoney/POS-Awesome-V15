@@ -19,19 +19,19 @@ export interface GetItemsArgs {
 
 const itemService = {
   getItemGroups(): Promise<ItemGroup[]> {
-    return api.call("posawesome.posawesome.api.items.get_items_groups");
+    return api.call("posawesome.mizan.api.items.get_items_groups");
   },
 
   getItems(args: GetItemsArgs, signal?: AbortSignal): Promise<Item[]> {
-    return api.call("posawesome.posawesome.api.items.get_items", args, { signal });
+    return api.call("posawesome.mizan.api.items.get_items", args, { signal });
   },
 
   getItemsFromBarcode(args: { selling_price_list: string; currency: string; barcode: string }): Promise<Item | null> {
-    return api.call("posawesome.posawesome.api.items.get_items_from_barcode", args);
+    return api.call("posawesome.mizan.api.items.get_items_from_barcode", args);
   },
 
   getItemBrand(itemCode: string): Promise<string> {
-    return api.call("posawesome.posawesome.api.items.get_item_brand", { item_code: itemCode });
+    return api.call("posawesome.mizan.api.items.get_item_brand", { item_code: itemCode });
   },
 
   getUOMs(): Promise<{ name: string }[]> {

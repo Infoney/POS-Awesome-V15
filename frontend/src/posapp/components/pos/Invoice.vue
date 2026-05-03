@@ -767,7 +767,7 @@ export default {
 			}
 			try {
 				const r = await frappe.call({
-					method: "posawesome.posawesome.api.offers.get_applicable_delivery_charges",
+					method: "posawesome.mizan.api.offers.get_applicable_delivery_charges",
 					args: {
 						company: this.pos_profile.company,
 						pos_profile: this.pos_profile.name,

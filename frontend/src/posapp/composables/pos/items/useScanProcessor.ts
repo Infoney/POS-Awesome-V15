@@ -235,7 +235,7 @@ export function useScanProcessor(context: ScanProcessorContext) {
 				// Try fetching the rate for this UOM from the active price list
 				try {
 					const res = await frappe.call({
-						method: "posawesome.posawesome.api.items.get_price_for_uom",
+						method: "posawesome.mizan.api.items.get_price_for_uom",
 						args: {
 							item_code: newItem.item_code,
 							price_list: active_price_list.value,
@@ -484,7 +484,7 @@ export function useScanProcessor(context: ScanProcessorContext) {
 
 		try {
 			const res = await frappe.call({
-				method: "posawesome.posawesome.api.items.parse_scale_barcode",
+				method: "posawesome.mizan.api.items.parse_scale_barcode",
 				args: { barcode: scannedCode },
 			});
 			if (res && res.message) {
@@ -594,7 +594,7 @@ export function useScanProcessor(context: ScanProcessorContext) {
 			if (searchSerialNo || searchBatchNo) {
 				try {
 					const resolveRes = await frappe.call({
-						method: "posawesome.posawesome.api.items.search_serial_or_batch_or_barcode_number",
+						method: "posawesome.mizan.api.items.search_serial_or_batch_or_barcode_number",
 						args: {
 							search_value: scannedCode,
 							search_serial_no: searchSerialNo ? 1 : 0,
@@ -653,7 +653,7 @@ export function useScanProcessor(context: ScanProcessorContext) {
 			if (qtyFromBarcode !== null) {
 				// Scale barcodes use a direct, faster lookup
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_item_detail",
+					method: "posawesome.mizan.api.items.get_item_detail",
 					args: {
 						item: JSON.stringify({ item_code: searchCode }),
 						warehouse: pos_profile.value.warehouse,
@@ -667,7 +667,7 @@ export function useScanProcessor(context: ScanProcessorContext) {
 			} else {
 				// Regular barcodes and searches use the generic search
 				const res = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_items",
+					method: "posawesome.mizan.api.items.get_items",
 					args: {
 						pos_profile: pos_profile.value,
 						price_list: active_price_list.value,

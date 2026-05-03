@@ -602,6 +602,216 @@
 				</v-col>
 			</v-row>
 
+			<!--
+				Cashiers — per-cashier breakdown of who rang what on this
+				shift, with a drill-down into the actual invoices each
+				cashier rang. Multiple cashiers can rotate via the in-app
+				Switch Cashier flow without ending the shift, so this is
+				the only place the closing report shows the per-mini-shift
+				split. The store manager opens any cashier panel to spot
+				anomalies (a stretch of returns, an oddly-large ticket on
+				a junior cashier's mini-shift, etc.) without bouncing to
+				ERPNext list view.
+
+				Hides on shifts that pre-date the cashier-tracking
+				rollout (empty array).
+			-->
+			<div
+				v-if="cashiersBreakdown && cashiersBreakdown.length"
+				class="table-section mt-4"
+			>
+				<div class="table-header mb-2">
+					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
+						{{ __("Invoices by Cashier") }}
+					</h5>
+					<p class="text-body-2 text-grey">
+						{{
+							__(
+								"Click a cashier to see every invoice they rang. Use this to review per-cashier performance and spot errors before submitting the closing entry.",
+							)
+						}}
+					</p>
+				</div>
+
+				<v-expansion-panels
+					multiple
+					variant="accordion"
+					class="cashier-panels"
+				>
+					<v-expansion-panel
+						v-for="row in cashiersBreakdown"
+						:key="row.cashier"
+						:value="row.cashier"
+					>
+						<v-expansion-panel-title class="cashier-panel-title">
+							<div class="cashier-panel-summary">
+								<div class="cashier-panel-summary__main">
+									<v-icon size="18" class="me-2">
+										mdi-account-circle-outline
+									</v-icon>
+									<div class="cashier-panel-summary__name-block">
+										<div class="cashier-panel-summary__name">
+											{{ row.cashier_name || row.cashier }}
+										</div>
+										<div
+											v-if="row.sales_person"
+											class="cashier-panel-summary__sales-person"
+										>
+											{{ __("Sales Person") }}:
+											{{ row.sales_person }}
+										</div>
+									</div>
+								</div>
+								<div class="cashier-panel-summary__stats">
+									<span class="cashier-panel-summary__count">
+										{{ row.invoice_count || 0 }}
+										{{ __("invoices") }}
+									</span>
+									<span class="cashier-panel-summary__total">
+										{{
+											formatCurrencyWithSymbol(
+												row.grand_total || 0,
+												overviewCompanyCurrency,
+											)
+										}}
+									</span>
+								</div>
+							</div>
+						</v-expansion-panel-title>
+						<v-expansion-panel-text class="cashier-panel-text">
+							<div class="overview-table-wrapper">
+								<table class="overview-table cashier-invoice-table">
+									<thead>
+										<tr>
+											<th>{{ __("Invoice") }}</th>
+											<th>{{ __("Time") }}</th>
+											<th>{{ __("Customer") }}</th>
+											<th class="text-end">
+												{{ __("Total") }}
+											</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr
+											v-for="invoice in row.invoices || []"
+											:key="invoice.name"
+											:class="{ 'is-return': invoice.is_return }"
+										>
+											<td class="invoice-name-cell">
+												<span class="invoice-name">
+													{{ invoice.name }}
+												</span>
+												<span
+													v-if="invoice.is_return"
+													class="invoice-return-tag"
+												>
+													{{ __("Return") }}
+												</span>
+											</td>
+											<td class="invoice-time">
+												{{
+													formatInvoiceTime(
+														invoice.posting_time,
+													) || "—"
+												}}
+											</td>
+											<td>
+												{{
+													invoice.customer_name ||
+													invoice.customer ||
+													"—"
+												}}
+											</td>
+											<td class="text-end">
+												<span class="overview-amount">
+													{{
+														formatCurrencyWithSymbol(
+															invoice.grand_total || 0,
+															invoice.currency ||
+																overviewCompanyCurrency,
+														)
+													}}
+												</span>
+												<div
+													v-if="
+														invoice.currency &&
+														invoice.currency !==
+															overviewCompanyCurrency
+													"
+													class="company-equivalent"
+												>
+													({{
+														formatCurrencyWithSymbol(
+															invoice.base_grand_total ||
+																0,
+															overviewCompanyCurrency,
+														)
+													}})
+												</div>
+											</td>
+										</tr>
+										<tr
+											v-if="!row.invoices || !row.invoices.length"
+										>
+											<td colspan="4" class="text-center text-grey">
+												{{ __("No invoices for this cashier.") }}
+											</td>
+										</tr>
+									</tbody>
+									<tfoot>
+										<tr class="cashier-subtotal-row">
+											<td colspan="3">
+												<strong>
+													{{ __("Subtotal") }}
+												</strong>
+											</td>
+											<td class="text-end">
+												<strong>
+													{{
+														formatCurrencyWithSymbol(
+															row.grand_total || 0,
+															overviewCompanyCurrency,
+														)
+													}}
+												</strong>
+											</td>
+										</tr>
+									</tfoot>
+								</table>
+							</div>
+						</v-expansion-panel-text>
+					</v-expansion-panel>
+				</v-expansion-panels>
+
+				<div class="cashier-grand-total-row mt-2">
+					<div class="cashier-grand-total-row__label">
+						<v-icon size="18" class="me-2">mdi-sigma</v-icon>
+						{{ __("Grand Total — All Cashiers") }}
+						<span class="cashier-grand-total-row__count">
+							·
+							{{
+								cashiersBreakdown.reduce(
+									(sum, r) => sum + (r.invoice_count || 0),
+									0,
+								)
+							}}
+							{{ __("invoices") }}
+						</span>
+					</div>
+					<div class="cashier-grand-total-row__value">
+						{{
+							formatCurrencyWithSymbol(
+								cashiersBreakdown.reduce(
+									(sum, r) => sum + (r.grand_total || 0),
+									0,
+								),
+								overviewCompanyCurrency,
+							)
+						}}
+					</div>
+				</div>
+			</div>
+
 			<div v-if="paymentsByMode.length" class="table-section mt-4">
 				<div class="table-header mb-2">
 					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
@@ -669,6 +879,88 @@
 					</table>
 				</div>
 			</div>
+
+			<!--
+				Taxes Collected — split out as its own section so the
+				cashier / store manager / accountant can see the day's
+				tax liability at a glance, broken down per tax account
+				(useful for ZATCA reconciliation in KSA-shifts) AND per
+				invoice currency. Hides itself when no tax was collected.
+			-->
+			<div
+				v-if="taxesCollectedSummary && taxesCollectedSummary.company_currency_total"
+				class="table-section mt-4"
+			>
+				<div class="table-header mb-2">
+					<h5 class="text-subtitle-1 text-grey-darken-2 mb-1">
+						{{ __("Taxes Collected") }}
+					</h5>
+					<p class="text-body-2 text-grey">
+						{{ __("Tax owed to the government — separate from net sales (revenue you keep)") }}
+					</p>
+				</div>
+
+				<div class="overview-table-wrapper" v-if="taxesCollectedByAccount && taxesCollectedByAccount.length">
+					<table class="overview-table">
+						<thead>
+							<tr>
+								<th>{{ __("Tax Account") }}</th>
+								<th class="text-end">{{ __("Rate") }}</th>
+								<th>{{ __("Currency") }}</th>
+								<th class="text-end">{{ __("Amount") }}</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr
+								v-for="row in taxesCollectedByAccount"
+								:key="`tax-account-${row.account_head}-${row.currency}-${row.rate}`"
+							>
+								<td>{{ row.account_head }}</td>
+								<td class="text-end">{{ row.rate }}%</td>
+								<td>{{ row.currency || overviewCompanyCurrency }}</td>
+								<td class="text-end">
+									<div class="amount-with-base">
+										<div class="amount-primary">
+											<span class="overview-amount">
+												{{
+													formatCurrencyWithSymbol(
+														row.amount || 0,
+														row.currency || overviewCompanyCurrency,
+													)
+												}}
+											</span>
+											<span
+												v-if="shouldShowCompanyEquivalent({ company_currency_total: row.company_currency_amount }, row.currency)"
+												class="company-equivalent"
+											>
+												({{
+													formatCurrencyWithSymbol(
+														row.company_currency_amount || 0,
+														overviewCompanyCurrency,
+													)
+												}})
+											</span>
+										</div>
+									</div>
+								</td>
+							</tr>
+							<tr>
+								<td colspan="3"><strong>{{ __("Total Tax Collected") }}</strong></td>
+								<td class="text-end">
+									<strong>
+										{{
+											formatCurrencyWithSymbol(
+												taxesCollectedSummary.company_currency_total || 0,
+												overviewCompanyCurrency,
+											)
+										}}
+									</strong>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
 		</div>
 	</div>
 </template>
@@ -685,6 +977,10 @@ defineProps({
 	cashExpectedByCurrency: Array,
 	cashMovementSummary: Object,
 	paymentsByMode: Array,
+	taxesCollectedSummary: { type: Object, default: () => ({ company_currency_total: 0, by_account: [], by_currency: [] }) },
+	taxesCollectedByAccount: { type: Array, default: () => [] },
+	taxesCollectedByCurrency: { type: Array, default: () => [] },
+	cashiersBreakdown: { type: Array, default: () => [] },
 	overviewCompanyCurrency: String,
 	// Functions
 	formatCurrencyWithSymbol: Function,
@@ -696,6 +992,21 @@ defineProps({
 });
 
 const __ = window.__ || ((t) => t);
+
+/*
+ * `posting_time` from the server is an ISO-ish "HH:MM:SS.ffffff"
+ * string. The cashier-invoice grid only needs HH:MM, so trim the
+ * seconds + microseconds before display. Empty / null / unparseable
+ * inputs return an empty string so the cell falls back to "—".
+ */
+function formatInvoiceTime(value) {
+	if (!value) return "";
+	const text = String(value).trim();
+	if (!text) return "";
+	const match = text.match(/^(\d{1,2}):(\d{2})/);
+	if (!match) return text;
+	return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
 </script>
 
 <style scoped>
@@ -891,5 +1202,162 @@ const __ = window.__ || ((t) => t);
 	border-radius: 8px;
 	opacity: 0.6;
 	font-style: italic;
+}
+
+/* ── Cashier expansion panels (per-cashier invoice drill-down) ────── */
+.cashier-panels {
+	border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+	border-radius: 10px;
+	overflow: hidden;
+	background-color: rgba(var(--v-theme-on-surface), 0.02);
+}
+
+.cashier-panels :deep(.v-expansion-panel) {
+	background: transparent;
+}
+
+.cashier-panels :deep(.v-expansion-panel-title) {
+	min-height: 48px;
+	padding: 8px 16px;
+}
+
+.cashier-panel-summary {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.cashier-panel-summary__main {
+	display: flex;
+	align-items: center;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.cashier-panel-summary__name-block {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.cashier-panel-summary__name {
+	font-weight: 600;
+	color: rgba(var(--v-theme-on-surface), 0.95);
+	font-size: 0.95rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cashier-panel-summary__sales-person {
+	font-size: 0.78rem;
+	color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.cashier-panel-summary__stats {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	flex-shrink: 0;
+}
+
+.cashier-panel-summary__count {
+	font-size: 0.8rem;
+	color: rgba(var(--v-theme-on-surface), 0.6);
+	background: rgba(var(--v-theme-primary), 0.08);
+	padding: 2px 10px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+.cashier-panel-summary__total {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: rgb(var(--v-theme-primary));
+	font-size: 0.95rem;
+}
+
+.cashier-panel-text :deep(.v-expansion-panel-text__wrapper) {
+	padding: 8px 16px 16px;
+}
+
+.cashier-invoice-table th,
+.cashier-invoice-table td {
+	font-size: 0.85rem;
+	padding: 8px 10px;
+}
+
+.cashier-invoice-table .invoice-name {
+	font-family: "SF Mono", "Roboto Mono", "Consolas", monospace;
+	font-size: 0.82rem;
+	color: rgba(var(--v-theme-on-surface), 0.92);
+}
+
+.cashier-invoice-table .invoice-return-tag {
+	display: inline-block;
+	margin-inline-start: 8px;
+	padding: 1px 6px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	color: rgb(var(--v-theme-warning));
+	background: rgba(var(--v-theme-warning), 0.12);
+	border-radius: 4px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.cashier-invoice-table tr.is-return td {
+	background: rgba(var(--v-theme-warning), 0.04);
+}
+
+.cashier-invoice-table .invoice-time {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	color: rgba(var(--v-theme-on-surface), 0.7);
+}
+
+.cashier-invoice-table tfoot .cashier-subtotal-row td {
+	background: rgba(var(--v-theme-primary), 0.04);
+	border-top: 2px solid rgba(var(--v-theme-primary), 0.18);
+}
+
+.cashier-grand-total-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 16px;
+	background: linear-gradient(
+		135deg,
+		rgba(var(--v-theme-primary), 0.1),
+		rgba(var(--v-theme-secondary), 0.06)
+	);
+	border: 1px solid rgba(var(--v-theme-primary), 0.22);
+	border-radius: 10px;
+	font-size: 0.95rem;
+}
+
+.cashier-grand-total-row__label {
+	display: inline-flex;
+	align-items: center;
+	font-weight: 600;
+	color: rgba(var(--v-theme-on-surface), 0.92);
+	letter-spacing: 0.01em;
+}
+
+.cashier-grand-total-row__count {
+	margin-inline-start: 8px;
+	font-weight: 500;
+	color: rgba(var(--v-theme-on-surface), 0.6);
+	font-size: 0.85rem;
+}
+
+.cashier-grand-total-row__value {
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+	color: rgb(var(--v-theme-primary));
+	font-size: 1.05rem;
 }
 </style>

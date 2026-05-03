@@ -551,7 +551,7 @@ export async function _applyServerPricingRules(context: any, ctx: any = {}) {
 		}));
 
 	const response = await frappe.call({
-		method: "posawesome.posawesome.api.pricing_rules.reconcile_line_prices",
+		method: "posawesome.mizan.api.pricing_rules.reconcile_line_prices",
 		args: {
 			cart_payload: JSON.stringify({
 				context: ctx,

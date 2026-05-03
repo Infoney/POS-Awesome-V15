@@ -87,7 +87,7 @@ export function usePurchaseReceipt(options: {
 		}
 		try {
 			const { message } = await frappe.call({
-				method: "posawesome.posawesome.api.purchase_orders.get_supplier_info",
+				method: "posawesome.mizan.api.purchase_orders.get_supplier_info",
 				args: { supplier: supplierName },
 			});
 			if (message) {
@@ -106,7 +106,7 @@ export function usePurchaseReceipt(options: {
 	const fetchItemMeta = async (itemCode: string) => {
 		try {
 			const { message } = await frappe.call({
-				method: "posawesome.posawesome.api.purchase_receipts.get_item_meta",
+				method: "posawesome.mizan.api.purchase_receipts.get_item_meta",
 				args: { item_code: itemCode },
 			});
 			return message || null;
@@ -126,7 +126,7 @@ export function usePurchaseReceipt(options: {
 		try {
 			const { message } = await frappe.call({
 				method:
-					"posawesome.posawesome.api.purchase_receipts.get_existing_batches",
+					"posawesome.mizan.api.purchase_receipts.get_existing_batches",
 				args: { item_code: row.item_code },
 			});
 			row.batch_options = Array.isArray(message) ? (message as BatchOption[]) : [];
@@ -177,7 +177,7 @@ export function usePurchaseReceipt(options: {
 		if (activePriceList) {
 			try {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_price_for_uom",
+					method: "posawesome.mizan.api.items.get_price_for_uom",
 					args: {
 						item_code: item.item_code,
 						price_list: activePriceList,
@@ -239,7 +239,7 @@ export function usePurchaseReceipt(options: {
 			const priceList = supplierPriceList.value || itemsStore.activePriceList;
 			if (priceList) {
 				const { message } = await frappe.call({
-					method: "posawesome.posawesome.api.items.get_price_for_uom",
+					method: "posawesome.mizan.api.items.get_price_for_uom",
 					args: {
 						item_code: row.item_code,
 						price_list: priceList,
@@ -419,7 +419,7 @@ export function usePurchaseReceipt(options: {
 
 			const { message } = await frappe.call({
 				method:
-					"posawesome.posawesome.api.purchase_receipts.create_purchase_receipt",
+					"posawesome.mizan.api.purchase_receipts.create_purchase_receipt",
 				args: { data: JSON.stringify(payload) },
 			});
 			return message;
