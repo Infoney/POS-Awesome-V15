@@ -28,3 +28,5 @@ posawesome.patches.backfill_cashier_tracking
 posawesome.patches.add_pos_hide_drawer_brand_setting
 posawesome.patches.add_purchase_invoice_flag
 posawesome.patches.add_pos_allow_mizan_barcode_print
+posawesome.patches.add_pos_receipt_customization
+posawesome.patches.install_mizan_receipt_print
