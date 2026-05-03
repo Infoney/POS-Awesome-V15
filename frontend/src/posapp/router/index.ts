@@ -36,6 +36,16 @@ const routes = [
 		},
 	},
 	{
+		path: "/purchase-invoice",
+		component: () =>
+			import("../components/pos/purchase/PurchaseInvoice.vue"),
+		meta: {
+			title: "Purchase Invoice",
+			layout: "default",
+			loadingMessage: "Loading purchase invoice...",
+		},
+	},
+	{
 		path: "/payments",
 		component: () => import("../components/pos/shell/PayView.vue"),
 		meta: { title: "Payments", layout: "default", loadingMessage: "Loading payments..." },
@@ -70,6 +80,16 @@ const routes = [
 			title: "Barcode Printing",
 			layout: "default",
 			loadingMessage: "Loading barcode printing...",
+		},
+	},
+	{
+		path: "/mizan-barcode-print",
+		component: () =>
+			import("../components/pos/shell/MizanBarcodePrint.vue"),
+		meta: {
+			title: "Mizan Barcode Print",
+			layout: "default",
+			loadingMessage: "Loading Mizan barcode print...",
 		},
 	},
 	{

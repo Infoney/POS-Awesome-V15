@@ -378,6 +378,32 @@ def create_purchase_receipt(data):
                     "POS Awesome PR price-list update failed",
                 )
 
+    # Mirror the Purchase Invoice flow: the operator can immediately
+    # print one barcode label per unit just received. PR + PI share
+    # the same label payload builder so a single shipment landed via
+    # PR or PI prints identical labels (item name, item code,
+    # selling price, EAN, batch+expiry, shop name).
+    try:
+        from .purchase_invoices import _build_label_payload
+
+        label_payload = _build_label_payload(receipt, profile)
+    except Exception:
+        # Defensive — never fail the PR submit because of a label-
+        # building hiccup. Operator can still re-print from the desk
+        # form if labels are missing.
+        frappe.log_error(
+            frappe.get_traceback(),
+            "POS Awesome PR label payload build failed",
+        )
+        label_payload = {
+            "labels": [],
+            "brand_name": "",
+            "company_currency": frappe.get_cached_value(
+                "Company", company, "default_currency"
+            ),
+            "invoice_currency": receipt.currency,
+        }
+
     return {
         "purchase_receipt": receipt.name,
         "supplier": supplier,
@@ -385,4 +411,5 @@ def create_purchase_receipt(data):
         "price_list_currency": price_list_currency,
         "warehouse": warehouse,
         "total": receipt.grand_total,
+        **label_payload,
     }

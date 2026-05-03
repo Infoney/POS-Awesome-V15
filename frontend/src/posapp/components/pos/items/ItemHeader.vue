@@ -32,11 +32,18 @@
 					<template v-slot:append-inner>
 						<span
 							class="cmd-search-hint"
-							:title="__('Press Ctrl+K to focus this search')"
+							:title="__('Press F2 to focus this search')"
 							aria-hidden="true"
 						>
-							<kbd class="cmd-search-hint__key">{{ shortcutModifierLabel }}</kbd>
-							<kbd class="cmd-search-hint__key">K</kbd>
+							<!--
+								Single F2 chip — no modifier needed (was
+								Ctrl/Cmd+K, but pharmacy cashiers kept
+								hitting browser address-bar autocomplete
+								on Ctrl+K). The unused modifier-label
+								computed below stays in case a future
+								shortcut wants it again.
+							-->
+							<kbd class="cmd-search-hint__key">F2</kbd>
 						</span>
 					</template>
 				</v-text-field>

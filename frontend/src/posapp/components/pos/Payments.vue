@@ -1533,7 +1533,13 @@ const submitInvoiceWrapper = async (print, callbackOverrides = {}, options = {})
 				is_cashback.value = true;
 				show_change_dialog.value = true;
 				is_credit_return.value = false;
-				sales_person.value = "";
+				// Reset Sales Person back to the active cashier's
+				// linked `posa_sales_person` (if any) instead of
+				// blanking it. Keeps the next transaction's default
+				// in sync with the cashier currently at the till —
+				// they don't have to re-pick after every sale.
+				sales_person.value =
+					currentCashier.value?.posa_sales_person || "";
 			},
 			onFinishNavigation: (clearInvoice) => {
 				finishSubmissionNavigation(clearInvoice);
@@ -1768,6 +1774,36 @@ watch(sales_person, (newVal) => {
 		invoice_doc.value.sales_team = [];
 	}
 });
+
+/*
+ * Auto-select Sales Person from the active cashier's
+ * `posa_sales_person` link.
+ *
+ * Behaviour:
+ *   - On Payments mount: the seeded `currentCashier` (read from
+ *     localStorage / session at store init) bubbles a value into
+ *     `sales_person` immediately so the dropdown pre-fills before
+ *     the cashier even sees the form.
+ *   - On Switch Cashier: the in-app PIN dialog mutates
+ *     `currentCashier` in place; this watcher catches the change
+ *     and swaps the default Sales Person to the new cashier's
+ *     link. Cashier B taking over a half-rung sale picks up B's
+ *     Sales Person, not A's.
+ *   - When the new cashier has no `posa_sales_person` set, the
+ *     field is cleared (`""`) so the cashier picks one manually
+ *     instead of inheriting whatever was selected previously.
+ *
+ * `flush: 'post'` keeps the assignment compatible with the
+ * `watch(sales_person, ...)` above — the upstream `sales_team`
+ * mutation runs in the same microtask.
+ */
+watch(
+	() => currentCashier.value?.posa_sales_person || "",
+	(salesPersonName) => {
+		sales_person.value = salesPersonName || "";
+	},
+	{ immediate: true },
+);
 
 watch(is_credit_sale, (newVal) => {
 	if (!invoice_doc.value || !Array.isArray(invoice_doc.value.payments)) return;

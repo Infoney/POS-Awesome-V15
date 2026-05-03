@@ -1,4 +1,15 @@
 <template>
+	<!--
+		`currencySymbol(invoice_doc.currency)` on EVERY field below
+		(was `currencySymbol()` with no arg on Net Total / Tax / Total
+		Amount / diff). The empty-arg call returns the company-currency
+		symbol — so on a foreign-currency invoice (SAR sale, KWD
+		company) the prefix wrongly read "KWD" while the value came
+		straight from `invoice_doc.net_total` in SAR. Discount Amount
+		and Grand Total have always passed the invoice currency
+		explicitly and rendered correctly; this aligns the rest of the
+		grid with that pattern.
+	-->
 	<v-row v-if="invoice_doc" class="invoice-totals-grid">
 		<v-col cols="12" sm="6">
 			<v-text-field
@@ -9,7 +20,7 @@
 				class="sleek-field pos-themed-input"
 				:model-value="formatCurrency(invoice_doc.net_total, displayCurrency)"
 				readonly
-				:prefix="currencySymbol()"
+				:prefix="currencySymbol(invoice_doc.currency)"
 				persistent-placeholder
 			></v-text-field>
 		</v-col>
@@ -23,7 +34,7 @@
 				hide-details
 				:model-value="formatCurrency(invoice_doc.total_taxes_and_charges, displayCurrency)"
 				readonly
-				:prefix="currencySymbol()"
+				:prefix="currencySymbol(invoice_doc.currency)"
 				persistent-placeholder
 			></v-text-field>
 		</v-col>
@@ -37,7 +48,7 @@
 				hide-details
 				:model-value="formatCurrency(invoice_doc.total, displayCurrency)"
 				readonly
-				:prefix="currencySymbol()"
+				:prefix="currencySymbol(invoice_doc.currency)"
 				persistent-placeholder
 			></v-text-field>
 		</v-col>
@@ -53,7 +64,7 @@
 					formatCurrency(diff_payment < 0 ? -diff_payment : diff_payment, displayCurrency)
 				"
 				readonly
-				:prefix="currencySymbol()"
+				:prefix="currencySymbol(invoice_doc.currency)"
 				persistent-placeholder
 			></v-text-field>
 		</v-col>

@@ -84,10 +84,22 @@ def get_terminal_employees(pos_profile=None):
 	if not users:
 		return []
 
+	# `posa_sales_person` is added by the cashier-tracking patch and
+	# may not exist on tenants that haven't migrated yet. Guard the
+	# fetch so the fields list adapts.
+	user_fields = ["name", "full_name", "enabled", "posa_is_pos_supervisor"]
+	has_sales_person_field = False
+	try:
+		has_sales_person_field = frappe.db.has_column("User", "posa_sales_person")
+	except Exception:
+		pass
+	if has_sales_person_field:
+		user_fields.append("posa_sales_person")
+
 	user_rows = frappe.get_all(
 		"User",
 		filters={"name": ["in", users], "enabled": 1},
-		fields=["name", "full_name", "enabled", "posa_is_pos_supervisor"],
+		fields=user_fields,
 		order_by="full_name asc, name asc",
 		ignore_permissions=True,
 	)
@@ -106,6 +118,13 @@ def get_terminal_employees(pos_profile=None):
 				"enabled": row.get("enabled", 1),
 				"is_current": row.get("name") == current_user,
 				"is_supervisor": bool(row.get("posa_is_pos_supervisor")),
+				# Optional Sales Person link — when set, the POS auto-
+				# selects this Sales Person as the default for any
+				# transactions this cashier rings (per user spec:
+				# switching cashiers also switches the default sales
+				# person to the new cashier's link). Empty when the
+				# user hasn't set `posa_sales_person`.
+				"posa_sales_person": row.get("posa_sales_person") or "",
 			}
 		)
 

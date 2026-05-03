@@ -1,0 +1,652 @@
+# Copyright (c) 2026, Infoney and contributors
+# For license information, please see license.txt
+"""
+One-step Purchase Invoice flow for the in-app POS shell.
+
+Pharmacies replenishing the till from a small shipment don't want
+the three-doctype dance (Purchase Order → Purchase Receipt →
+Purchase Invoice) — they want to type the items + quantities they
+just received, hit submit, see stock land in the warehouse, and
+print barcode labels for every unit.
+
+The standard ERPNext lever for "one document, all three effects"
+is `Purchase Invoice` with `update_stock = 1`. Submitting that
+single document creates Stock Ledger entries directly (same as a
+Purchase Receipt would) AND books the payable, so the cashier
+walks away with one document name to keep.
+
+Warehouse + cost center default from the POS Profile but stay
+operator-editable (mirroring the Purchase Receipt screen) — for
+multi-warehouse / multi-cost-centre stores the cashier needs to
+override per shipment.
+
+Batch + serial handling mirrors `purchase_receipts.py` end-to-end:
+each line can carry `batch_no` (existing or freshly typed) plus a
+`batch_expiry_date` for new batches, and `serial_no` (newline /
+comma list) for serial-tracked items. Server uses
+`_resolve_or_create_batch` from purchase_receipts.py so a Batch
+created via the PI page is identical to one created via the PR
+page.
+
+Companion frontend: `frontend/src/posapp/components/pos/purchase/
+PurchaseInvoice.vue` builds the payload; this module accepts it.
+The response includes a `labels` array — one row per unit
+purchased, with the metadata the label-print dialog needs (item
+name, cost rate, standard selling price, barcode, brand name) so
+the client can render labels without a second round-trip per
+item.
+"""
+
+import json
+
+import frappe
+from frappe import _
+from frappe.utils import cint, flt, nowdate
+
+from .purchase_orders import (
+    _ensure_allowed,
+    _resolve_pos_profile,
+    _resolve_supplier,
+    _resolve_supplier_buying_price_list,
+    _upsert_item_price,
+)
+from .purchase_receipts import (
+    _normalize_serial_payload,
+    _resolve_or_create_batch,
+    get_item_meta,
+)
+from .utils import get_default_warehouse
+
+
+def _resolve_pharmacy_brand_name(profile, company):
+    """
+    Pick the most user-meaningful "brand name" to print at the foot
+    of every barcode label. Fallback chain (in order):
+
+        1. POS Profile.custom_shop_name — pharmacy operators add this
+           via Frappe Customize Form to hold the storefront name in
+           Arabic (separate from `company_name`, which holds the
+           legal entity name in English). Frappe auto-prefixes UI-
+           added Custom Fields with `custom_`.
+        2. POS Profile.posa_brand_name — older POSAwesome custom
+           field, kept as a fallback so existing tenants aren't
+           silently broken if they only configured this one.
+        3. Company.company_name — last-ditch fallback to the legal
+           entity name.
+
+    Returning empty string is fine — the label dialog hides the
+    footer line when blank.
+    """
+    for fieldname in ("custom_shop_name", "posa_brand_name"):
+        candidate = (profile or {}).get(fieldname)
+        if candidate:
+            candidate = str(candidate).strip()
+            if candidate:
+                return candidate
+    if company:
+        company_name = frappe.db.get_value("Company", company, "company_name")
+        if company_name:
+            return str(company_name).strip()
+    return ""
+
+
+def _resolve_selling_price_list(profile):
+    candidate = (profile or {}).get("selling_price_list")
+    if candidate:
+        return candidate
+    return frappe.db.get_single_value("Selling Settings", "selling_price_list")
+
+
+def _fetch_item_metadata(item_codes):
+    """
+    Batch-fetch the per-item display metadata the label print dialog
+    needs (item_name, stock_uom, standard_rate, default barcode).
+    Returns a dict keyed by item_code so the per-line loop can hydrate
+    cheaply.
+    """
+    if not item_codes:
+        return {}
+
+    rows = frappe.get_all(
+        "Item",
+        filters={"name": ["in", list(item_codes)]},
+        fields=["name", "item_name", "stock_uom", "standard_rate"],
+    )
+    by_code = {row["name"]: row for row in rows}
+
+    barcode_rows = frappe.get_all(
+        "Item Barcode",
+        filters={"parent": ["in", list(item_codes)]},
+        fields=["parent", "barcode", "uom", "posa_uom"],
+    )
+    barcodes_by_code = {}
+    for row in barcode_rows:
+        barcodes_by_code.setdefault(row["parent"], []).append(row)
+    for code, meta in by_code.items():
+        meta["barcodes"] = barcodes_by_code.get(code, [])
+    return by_code
+
+
+_SCANNABLE_LENGTHS = {8, 12, 13}
+
+
+def _is_scannable_1d(value):
+    """
+    True for "easy to scan with a cheap 1D scanner" barcodes —
+    i.e. 8 / 12 / 13 digit numerics (EAN8 / UPC / EAN13). These
+    print at high contrast and read reliably even on small (38mm)
+    label rolls.
+
+    Pharmacies often have BOTH a short EAN13 on the unit AND a long
+    GS1 Application-Identifier string (`(01)0629...`(17)260605(10)…)
+    encoded in a 2D DataMatrix on the same SKU. The long GS1 string
+    is unscannable as a 1D CODE128 on a 50mm label, so we want to
+    prefer the EAN13 when the SKU has both.
+    """
+    text = str(value or "").strip()
+    return bool(text) and text.isdigit() and len(text) in _SCANNABLE_LENGTHS
+
+
+def _resolve_barcode_symbology(value):
+    """
+    Pick the JsBarcode format string for a given barcode value.
+    Used in the server-side label payload so the client renders
+    the bars deterministically (vs JsBarcode's `format="auto"`,
+    which has been observed to pick wrong on edge cases).
+
+    Decision tree (1D only — DataMatrix / GS1 paths intentionally
+    not supported per user spec; the operator always picks an
+    EAN/UPC barcode for the SKU):
+      * 13 digits, numeric → EAN13
+      * 12 digits, numeric → UPC
+      * 8  digits, numeric → EAN8
+      * Anything else      → CODE128 (covers alphanumeric SKU
+                              codes and any non-EAN strings)
+    """
+    text = str(value or "").strip()
+    if not text:
+        return "CODE128"
+    if text.isdigit():
+        if len(text) == 13:
+            return "EAN13"
+        if len(text) == 12:
+            return "UPC"
+        if len(text) == 8:
+            return "EAN8"
+    return "CODE128"
+
+
+def _pick_best_barcode(rows):
+    """
+    Among a list of `Item Barcode` rows, return the value most likely
+    to scan reliably as a 1D barcode. Preference order:
+      1. A scannable EAN13 / UPC / EAN8 (numeric, fixed length)
+      2. The first row's barcode (whatever it is)
+      3. Empty string
+    """
+    if not rows:
+        return ""
+    for row in rows:
+        if _is_scannable_1d(row.get("barcode")):
+            return str(row.get("barcode") or "").strip()
+    return str((rows[0] or {}).get("barcode") or "").strip()
+
+
+def _resolve_item_barcode(meta, uom, stock_uom):
+    """
+    Pick the barcode to print for this line.
+
+    Per user spec (2026-05-03): when an item has multiple barcodes,
+    ALWAYS prefer the EAN/UPC/EAN8 (scannable 1D, fixed-length
+    numeric) over any other format, regardless of UOM tagging.
+    Pharmacy use case: SKUs often have a long pharma string AND a
+    short EAN13 — the EAN13 is always the right choice for the
+    label printer + checkout scanner.
+
+    Cascade:
+      1. ANY scannable EAN13 / UPC / EAN8 on the item → win.
+         (Global, not UOM-scoped — short scannable barcodes are the
+         operator's preference no matter where they're tagged.)
+      2. UOM-tagged barcode (any format) — the line's UOM wins,
+         falling back to stock_uom for purchase-UOM lines that have
+         only stock-UOM barcodes.
+      3. First barcode on the item.
+    """
+    if not meta:
+        return ""
+    rows = meta.get("barcodes") or []
+    if not rows:
+        return ""
+
+    # Step 1 — global EAN / UPC / EAN8 preference.
+    for row in rows:
+        if _is_scannable_1d(row.get("barcode")):
+            return str(row.get("barcode") or "").strip()
+
+    # Step 2 — UOM-tagged fallback. No EAN exists on the item, so
+    # fall back to the per-UOM barcode the operator tagged.
+    def matches_uom(row, target):
+        return target and (row.get("posa_uom") or row.get("uom")) == target
+
+    for target in (uom, stock_uom):
+        if not target:
+            continue
+        for row in rows:
+            if matches_uom(row, target):
+                value = str(row.get("barcode") or "").strip()
+                if value:
+                    return value
+
+    # Step 3 — last resort, first barcode whatever it is.
+    return str((rows[0] or {}).get("barcode") or "").strip()
+
+
+# `_pick_best_barcode` was an earlier helper kept for backwards
+# compatibility — `_resolve_item_barcode` no longer calls it but
+# external callers might. Left in place so nothing breaks; safe to
+# delete in a future refactor.
+
+
+def _resolve_selling_price(item_code, price_list, uom, stock_uom):
+    """
+    Look up the per-item selling rate the customer would actually pay
+    so the label can show "Cost vs Sell" side-by-side. Prefer the
+    price-list rate at the printed UOM, then at stock UOM, then fall
+    back to `Item.standard_rate`. Empty/0 is fine — the dialog skips
+    the line if both rates are zero.
+    """
+    if not item_code:
+        return 0
+    if price_list:
+        for candidate_uom in (uom, stock_uom):
+            if not candidate_uom:
+                continue
+            row = frappe.db.get_value(
+                "Item Price",
+                {
+                    "item_code": item_code,
+                    "price_list": price_list,
+                    "uom": candidate_uom,
+                    "selling": 1,
+                },
+                "price_list_rate",
+            )
+            if row:
+                return flt(row)
+        # No UOM-scoped price — pick any selling price for this item.
+        row = frappe.db.get_value(
+            "Item Price",
+            {
+                "item_code": item_code,
+                "price_list": price_list,
+                "selling": 1,
+            },
+            "price_list_rate",
+        )
+        if row:
+            return flt(row)
+    standard_rate = frappe.db.get_value("Item", item_code, "standard_rate")
+    return flt(standard_rate or 0)
+
+
+def _format_iso_date(value):
+    """Coerce a date/datetime/str to YYYY-MM-DD for label printing."""
+    if not value:
+        return ""
+    try:
+        from frappe.utils import getdate
+
+        return str(getdate(value))
+    except Exception:
+        return str(value)
+
+
+def _resolve_batch_meta(batch_no):
+    """
+    Fetch expiry + manufacturing date for a Batch row, with a tiny
+    in-call cache so the same batch on multiple lines costs one
+    lookup. Empty/None batch returns blank meta.
+    """
+    if not batch_no:
+        return {"batch_no": "", "batch_expiry_date": "", "batch_manufacturing_date": ""}
+    if not frappe.db.exists("Batch", batch_no):
+        return {"batch_no": batch_no, "batch_expiry_date": "", "batch_manufacturing_date": ""}
+    row = frappe.db.get_value(
+        "Batch",
+        batch_no,
+        ["expiry_date", "manufacturing_date"],
+        as_dict=True,
+    )
+    return {
+        "batch_no": batch_no,
+        "batch_expiry_date": _format_iso_date(row.get("expiry_date")) if row else "",
+        "batch_manufacturing_date": (
+            _format_iso_date(row.get("manufacturing_date")) if row else ""
+        ),
+    }
+
+
+def _build_label_payload(invoice_doc, profile):
+    """
+    Expand each Purchase Invoice line into one entry per unit
+    purchased — three boxes of Panadol come back as three separate
+    `labels` entries, so the print dialog doesn't have to re-multiply
+    by qty client-side.
+
+    Per-label fields (matches the dialog's renderer):
+      * item_name      — the printable item label
+      * selling_rate   — what the customer will pay (no cost shown
+                          on the customer-facing label, per user
+                          request)
+      * barcode        — UOM-aware pick from `Item Barcode`
+      * batch_no       — Batch ID on the PI line, when present
+      * batch_expiry_date — pulled from the Batch doc, formatted
+                          as YYYY-MM-DD; printed under the barcode
+                          for pharmacy expiry traceability
+      * brand_name     — `custom_shop_name` → `posa_brand_name` →
+                          Company name fallback; printed at the
+                          foot of the label
+
+    Quantity is rounded UP because labels are physical objects: 1.5
+    kg of weighed goods → 2 labels. Pharmacy use case is integer
+    99% of the time so this is normally a no-op.
+    """
+    item_codes = {
+        row.item_code for row in (invoice_doc.items or []) if row.item_code
+    }
+    metadata = _fetch_item_metadata(item_codes)
+    selling_price_list = _resolve_selling_price_list(profile)
+    company_currency = frappe.get_cached_value(
+        "Company", invoice_doc.company, "default_currency"
+    )
+    brand_name = _resolve_pharmacy_brand_name(profile, invoice_doc.company)
+
+    # Cache batch lookups across lines — same batch on multiple
+    # lines costs ONE Batch.get_value, not N.
+    batch_meta_cache: dict[str, dict] = {}
+
+    labels = []
+    for row in invoice_doc.items or []:
+        meta = metadata.get(row.item_code) or {}
+        stock_uom = row.stock_uom or meta.get("stock_uom") or ""
+        printed_uom = row.uom or stock_uom
+
+        barcode = _resolve_item_barcode(meta, printed_uom, stock_uom)
+        selling_rate = _resolve_selling_price(
+            row.item_code, selling_price_list, printed_uom, stock_uom
+        )
+
+        batch_no = (row.get("batch_no") or "").strip() if hasattr(row, "get") else (
+            getattr(row, "batch_no", "") or ""
+        ).strip()
+        if batch_no not in batch_meta_cache:
+            batch_meta_cache[batch_no] = _resolve_batch_meta(batch_no)
+        batch_info = batch_meta_cache[batch_no]
+
+        qty_to_print = max(1, int(flt(row.qty) + 0.999))
+
+        labels.append(
+            {
+                "item_code": row.item_code,
+                "item_name": row.item_name or meta.get("item_name") or row.item_code,
+                "uom": printed_uom,
+                "qty": qty_to_print,
+                "selling_rate": flt(selling_rate),
+                "barcode": barcode,
+                # Resolved server-side so the client renders without
+                # a second analysis pass. See `_resolve_barcode_symbology`
+                # for the decision tree (1D EAN13 / UPC / EAN8 →
+                # GS1 DataMatrix → DataMatrix → CODE128 fallback).
+                "barcode_format": _resolve_barcode_symbology(barcode),
+                "batch_no": batch_info.get("batch_no", ""),
+                "batch_expiry_date": batch_info.get("batch_expiry_date", ""),
+                "batch_manufacturing_date": batch_info.get(
+                    "batch_manufacturing_date", ""
+                ),
+                "brand_name": brand_name,
+                "currency": invoice_doc.currency or company_currency,
+            }
+        )
+
+    return {
+        "labels": labels,
+        "brand_name": brand_name,
+        "company_currency": company_currency,
+        "invoice_currency": invoice_doc.currency or company_currency,
+    }
+
+
+@frappe.whitelist()
+def create_purchase_invoice(data):
+    """
+    Submit a one-step Purchase Invoice with `update_stock=1`.
+
+    Required payload fields:
+      * `supplier` — Supplier name (will resolve case-insensitively).
+      * `items[]` — see below.
+      * `pos_profile` — full POS Profile dict (from the client store),
+         falls back to `get_active_pos_profile()` when missing.
+
+    Per-line `items[]` shape (extended to match the Purchase Receipt
+    screen so the operator can land batch / expiry / serial data in
+    the same submit):
+      * item_code, qty, rate (required)
+      * uom, stock_uom, conversion_factor
+      * discount_percentage
+      * warehouse — overrides the parent warehouse for split shipments
+      * cost_center — same idea
+      * batch_no, batch_expiry_date, batch_manufacturing_date —
+        existing batch is matched, otherwise a new Batch is created
+        (expiry required for new batches)
+      * serial_no — list / newline / comma string
+
+    Optional payload fields:
+      * `warehouse` — defaults to `posa_purchase_warehouse` →
+        `warehouse` → company default. Operator can override.
+      * `cost_center` — defaults to POS Profile then Company.
+      * `posting_date`, `due_date`, `bill_no`, `bill_date`.
+      * `update_price_list` — when truthy, every line's rate is upserted
+        into the resolved buying price list (matches the PR screen's
+        "Save as buying price list" toggle).
+
+    Returns the new PI name + a `labels[]` array (one entry per unit
+    purchased) for the post-submit label-print dialog.
+    """
+    payload = json.loads(data) if isinstance(data, str) else data
+    profile = _resolve_pos_profile(payload.get("pos_profile"))
+    _ensure_allowed(profile, "posa_allow_purchase_invoice", _("Purchase invoices"))
+
+    supplier_input = payload.get("supplier")
+    if not supplier_input:
+        frappe.throw(_("Supplier is required."))
+
+    supplier = _resolve_supplier(supplier_input)
+    if not supplier:
+        frappe.throw(_("Supplier {0} was not found.").format(supplier_input))
+
+    company = (
+        payload.get("company")
+        or profile.get("company")
+        or frappe.defaults.get_default("company")
+    )
+    if not company:
+        frappe.throw(_("Company is required."))
+
+    # Warehouse — operator-overridable (mirror PR). Priority:
+    #   1. payload (cashier's explicit pick)
+    #   2. POS Profile `posa_purchase_warehouse` (PR's preferred field)
+    #   3. POS Profile `warehouse` (sales warehouse, fallback)
+    #   4. Stock Settings default warehouse
+    warehouse = (
+        payload.get("warehouse")
+        or profile.get("posa_purchase_warehouse")
+        or profile.get("warehouse")
+        or get_default_warehouse(company)
+    )
+    if not warehouse:
+        frappe.throw(_("Warehouse is required to receive stock."))
+
+    # Cost Center — same priority chain as PR. Stamped on the parent
+    # AND on every line; ERPNext's accounting submit pipeline reads
+    # `parent.cost_center` for "Stock Received But Not Billed" GL
+    # entries and throws a mandatory-field error if it's missing,
+    # even when every line has one.
+    cost_center = (
+        payload.get("cost_center")
+        or profile.get("cost_center")
+        or profile.get("posa_cost_center")
+        or frappe.get_cached_value("Company", company, "cost_center")
+        or None
+    )
+    if cost_center and not frappe.db.exists("Cost Center", cost_center):
+        frappe.throw(_("Cost Center {0} was not found.").format(cost_center))
+    if not cost_center:
+        frappe.throw(
+            _(
+                "No Cost Center could be resolved for this Purchase Invoice. "
+                "Pick one in the dialog or set a default on the POS Profile / Company."
+            )
+        )
+
+    items = payload.get("items") or []
+    if not items:
+        frappe.throw(_("Purchase invoice requires at least one item."))
+
+    posting_date = payload.get("posting_date") or nowdate()
+    due_date = payload.get("due_date") or posting_date
+
+    supplier_doc = frappe.get_doc("Supplier", supplier)
+    supplier_currency = supplier_doc.default_currency or frappe.get_value(
+        "Company", company, "default_currency"
+    )
+    buying_price_list = (
+        payload.get("buying_price_list")
+        or _resolve_supplier_buying_price_list(supplier)
+    )
+
+    invoice_doc = frappe.get_doc(
+        {
+            "doctype": "Purchase Invoice",
+            "supplier": supplier,
+            "company": company,
+            "posting_date": posting_date,
+            "due_date": due_date,
+            "currency": supplier_currency,
+            "buying_price_list": buying_price_list,
+            "update_stock": 1,
+            "set_warehouse": warehouse,
+            "cost_center": cost_center,
+            "bill_no": payload.get("bill_no"),
+            "bill_date": payload.get("bill_date") or posting_date,
+            "ignore_pricing_rule": 1,
+        }
+    )
+
+    update_price_list = cint(payload.get("update_price_list"))
+    rows_for_price_update: list[tuple[str, str | None, float]] = []
+
+    for row in items:
+        item_code = row.get("item_code")
+        if not item_code:
+            continue
+
+        qty = flt(row.get("qty"))
+        if qty <= 0:
+            continue
+
+        # Pull the same item meta the PR page uses so batch/serial
+        # flags drive `_resolve_or_create_batch` consistently.
+        item_meta = get_item_meta(item_code) or {}
+        stock_uom = row.get("stock_uom") or item_meta.get("stock_uom")
+        item_name = (
+            row.get("item_name") or item_meta.get("item_name") or item_code
+        )
+        uom = row.get("uom") or stock_uom
+        conversion_factor = flt(row.get("conversion_factor") or 1) or 1
+        rate = flt(row.get("rate"))
+        discount_percentage = flt(row.get("discount_percentage"))
+
+        batch_no = _resolve_or_create_batch(row, item_meta, supplier)
+        serial_no = (
+            _normalize_serial_payload(row.get("serial_no"))
+            if cint(item_meta.get("has_serial_no"))
+            else None
+        )
+
+        line = {
+            "item_code": item_code,
+            "item_name": item_name,
+            "qty": qty,
+            "uom": uom,
+            "stock_uom": stock_uom,
+            "conversion_factor": conversion_factor,
+            "rate": rate,
+            "price_list_rate": rate,
+            "discount_percentage": discount_percentage,
+            "warehouse": row.get("warehouse") or warehouse,
+        }
+        line_cost_center = row.get("cost_center") or cost_center
+        if line_cost_center:
+            line["cost_center"] = line_cost_center
+        if batch_no:
+            line["batch_no"] = batch_no
+        if serial_no:
+            line["serial_no"] = serial_no
+        invoice_doc.append("items", line)
+        rows_for_price_update.append((item_code, uom, rate))
+
+    if not invoice_doc.items:
+        frappe.throw(_("Purchase invoice requires at least one item with quantity."))
+
+    invoice_doc.flags.ignore_permissions = True
+    frappe.flags.ignore_account_permission = True
+    invoice_doc.insert()
+
+    # Persist a draft copy first — if the submit fails (e.g. account
+    # permissions, negative-stock guard), the operator still has the
+    # invoice to investigate from desk.
+    frappe.db.commit()
+
+    if cint(payload.get("submit", 1)):
+        try:
+            invoice_doc.submit()
+        except Exception as err:
+            frappe.db.rollback()
+            frappe.log_error(
+                frappe.get_traceback(), "POS Awesome Purchase Invoice Submit Failed"
+            )
+            frappe.throw(
+                _(
+                    "Purchase Invoice {0} was saved as Draft. Submit "
+                    "failed: {1}"
+                ).format(invoice_doc.name, str(err))
+            )
+
+    if update_price_list and buying_price_list:
+        for item_code, uom, rate in rows_for_price_update:
+            if rate <= 0:
+                continue
+            try:
+                _upsert_item_price(
+                    item_code,
+                    buying_price_list,
+                    rate,
+                    uom=uom,
+                    buying=True,
+                )
+            except Exception:
+                frappe.log_error(
+                    frappe.get_traceback(),
+                    "POS Awesome PI price-list update failed",
+                )
+
+    label_payload = _build_label_payload(invoice_doc, profile)
+
+    return {
+        "purchase_invoice": invoice_doc.name,
+        "warehouse": warehouse,
+        "cost_center": cost_center,
+        "grand_total": flt(invoice_doc.grand_total),
+        "currency": invoice_doc.currency,
+        **label_payload,
+    }

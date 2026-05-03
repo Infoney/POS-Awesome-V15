@@ -627,6 +627,18 @@ export default {
 			submitInFlight.value = false;
 			if (payload?.success) {
 				shiftSubmitted.value = true;
+				// Re-fetch the overview now that the shift is submitted
+				// — the server-side `validate` hook just populated the
+				// `cashiers` child table and may have re-aggregated
+				// other totals. Without this refresh, the post-submit
+				// "Print A4" button would render the PRE-submit
+				// overview snapshot, which is missing the per-cashier
+				// rollup the desk Print A4 (Mizan) shows.
+				const data = dialog_data.value || {};
+				const openingShift = data.pos_opening_shift;
+				if (openingShift) {
+					fetchOverview(openingShift, pos_profile.value?.currency);
+				}
 			} else {
 				toastStore.show({
 					title: __("Failed to close shift. Please try again."),

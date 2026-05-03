@@ -37,6 +37,14 @@ export interface TerminalEmployee {
 	enabled?: number;
 	is_current?: boolean;
 	is_supervisor?: boolean;
+	/**
+	 * Optional Sales Person linked to the cashier User via
+	 * `User.posa_sales_person`. When set, the POS payments screen
+	 * auto-selects this Sales Person on every transaction the
+	 * cashier rings. Switching cashiers via the Switch Cashier
+	 * dialog also switches the default sales person.
+	 */
+	posa_sales_person?: string;
 }
 
 const STORAGE_KEY = "posa_terminal_cashier";
@@ -106,6 +114,9 @@ export const useEmployeeStore = defineStore("employee", () => {
 						enabled: Number(cashier.enabled ?? 1),
 						is_current: Boolean(cashier.is_current),
 						is_supervisor: Boolean(cashier.is_supervisor),
+						posa_sales_person: cashier.posa_sales_person
+							? String(cashier.posa_sales_person)
+							: "",
 					};
 
 		if (!nextCashier) {
@@ -150,6 +161,9 @@ export const useEmployeeStore = defineStore("employee", () => {
 						enabled: Number(employee.enabled ?? 1),
 						is_current: Boolean(employee.is_current),
 						is_supervisor: Boolean(employee.is_supervisor),
+						posa_sales_person: employee.posa_sales_person
+							? String(employee.posa_sales_person)
+							: "",
 					}))
 			: [];
 

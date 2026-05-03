@@ -237,6 +237,51 @@ export function useClosingShift(eventBus: any) {
 				),
 			},
 			cash_movements: normalizeCashMovements(payload.cash_movements),
+			// Per-cashier rollup with the per-row invoice drill-down.
+			// The normalizer is otherwise white-listing fields, so
+			// without this the `cashiers` array from the server gets
+			// silently dropped — which is why the in-POS dialog Print
+			// A4 was missing the Cashiers section even though the desk
+			// `Print A4 (Mizan)` button (which reads from the saved
+			// closing shift's child table directly) shows it correctly.
+			//
+			// Light passthrough — server already shapes these rows in
+			// `_resolve_cashier_breakdown_rows`. We only re-coerce the
+			// numeric fields and the per-row `invoices[]` totals so a
+			// stale string from an older server doesn't crash the UI.
+			cashiers: Array.isArray(payload.cashiers)
+				? payload.cashiers.map((row: any) => ({
+						cashier: row?.cashier || "",
+						cashier_name: row?.cashier_name || "",
+						sales_person: row?.sales_person || "",
+						invoice_count: toNumber(row?.invoice_count),
+						grand_total: toNumber(row?.grand_total),
+						net_total: toNumber(row?.net_total),
+						invoices: Array.isArray(row?.invoices)
+							? row.invoices.map((inv: any) => ({
+									name: inv?.name || "",
+									doctype: inv?.doctype || "",
+									posting_date: inv?.posting_date || "",
+									posting_time: inv?.posting_time || "",
+									customer: inv?.customer || "",
+									customer_name:
+										inv?.customer_name ||
+										inv?.customer ||
+										"",
+									currency: inv?.currency || "",
+									grand_total: toNumber(inv?.grand_total),
+									base_grand_total: toNumber(
+										inv?.base_grand_total,
+									),
+									net_total: toNumber(inv?.net_total),
+									base_net_total: toNumber(
+										inv?.base_net_total,
+									),
+									is_return: Boolean(inv?.is_return),
+								}))
+							: [],
+					}))
+				: [],
 		});
 
 		const request = frappe.call(

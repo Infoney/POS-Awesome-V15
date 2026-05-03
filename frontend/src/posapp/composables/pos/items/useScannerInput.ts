@@ -81,7 +81,16 @@ export function useScannerInput(options: ScannerInputOptions = {}) {
 	const keyboardScanPendingValue = ref("");
 
 	// Config
-	const keyboardScanMinLength = 12;
+	//
+	// `keyboardScanMinLength` was 12, which silently dropped EAN8
+	// (8-digit) and UPC-E (8-digit) codes — the gate is on number of
+	// keystrokes captured by the keyboard-emulating scanner before
+	// the buffer is treated as a "scan" rather than a typed search.
+	// 8 covers EAN8 / UPC-E and still rules out short typed item
+	// codes (e.g. "PAN-1") because it requires 8+ rapidly-typed
+	// chars within the `keyboardScanMaxDuration` window — humans
+	// can't type 8 chars in 250ms, scanners can.
+	const keyboardScanMinLength = 8;
 	const keyboardScanMaxInterval = 45;
 	const keyboardScanMaxDuration = 250;
 	const keyboardScanProcessingDelay = 100;

@@ -1358,13 +1358,17 @@ const handleGlobalTypeToSearchKeydown = (event: KeyboardEvent) => {
 	appendSearchCharacter(event.key);
 };
 
-// Ctrl+K / Cmd+K — focus the item search from anywhere in the POS.
-// Mirrors the Command Center shortcut. Works even while another
-// input is focused so cashiers can jump to search without clicking.
+// F2 — focus the item search from anywhere in the POS. Was
+// Ctrl+K / Cmd+K (Command Center parity), but cashiers in the
+// pharmacy use Ctrl+K for browser address-bar autocomplete and
+// kept missing the focus shortcut. F2 has no default browser
+// behaviour and matches the function-key convention most retail
+// POS apps already use ("F2 = search"). Modifier keys MUST be
+// off — Shift+F2, Ctrl+F2 etc are left alone for Frappe Desk.
 const handleFocusSearchShortcut = (event: KeyboardEvent) => {
 	if (!event || event.defaultPrevented || event.repeat) return;
-	if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
-	if ((event.key || "").toLowerCase() !== "k") return;
+	if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+	if (event.key !== "F2") return;
 	if (
 		props.context !== "pos" ||
 		activeView.value === "payment" ||
