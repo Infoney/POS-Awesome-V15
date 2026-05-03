@@ -8,9 +8,15 @@
     - PR receives stock without booking the payable
     - PI receives stock AND books the payable (`update_stock = 1`)
 
-  Warehouse + cost center default from the POS Profile but stay
-  operator-editable so multi-warehouse / multi-cost-centre stores can
-  override per shipment. Same pattern as PR.
+  Warehouse + cost center seed from the POS Profile and stay LOCKED
+  for normal cashiers — preventing accidental writes to the wrong
+  warehouse / cost-center on a shared till. Supervisors
+  (`User.posa_is_pos_supervisor` checked) get an inline override
+  toggle that flips both fields editable for the rest of the form
+  session; the override re-locks on submit / clear / page revisit, and
+  also re-locks immediately if the active cashier flips back to
+  non-supervisor via the Switch Cashier dialog mid-form. PR keeps the
+  always-editable behaviour for now.
 
   Post-submit, opens `BarcodeLabelPrintDialog` with the `labels[]`
   payload so the operator can print barcode labels for each unit of
@@ -98,6 +104,16 @@
 						</v-autocomplete>
 					</div>
 
+					<!--
+						Warehouse + Cost Center seed from the active POS
+						Profile and stay LOCKED for non-supervisor cashiers.
+						Supervisors (`User.posa_is_pos_supervisor` checked
+						on the active cashier in the employee store) get an
+						unlock toggle that flips both fields editable.
+						Once unlocked the autocomplete + clear chip behave
+						normally. The toggle is per-form-instance — closing
+						and re-opening the page re-locks.
+					-->
 					<div class="pi-form-field">
 						<v-autocomplete
 							v-model="warehouse"
@@ -109,15 +125,42 @@
 							variant="outlined"
 							color="primary"
 							hide-details="auto"
-							clearable
+							:clearable="profileFieldsUnlocked"
+							:readonly="!profileFieldsUnlocked"
+							:disabled="!profileFieldsUnlocked && !warehouse"
 							:loading="warehouseLoading"
-							class="pos-themed-input pi-themed-field"
+							:class="[
+								'pos-themed-input pi-themed-field',
+								!profileFieldsUnlocked && 'pi-themed-field--locked',
+							]"
 							menu-icon="mdi-chevron-down"
 						>
 							<template #prepend-inner>
 								<v-icon size="18" class="pi-field-icon">
 									mdi-warehouse
 								</v-icon>
+							</template>
+							<template
+								v-if="!profileFieldsUnlocked"
+								#append-inner
+							>
+								<v-tooltip
+									:text="
+										isSupervisor
+											? __('Click the lock icon below to override the POS Profile defaults')
+											: __('Locked by POS Profile — supervisor unlock required')
+									"
+								>
+									<template #activator="{ props: tipProps }">
+										<v-icon
+											v-bind="tipProps"
+											size="16"
+											class="pi-lock-icon"
+										>
+											mdi-lock-outline
+										</v-icon>
+									</template>
+								</v-tooltip>
 							</template>
 						</v-autocomplete>
 					</div>
@@ -133,14 +176,27 @@
 							variant="outlined"
 							color="primary"
 							hide-details="auto"
-							clearable
+							:clearable="profileFieldsUnlocked"
+							:readonly="!profileFieldsUnlocked"
+							:disabled="!profileFieldsUnlocked && !costCenter"
 							:loading="costCenterLoading"
-							class="pos-themed-input pi-themed-field"
+							:class="[
+								'pos-themed-input pi-themed-field',
+								!profileFieldsUnlocked && 'pi-themed-field--locked',
+							]"
 							menu-icon="mdi-chevron-down"
 						>
 							<template #prepend-inner>
 								<v-icon size="18" class="pi-field-icon">
 									mdi-bank-outline
+								</v-icon>
+							</template>
+							<template
+								v-if="!profileFieldsUnlocked"
+								#append-inner
+							>
+								<v-icon size="16" class="pi-lock-icon">
+									mdi-lock-outline
 								</v-icon>
 							</template>
 						</v-autocomplete>
@@ -179,6 +235,35 @@
 							/>
 						</div>
 					</div>
+				</div>
+
+				<!-- Lock toggle row — visible only to supervisors. Clicking
+				     flips warehouse + cost center editable for the rest of
+				     this form session. -->
+				<div v-if="isSupervisor" class="pi-lock-toggle-row">
+					<button
+						type="button"
+						class="pi-lock-toggle"
+						:class="{
+							'pi-lock-toggle--unlocked': profileFieldsUnlocked,
+						}"
+						@click="profileFieldsUnlocked = !profileFieldsUnlocked"
+					>
+						<v-icon size="14" class="pi-lock-toggle__icon">
+							{{
+								profileFieldsUnlocked
+									? "mdi-lock-open-variant-outline"
+									: "mdi-lock-outline"
+							}}
+						</v-icon>
+						<span>
+							{{
+								profileFieldsUnlocked
+									? __("Override unlocked — warehouse + cost center editable")
+									: __("Override warehouse + cost center (supervisor)")
+							}}
+						</span>
+					</button>
 				</div>
 
 				<!-- Bill No (supplier's invoice reference) — optional, full-width row -->
@@ -338,13 +423,15 @@
 <script>
 import format, { formatUtils } from "../../../format";
 import { useUIStore } from "../../../stores/uiStore.js";
+import { useEmployeeStore } from "../../../stores/employeeStore";
+import { storeToRefs } from "pinia";
 import { getOpeningStorage } from "../../../../offline/index";
 import { useToastStore } from "../../../stores/toastStore";
 import { usePurchaseInvoice } from "../../../composables/pos/payments/usePurchaseInvoice";
 import SupplierDialog from "../dialogs/purchase/SupplierDialog.vue";
 import PurchaseReceiptItemsTable from "./PurchaseReceiptItemsTable.vue";
 import BarcodeLabelPrintDialog from "./BarcodeLabelPrintDialog.vue";
-import { ref, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 
 export default {
 	mixins: [format],
@@ -356,8 +443,28 @@ export default {
 	setup() {
 		const uiStore = useUIStore();
 		const toastStore = useToastStore();
+		const employeeStore = useEmployeeStore();
+		const { currentCashier } = storeToRefs(employeeStore);
 
 		const pos_profile = ref({});
+
+		// Warehouse + cost center are seeded from the active POS Profile and
+		// stay LOCKED for non-supervisor cashiers. Supervisors see the lock
+		// toggle in the form header; flipping it makes both autocompletes
+		// editable for the rest of this form session (re-locks on form
+		// reset / page revisit). Read `is_supervisor` reactively so a
+		// Switch Cashier mid-form correctly re-locks.
+		const isSupervisor = computed(() =>
+			Boolean(currentCashier.value?.is_supervisor),
+		);
+		const profileFieldsUnlocked = ref(false);
+
+		// If the cashier flips back to non-supervisor (Switch Cashier), force
+		// the override back off so the locked field defaults can't leak
+		// through an active session.
+		watch(isSupervisor, (val) => {
+			if (!val) profileFieldsUnlocked.value = false;
+		});
 
 		const {
 			invoiceItems,
@@ -614,6 +721,9 @@ export default {
 
 		const resetForm = () => {
 			resetComposableForm();
+			// Re-lock warehouse + cost center after every reset so a stale
+			// supervisor unlock can't carry into the next document.
+			profileFieldsUnlocked.value = false;
 		};
 
 		onMounted(async () => {
@@ -706,6 +816,8 @@ export default {
 			itemSearchLoading,
 			handleItemSearch,
 			onItemSelected,
+			isSupervisor,
+			profileFieldsUnlocked,
 		};
 	},
 	computed: {
@@ -959,6 +1071,91 @@ export default {
 }
 .pi-themed-field :deep(.v-field--focused .v-label) {
 	color: #f5d0fe !important;
+}
+
+/*
+ * Locked state — warehouse + cost center inherit the POS Profile and stay
+ * read-only for non-supervisor cashiers. Supervisor unlock is handled
+ * via the .pi-lock-toggle button below; this just dims the chrome and
+ * swaps the cursor so the locked state reads at a glance.
+ */
+.pi-themed-field--locked :deep(.v-field) {
+	background: rgba(139, 92, 246, 0.025) !important;
+	cursor: not-allowed !important;
+}
+.pi-themed-field--locked :deep(.v-field__outline__start),
+.pi-themed-field--locked :deep(.v-field__outline__end),
+.pi-themed-field--locked :deep(.v-field__outline__notch::before),
+.pi-themed-field--locked :deep(.v-field__outline__notch::after) {
+	border-color: rgba(139, 92, 246, 0.18) !important;
+	border-style: dashed !important;
+}
+.pi-themed-field--locked :deep(.v-field__input) {
+	cursor: not-allowed !important;
+	color: rgba(231, 235, 243, 0.78) !important;
+}
+.pi-themed-field--locked :deep(.v-label) {
+	color: rgba(231, 235, 243, 0.5) !important;
+}
+/*
+ * Vuetify renders disabled fields at 38% opacity by default — we use
+ * `:disabled` to swallow keyboard input on the locked autocomplete (the
+ * `:readonly` flag alone leaves space-bar and arrow-keys interactive).
+ * Restore full opacity so the seeded value still reads cleanly.
+ */
+.pi-themed-field--locked :deep(.v-field--disabled) {
+	opacity: 1 !important;
+}
+.pi-lock-icon {
+	color: rgba(245, 208, 254, 0.55) !important;
+	margin-right: 4px;
+}
+
+/*
+ * Supervisor unlock toggle — only rendered when
+ * `currentCashier.is_supervisor` is true. Compact pill that flips both
+ * warehouse + cost center editable for the rest of this form session
+ * (re-locks on submit / clear / page revisit). Sits between the form
+ * grid and the bill-no row.
+ */
+.pi-lock-toggle-row {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 8px;
+}
+.pi-lock-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.72rem;
+	font-weight: 500;
+	color: rgba(245, 208, 254, 0.85);
+	background: rgba(139, 92, 246, 0.10);
+	border: 1px dashed rgba(139, 92, 246, 0.45);
+	padding: 5px 12px;
+	border-radius: 999px;
+	cursor: pointer;
+	transition: background-color 0.18s ease, border-color 0.18s ease,
+		color 0.18s ease;
+}
+.pi-lock-toggle:hover {
+	background: rgba(139, 92, 246, 0.18);
+	border-color: rgba(245, 208, 254, 0.6);
+	color: #f5d0fe;
+}
+.pi-lock-toggle--unlocked {
+	color: #fde68a;
+	background: rgba(251, 191, 36, 0.12);
+	border-color: rgba(251, 191, 36, 0.55);
+	border-style: solid;
+}
+.pi-lock-toggle--unlocked:hover {
+	background: rgba(251, 191, 36, 0.20);
+	border-color: rgba(251, 191, 36, 0.75);
+	color: #fef3c7;
+}
+.pi-lock-toggle__icon {
+	color: inherit !important;
 }
 
 /* Posting Date wrapper to give it the same chrome */
