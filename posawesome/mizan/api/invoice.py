@@ -499,7 +499,20 @@ def calc_delivery_charges(doc):
 
 
 def apply_tax_inclusive(doc):
-    """Mark taxes as inclusive based on POS Profile setting."""
+    """Mark taxes as inclusive based on POS Profile setting.
+
+    Bug observed on kpgtest invoice 03334 manual return: ERPNext's
+    standard "Create Return" path drops `included_in_print_rate` from
+    the new return's tax rows. The original (tax-inclusive: net 726
+    + tax 109 = grand 835 SAR) becomes a return with the original
+    grand re-interpreted as net (835 + 15% tax = 960.25 SAR), so
+    refunding the original SAR 835 hits "Total payments amount can't
+    be greater than 960.25". Re-asserting `included_in_print_rate`
+    here from the POS Profile setting fixes it.
+
+    Actual-type rows (e.g. delivery charges) stay exclusive
+    regardless — they're add-on amounts, not item rate components.
+    """
     if not doc.pos_profile:
         return
     try:
@@ -510,10 +523,15 @@ def apply_tax_inclusive(doc):
     has_changes = False
     for tax in doc.get("taxes", []):
         if tax.charge_type == "Actual":
+            # Actual tax rows are add-on amounts (delivery charges,
+            # round-off, etc.) and should never be included in print
+            # rate. Skip the inclusive logic for these.
             if tax.included_in_print_rate:
                 tax.included_in_print_rate = 0
                 has_changes = True
-        continue
+            continue
+        # Non-Actual rows (On Net Total, On Previous Row Amount, etc.)
+        # honour the POS Profile's tax-inclusive setting.
         if tax_inclusive and not tax.included_in_print_rate:
             tax.included_in_print_rate = 1
             has_changes = True
