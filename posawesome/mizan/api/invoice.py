@@ -153,6 +153,47 @@ def before_validate(doc, method):
         if base_amount > 0:
             payment.base_amount = -base_amount
 
+    # Detect and undo ERPNext's client-side value-swap on multi-currency
+    # returns created via the standard Sales Invoice form (back-end /
+    # manual creation). Symptom captured on kpgtest invoice 03329:
+    # cashier intended to refund -702.075 SAR but the form sent
+    # `payment.amount = -57.785` (which is the KWD value of
+    # `base_grand_total`, not the SAR value of `grand_total`). The
+    # form lands a company-currency value into the invoice-currency
+    # `amount` field. POS Awesome's own payment dialog avoids this
+    # because it controls amount entry directly; manual SI creation
+    # goes through ERPNext's standard form code which has the bug.
+    #
+    # Detection criteria (all required):
+    #   * Multi-currency (party_account_currency != doc.currency)
+    #   * conversion_rate is non-trivial (> 0 and != 1)
+    #   * payment.amount magnitude matches base_grand_total within 0.01
+    #   * payment.amount magnitude is far (> 1.0) from grand_total
+    #
+    # The tight `< 0.01` match against base_grand_total + the
+    # `> 1.0` separation from grand_total together make this safe
+    # against legitimate partial refunds at coincidentally-similar
+    # amounts.
+    if (
+        doc.get("is_pos")
+        and doc.get("party_account_currency")
+        and doc.party_account_currency != doc.currency
+    ):
+        conv = flt(doc.conversion_rate) or 1
+        if conv > 0 and conv != 1:
+            grand_total_abs = abs(flt(doc.grand_total))
+            base_grand_total_abs = abs(flt(doc.base_grand_total))
+            for payment in doc.payments:
+                amount_abs = abs(flt(payment.amount))
+                if amount_abs <= 0:
+                    continue
+                close_to_base = abs(amount_abs - base_grand_total_abs) < 0.01
+                far_from_invoice = abs(amount_abs - grand_total_abs) > 1
+                if close_to_base and far_from_invoice:
+                    corrected_amount = flt(payment.amount) / conv
+                    payment.amount = corrected_amount
+                    payment.base_amount = corrected_amount * conv
+
 
 def validate(doc, method):
     # TEMP DIAG: log post-validate state. If this fires for a return,
