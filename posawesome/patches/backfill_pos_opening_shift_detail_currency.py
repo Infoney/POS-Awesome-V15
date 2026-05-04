@@ -35,8 +35,17 @@ def execute():
     # this point. Reload the child + parent JSON ourselves so the schema
     # sync runs in time and the SELECT below doesn't 1054 with
     # "Unknown column 'd.currency'".
-    frappe.reload_doc("posawesome", "doctype", "pos_opening_shift_detail")
-    frappe.reload_doc("posawesome", "doctype", "pos_opening_shift")
+    #
+    # Module is "mizan" (post-rename), NOT "posawesome" — the bench app
+    # slug stays `posawesome` but the Frappe module hosting these DocType
+    # JSONs is `Mizan` (directory: posawesome/mizan/doctype/...). Calling
+    # `reload_doc("posawesome", ...)` raises `frappe.DoesNotExistError:
+    # Module posawesome not found` on first migrate of any site picking up
+    # the Mizan rename — exact symptom from kpgerm 2026-05-05. Sister
+    # patches (backfill_cashier_tracking.py) already use "mizan"; this
+    # one was missed during the rebrand.
+    frappe.reload_doc("mizan", "doctype", "pos_opening_shift_detail")
+    frappe.reload_doc("mizan", "doctype", "pos_opening_shift")
 
     # Defensive guard: if the reload didn't add the column for any reason
     # (older Frappe builds, cached metadata, etc.), bail rather than crash
