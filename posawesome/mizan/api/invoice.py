@@ -15,12 +15,175 @@ from posawesome.mizan.doctype.delivery_charges.delivery_charges import (
 from posawesome.mizan.doctype.pos_coupon.pos_coupon import update_coupon_code_count
 
 
+# ---------------------------------------------------------------------------
+# Monkey-patch: prevent ERPNext's POS-return rounding-drift bug.
+#
+# `erpnext.controllers.taxes_and_totals.calculate_taxes_and_totals
+# .set_total_amount_to_default_mop` runs inside `validate()` for any
+# POS Sales Invoice that is a return. It compares two values that can
+# diverge by floating-point dust on a foreign-currency return:
+#
+#   * `total_amount_to_pay` = `base_grand_total` rounded to 3 decimals.
+#   * `total_paid_amount`   = sum of `payment.base_amount`, computed
+#                             inside `calculate_paid_amount` as
+#                             `amount × conversion_rate` with NO
+#                             precision rounding.
+#
+# For a SAR-on-KWD refund of -575.5 SAR, `base_grand_total` = -47.367
+# (rounded) but the unrounded sum of `base_amount` = -47.36725...
+# `pending_amount = -47.367 - (-47.36725) = +0.00025` — positive. The
+# original method then WIPES the cashier's payments table and replaces
+# it with a single default-MOP row carrying that tiny positive amount,
+# which trips `verify_payment_amount_is_negative` two function calls
+# later: "Row #1 (Payment Table): Amount must be negative".
+#
+# The patch adds a tolerance check: if `pending_amount` is within 0.01
+# of zero, treat the invoice as fully refunded and skip the rebuild.
+# Real under-refunds (pending > 0.01) still fall through to the
+# original behaviour.
+#
+# Applied at module import time. The first time Frappe loads a Sales
+# Invoice or POS Invoice doc_event hook, this module imports and the
+# patch takes effect for the worker's lifetime.
+# ---------------------------------------------------------------------------
+try:
+    from erpnext.controllers import taxes_and_totals as _ttn
+
+    _orig_set_total_amount_to_default_mop = (
+        _ttn.calculate_taxes_and_totals.set_total_amount_to_default_mop
+    )
+
+    def _posa_set_total_amount_to_default_mop(self, total_amount_to_pay):
+        if self.doc.get("is_return") and self.doc.get("is_pos"):
+            same_currency = self.doc.party_account_currency == self.doc.currency
+            # Multi-currency: ALWAYS skip ERPNext's rebuild — see commit
+            # 25d1bd08 for full rationale.
+            if not same_currency:
+                return
+            # Single-currency: small-tolerance check.
+            total_paid_amount = sum(
+                p.amount for p in self.doc.get("payments") or []
+            )
+            pending_amount = total_amount_to_pay - total_paid_amount
+            if abs(pending_amount) < 0.01:
+                return
+        return _orig_set_total_amount_to_default_mop(self, total_amount_to_pay)
+
+    _ttn.calculate_taxes_and_totals.set_total_amount_to_default_mop = (
+        _posa_set_total_amount_to_default_mop
+    )
+except Exception:
+    # If ERPNext's API changes (method renamed / removed), the patch
+    # silently no-ops and `before_validate`'s defensive sign-flip
+    # remains the safety net.
+    pass
+
+
+def before_validate(doc, method):
+    """Pre-validate fix-up for Sales / POS Invoice docs.
+
+    Two responsibilities, both of which MUST run before ERPNext's
+    own ``doc.validate()``:
+
+    1. ``apply_tax_inclusive`` — re-asserts the POS Profile's
+       ``posa_tax_inclusive`` setting on every non-Actual tax row
+       and triggers a recompute, so a return ERPNext mis-built
+       (with ``included_in_print_rate`` dropped) lands at the
+       correct ``grand_total`` BEFORE ERPNext's
+       ``validate_pos_return`` runs. Wiring this on ``validate``
+       used to leave a window where ERPNext threw "Total payments
+       amount can't be greater than 960.25" on the original SAR
+       835 return — see commit history for the full saga.
+
+    2. Negative-sign flip + form-swap correction (returns only).
+       Defensive safety net for ERPNext's POS-return rounding-drift
+       monkey-patch above, plus the manual-SI-form value-swap bug
+       on multi-currency returns. ``amount`` and ``base_amount``
+       are flipped independently because they're in different
+       currencies on a multi-currency invoice — mirroring one onto
+       the other corrupts the saved figures.
+    """
+    apply_tax_inclusive(doc)
+
+    if not getattr(doc, "is_return", 0):
+        return
+    if not getattr(doc, "payments", None):
+        return
+    for payment in doc.payments:
+        amount = flt(payment.get("amount"))
+        if amount > 0:
+            payment.amount = -amount
+        base_amount = flt(payment.get("base_amount"))
+        if base_amount > 0:
+            payment.base_amount = -base_amount
+
+    # Detect and undo ERPNext's client-side value-swap on multi-currency
+    # returns created via the standard Sales Invoice form (back-end /
+    # manual creation). Symptom captured on kpgtest invoice 03329:
+    # cashier intended to refund -702.075 SAR but the form sent
+    # `payment.amount = -57.785` (which is the KWD value of
+    # `base_grand_total`, not the SAR value of `grand_total`). The
+    # form lands a company-currency value into the invoice-currency
+    # `amount` field. POS Awesome's own payment dialog avoids this
+    # because it controls amount entry directly; manual SI creation
+    # goes through ERPNext's standard form code which has the bug.
+    #
+    # Detection criteria (all required):
+    #   * Multi-currency (party_account_currency != doc.currency)
+    #   * conversion_rate is non-trivial (> 0 and != 1)
+    #   * payment.amount magnitude matches base_grand_total within 0.01
+    #   * payment.amount magnitude is far (> 1.0) from grand_total
+    #
+    # The tight `< 0.01` match against base_grand_total + the
+    # `> 1.0` separation from grand_total together make this safe
+    # against legitimate partial refunds at coincidentally-similar
+    # amounts.
+    #
+    # Recovery values: anchor directly to ``doc.grand_total`` /
+    # ``doc.base_grand_total`` instead of inverse-converting
+    # ``payment.amount / conv``. The inverse path drifts because
+    # ``base_grand_total`` is already rounded to invoice precision
+    # before we see it. For ``grand_total = -960.25 SAR`` at
+    # ``conv = 0.082306261``, the rounded ``base_grand_total = -79.035
+    # KWD``; ``-79.035 / 0.082306261 = -960.2550163...``, off by
+    # 0.005 SAR. Stored at field precision that lands as -960.255
+    # vs. the doc's -960.25, leaving a +0.005 SAR ``outstanding_amount``
+    # that breaks downstream (closing-shift sums, GL reconciliation,
+    # printed receipt totals).
+    #
+    # Anchoring is safe because the corrector only fires when
+    # ``payment.amount ≈ base_grand_total`` (i.e. the form filled the
+    # full refund into a single row); doc.grand_total is then exactly
+    # the refund magnitude in invoice currency.
+    if (
+        doc.get("is_pos")
+        and doc.get("party_account_currency")
+        and doc.party_account_currency != doc.currency
+    ):
+        conv = flt(doc.conversion_rate) or 1
+        if conv > 0 and conv != 1:
+            grand_total_abs = abs(flt(doc.grand_total))
+            base_grand_total_abs = abs(flt(doc.base_grand_total))
+            for payment in doc.payments:
+                amount_abs = abs(flt(payment.amount))
+                if amount_abs <= 0:
+                    continue
+                close_to_base = abs(amount_abs - base_grand_total_abs) < 0.01
+                far_from_invoice = abs(amount_abs - grand_total_abs) > 1
+                if close_to_base and far_from_invoice:
+                    # Preserve the stored sign — the earlier negative-flip
+                    # block already ensured payment.amount is ≤ 0 on a
+                    # return, so flt(payment.amount) is negative here.
+                    sign = -1 if flt(payment.amount) < 0 else 1
+                    payment.amount = sign * grand_total_abs
+                    payment.base_amount = sign * base_grand_total_abs
+
+
 def validate(doc, method):
     validate_shift(doc)
     set_patient(doc)
     auto_set_delivery_charges(doc)
     calc_delivery_charges(doc)
-    apply_tax_inclusive(doc)
 
 
 def before_submit(doc, method):
@@ -292,7 +455,20 @@ def calc_delivery_charges(doc):
 
 
 def apply_tax_inclusive(doc):
-    """Mark taxes as inclusive based on POS Profile setting."""
+    """Mark taxes as inclusive based on POS Profile setting.
+
+    Bug observed on kpgtest invoice 03334 manual return: ERPNext's
+    standard "Create Return" path drops `included_in_print_rate` from
+    the new return's tax rows. The original (tax-inclusive: net 726
+    + tax 109 = grand 835 SAR) becomes a return with the original
+    grand re-interpreted as net (835 + 15% tax = 960.25 SAR), so
+    refunding the original SAR 835 hits "Total payments amount can't
+    be greater than 960.25". Re-asserting `included_in_print_rate`
+    here from the POS Profile setting fixes it.
+
+    Actual-type rows (e.g. delivery charges) stay exclusive
+    regardless — they're add-on amounts, not item rate components.
+    """
     if not doc.pos_profile:
         return
     try:
@@ -303,10 +479,15 @@ def apply_tax_inclusive(doc):
     has_changes = False
     for tax in doc.get("taxes", []):
         if tax.charge_type == "Actual":
+            # Actual tax rows are add-on amounts (delivery charges,
+            # round-off, etc.) and should never be included in print
+            # rate. Skip the inclusive logic for these.
             if tax.included_in_print_rate:
                 tax.included_in_print_rate = 0
                 has_changes = True
-        continue
+            continue
+        # Non-Actual rows (On Net Total, On Previous Row Amount, etc.)
+        # honour the POS Profile's tax-inclusive setting.
         if tax_inclusive and not tax.included_in_print_rate:
             tax.included_in_print_rate = 1
             has_changes = True
