@@ -55,17 +55,33 @@ try:
 
     def _posa_set_total_amount_to_default_mop(self, total_amount_to_pay):
         if self.doc.get("is_return") and self.doc.get("is_pos"):
-            total_paid_amount = 0
             same_currency = self.doc.party_account_currency == self.doc.currency
-            for payment in self.doc.get("payments"):
-                total_paid_amount += (
-                    payment.amount if same_currency else payment.base_amount
-                )
+            # Multi-currency: ALWAYS skip ERPNext's rebuild. The path
+            # compares a rounded `total_amount_to_pay` (in company
+            # currency, derived from `base_grand_total`) against an
+            # unrounded sum of `payment.base_amount` (computed without
+            # precision in `calculate_paid_amount`). On a foreign-
+            # currency return the drift consistently produces a
+            # positive `pending_amount`, even when the cashier's
+            # payments fully refund the invoice. The rebuild then
+            # wipes the cashier's payments table and inserts a single
+            # row carrying that pending value WRITTEN INTO `amount` —
+            # which the table treats as invoice currency, not company
+            # currency — so the saved row's `amount` ends up holding
+            # what should have been a base-currency value (the bug
+            # observed on kpgtest: SAR -575.500 refund saved as
+            # SAR -47.367, which is the KWD value of that refund).
+            # The cashier's typed amounts are the source of truth on
+            # a multi-currency return; do not re-derive them.
+            if not same_currency:
+                return
+            # Single-currency: keep a small tolerance check. The drift
+            # can still occur under unusual rounding configs; 0.01
+            # absorbs it without masking real under-refunds.
+            total_paid_amount = sum(
+                p.amount for p in self.doc.get("payments") or []
+            )
             pending_amount = total_amount_to_pay - total_paid_amount
-            # Tolerance: 1 cent in either currency. ERPNext's own
-            # rounded-vs-unrounded comparison can produce drift of
-            # ~10⁻⁴ on multi-currency returns; 0.01 covers it without
-            # masking genuine under-refunds.
             if abs(pending_amount) < 0.01:
                 return
         return _orig_set_total_amount_to_default_mop(self, total_amount_to_pay)
