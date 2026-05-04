@@ -15,6 +15,71 @@ from posawesome.mizan.doctype.delivery_charges.delivery_charges import (
 from posawesome.mizan.doctype.pos_coupon.pos_coupon import update_coupon_code_count
 
 
+# ---------------------------------------------------------------------------
+# Monkey-patch: prevent ERPNext's POS-return rounding-drift bug.
+#
+# `erpnext.controllers.taxes_and_totals.calculate_taxes_and_totals
+# .set_total_amount_to_default_mop` runs inside `validate()` for any
+# POS Sales Invoice that is a return. It compares two values that can
+# diverge by floating-point dust on a foreign-currency return:
+#
+#   * `total_amount_to_pay` = `base_grand_total` rounded to 3 decimals.
+#   * `total_paid_amount`   = sum of `payment.base_amount`, computed
+#                             inside `calculate_paid_amount` as
+#                             `amount × conversion_rate` with NO
+#                             precision rounding.
+#
+# For a SAR-on-KWD refund of -575.5 SAR, `base_grand_total` = -47.367
+# (rounded) but the unrounded sum of `base_amount` = -47.36725...
+# `pending_amount = -47.367 - (-47.36725) = +0.00025` — positive. The
+# original method then WIPES the cashier's payments table and replaces
+# it with a single default-MOP row carrying that tiny positive amount,
+# which trips `verify_payment_amount_is_negative` two function calls
+# later: "Row #1 (Payment Table): Amount must be negative".
+#
+# The patch adds a tolerance check: if `pending_amount` is within 0.01
+# of zero, treat the invoice as fully refunded and skip the rebuild.
+# Real under-refunds (pending > 0.01) still fall through to the
+# original behaviour.
+#
+# Applied at module import time. The first time Frappe loads a Sales
+# Invoice or POS Invoice doc_event hook, this module imports and the
+# patch takes effect for the worker's lifetime.
+# ---------------------------------------------------------------------------
+try:
+    from erpnext.controllers import taxes_and_totals as _ttn
+
+    _orig_set_total_amount_to_default_mop = (
+        _ttn.calculate_taxes_and_totals.set_total_amount_to_default_mop
+    )
+
+    def _posa_set_total_amount_to_default_mop(self, total_amount_to_pay):
+        if self.doc.get("is_return") and self.doc.get("is_pos"):
+            total_paid_amount = 0
+            same_currency = self.doc.party_account_currency == self.doc.currency
+            for payment in self.doc.get("payments"):
+                total_paid_amount += (
+                    payment.amount if same_currency else payment.base_amount
+                )
+            pending_amount = total_amount_to_pay - total_paid_amount
+            # Tolerance: 1 cent in either currency. ERPNext's own
+            # rounded-vs-unrounded comparison can produce drift of
+            # ~10⁻⁴ on multi-currency returns; 0.01 covers it without
+            # masking genuine under-refunds.
+            if abs(pending_amount) < 0.01:
+                return
+        return _orig_set_total_amount_to_default_mop(self, total_amount_to_pay)
+
+    _ttn.calculate_taxes_and_totals.set_total_amount_to_default_mop = (
+        _posa_set_total_amount_to_default_mop
+    )
+except Exception:
+    # If ERPNext's API changes (method renamed / removed), the patch
+    # silently no-ops and `before_validate`'s defensive sign-flip
+    # remains the safety net.
+    pass
+
+
 _VALIDATE_CALL_COUNTER = {}
 
 
