@@ -100,12 +100,14 @@ after_migrate = [
 
 doc_events = {
     "Sales Invoice": {
+        "before_validate": "posawesome.mizan.api.invoice.before_validate",
         "validate": "posawesome.mizan.api.invoice.validate",
         "before_submit": "posawesome.mizan.api.invoice.before_submit",
         "before_cancel": "posawesome.mizan.api.invoice.before_cancel",
         "on_cancel": "posawesome.mizan.api.invoice.on_cancel",
     },
     "POS Invoice": {
+        "before_validate": "posawesome.mizan.api.invoice.before_validate",
         "validate": "posawesome.mizan.api.invoice.validate",
         "before_submit": "posawesome.mizan.api.invoice.before_submit",
         "before_cancel": "posawesome.mizan.api.invoice.before_cancel",

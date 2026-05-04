@@ -270,6 +270,21 @@ def _ensure_invoice_payments_linkage(invoice_doc, submitted_payments):
         else:
             base_amount = flt(amount * invoice_conversion_rate)
 
+        # Defensive sign flip for returns. ERPNext's `validate_paid_amount`
+        # throws "Row #N (Payment Table): Amount must be negative" if any
+        # payment row arrives positive on a return. The client-side flip
+        # in `ensureReturnPaymentsAreNegative` covers most paths, but a
+        # late re-stamp (rebalance, denomination button, draft replay)
+        # can still leak a positive value through. Force the sign here so
+        # the saved record always satisfies ERPNext's invariant. `amount`
+        # and `base_amount` are flipped independently because they're
+        # different currencies on a multi-currency invoice.
+        if is_return:
+            if amount > 0:
+                amount = -amount
+            if base_amount > 0:
+                base_amount = -base_amount
+
         desired_rows.append(
             {
                 "mode_of_payment": mode,

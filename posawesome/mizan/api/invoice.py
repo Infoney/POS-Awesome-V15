@@ -15,6 +15,34 @@ from posawesome.mizan.doctype.delivery_charges.delivery_charges import (
 from posawesome.mizan.doctype.pos_coupon.pos_coupon import update_coupon_code_count
 
 
+def before_validate(doc, method):
+    """Run before ERPNext's `validate()` so we can pre-empt
+    `validate_paid_amount` — the check that throws
+    "Row #N (Payment Table): Amount must be negative" on returns.
+
+    Why this hook (and not `validate`): `doc_events.validate` fires AFTER
+    the doctype's own `validate()` method, which is where ERPNext's check
+    runs. By that time the throw has already happened. Doing the flip in
+    `before_validate` lands the negative signs on the rows before
+    ERPNext's check sees them.
+
+    Independent flips for `amount` and `base_amount` because they're in
+    different currencies on a multi-currency invoice — mirroring one
+    onto the other corrupts the saved figures.
+    """
+    if not getattr(doc, "is_return", 0):
+        return
+    if not getattr(doc, "payments", None):
+        return
+    for payment in doc.payments:
+        amount = flt(payment.get("amount"))
+        if amount > 0:
+            payment.amount = -amount
+        base_amount = flt(payment.get("base_amount"))
+        if base_amount > 0:
+            payment.base_amount = -base_amount
+
+
 def validate(doc, method):
     validate_shift(doc)
     set_patient(doc)
