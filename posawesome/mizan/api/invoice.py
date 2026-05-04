@@ -15,16 +15,28 @@ from posawesome.mizan.doctype.delivery_charges.delivery_charges import (
 from posawesome.mizan.doctype.pos_coupon.pos_coupon import update_coupon_code_count
 
 
+_VALIDATE_CALL_COUNTER = {}
+
+
+def _diag_payment_snapshot(doc):
+    try:
+        return [
+            {
+                "idx": p.idx,
+                "mop": p.mode_of_payment,
+                "amount": flt(p.amount),
+                "base_amount": flt(p.base_amount),
+            }
+            for p in (doc.payments or [])
+        ]
+    except Exception:
+        return []
+
+
 def before_validate(doc, method):
     """Run before ERPNext's `validate()` so we can pre-empt
-    `validate_paid_amount` — the check that throws
+    `verify_payment_amount_is_negative` — the check that throws
     "Row #N (Payment Table): Amount must be negative" on returns.
-
-    Why this hook (and not `validate`): `doc_events.validate` fires AFTER
-    the doctype's own `validate()` method, which is where ERPNext's check
-    runs. By that time the throw has already happened. Doing the flip in
-    `before_validate` lands the negative signs on the rows before
-    ERPNext's check sees them.
 
     Independent flips for `amount` and `base_amount` because they're in
     different currencies on a multi-currency invoice — mirroring one
@@ -34,21 +46,7 @@ def before_validate(doc, method):
         return
     if not getattr(doc, "payments", None):
         return
-    # TEMP DIAG: capture what we see at validate time so we can pin down
-    # the foreign-currency return regression. Remove once kpgtest confirms
-    # the saved invoice carries the correct payments.
-    try:
-        snapshot_before = [
-            {
-                "idx": p.idx,
-                "mop": p.mode_of_payment,
-                "amount": flt(p.amount),
-                "base_amount": flt(p.base_amount),
-            }
-            for p in doc.payments
-        ]
-    except Exception:
-        snapshot_before = []
+    snapshot_before = _diag_payment_snapshot(doc)
     for payment in doc.payments:
         amount = flt(payment.get("amount"))
         if amount > 0:
@@ -56,24 +54,26 @@ def before_validate(doc, method):
         base_amount = flt(payment.get("base_amount"))
         if base_amount > 0:
             payment.base_amount = -base_amount
+    snapshot_after = _diag_payment_snapshot(doc)
+    # TEMP DIAG: tag each call with a per-doc counter + docstatus so we
+    # can tell draft re-saves apart from the final submit. Remove once
+    # the foreign-currency return flow is confirmed working.
     try:
-        snapshot_after = [
-            {
-                "idx": p.idx,
-                "mop": p.mode_of_payment,
-                "amount": flt(p.amount),
-                "base_amount": flt(p.base_amount),
-            }
-            for p in doc.payments
-        ]
+        key = doc.name or "<new>"
+        _VALIDATE_CALL_COUNTER[key] = _VALIDATE_CALL_COUNTER.get(key, 0) + 1
+        call_n = _VALIDATE_CALL_COUNTER[key]
         frappe.log_error(
-            title="POSA before_validate return diag",
+            title="POSA before_validate #{n} {ds}".format(
+                n=call_n, ds=getattr(doc, "docstatus", "?")
+            ),
             message=(
-                "doc={name} is_return={ir} currency={c} conv={cr} "
-                "grand_total={gt} base_grand_total={bgt}\n"
+                "doc={name} call#={n} docstatus={ds} is_return={ir} "
+                "currency={c} conv={cr} grand_total={gt} base_grand_total={bgt}\n"
                 "before={sb}\nafter={sa}\ncustom_return_reason={crr!r}"
             ).format(
                 name=doc.name,
+                n=call_n,
+                ds=getattr(doc, "docstatus", "?"),
                 ir=doc.is_return,
                 c=doc.currency,
                 cr=doc.conversion_rate,
@@ -89,6 +89,29 @@ def before_validate(doc, method):
 
 
 def validate(doc, method):
+    # TEMP DIAG: log post-validate state for foreign-currency return
+    # investigation. If verify_payment_amount_is_negative threw inside
+    # doc.validate(), this hook never runs (proving the throw happened
+    # between before_validate and our hook). If it does run, we get the
+    # final state right before save commit. Remove once confirmed working.
+    if getattr(doc, "is_return", 0) and getattr(doc, "payments", None):
+        try:
+            frappe.log_error(
+                title="POSA post-validate {ds}".format(ds=getattr(doc, "docstatus", "?")),
+                message=(
+                    "doc={name} docstatus={ds} after-validate payments={p} "
+                    "paid_amount={pa} base_paid_amount={bpa}"
+                ).format(
+                    name=doc.name,
+                    ds=getattr(doc, "docstatus", "?"),
+                    p=_diag_payment_snapshot(doc),
+                    pa=getattr(doc, "paid_amount", None),
+                    bpa=getattr(doc, "base_paid_amount", None),
+                ),
+            )
+        except Exception:
+            pass
+
     validate_shift(doc)
     set_patient(doc)
     auto_set_delivery_charges(doc)
