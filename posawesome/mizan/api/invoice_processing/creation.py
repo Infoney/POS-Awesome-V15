@@ -244,6 +244,11 @@ def _ensure_invoice_payments_linkage(invoice_doc, submitted_payments):
         return
 
     is_return = bool(getattr(invoice_doc, "is_return", 0))
+    # Use the invoice's `conversion_rate` (invoice currency -> company currency)
+    # to derive `base_amount` when the client didn't send one. Mirroring
+    # `amount` directly is wrong on a foreign-currency invoice — base_amount
+    # must be in company currency.
+    invoice_conversion_rate = flt(getattr(invoice_doc, "conversion_rate", 1) or 1) or 1
 
     desired_rows = []
     for raw_row in submitted_payments:
@@ -260,7 +265,10 @@ def _ensure_invoice_payments_linkage(invoice_doc, submitted_payments):
             continue
 
         base_amount_raw = _row_field(raw_row, "base_amount")
-        base_amount = flt(base_amount_raw) if base_amount_raw not in (None, "") else amount
+        if base_amount_raw not in (None, ""):
+            base_amount = flt(base_amount_raw)
+        else:
+            base_amount = flt(amount * invoice_conversion_rate)
 
         desired_rows.append(
             {

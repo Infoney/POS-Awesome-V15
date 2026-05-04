@@ -709,6 +709,13 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		// 1. Ensure return payments are negative
 		if (doc.is_return) {
 			ensureReturnPaymentsAreNegative();
+			// `custom_return_reason` is a mandatory custom field on Sales
+			// Invoice. Catching it here gives the cashier an inline message
+			// instead of a server-side mandatory-field error after the round-trip.
+			const reason = String(doc.custom_return_reason || "").trim();
+			if (!reason) {
+				throw new Error(__("Reason for Return is required"));
+			}
 		}
 
 		let current_total_payments = 0;
@@ -965,13 +972,21 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			);
 			if (default_payment) {
 				const amount = doc.rounded_total || doc.grand_total;
+				const conversion_rate = doc.conversion_rate || 1;
 				default_payment.amount = -Math.abs(amount);
 				if (default_payment.base_amount !== undefined) {
-					default_payment.base_amount = -Math.abs(amount);
+					// Multi-currency: base_amount is in company currency, so
+					// scale by conversion_rate. Mirroring `amount` here drops
+					// foreign-currency returns into the wrong base value.
+					default_payment.base_amount = -Math.abs(
+						amount * conversion_rate,
+					);
 				}
 			}
 		}
-		// Ensure all set payments are negative
+		// Ensure all set payments are negative — independently flip `amount`
+		// and `base_amount` so neither can mask the other (they encode
+		// different currencies on a multi-currency invoice).
 		if (doc.payments) {
 			doc.payments.forEach((payment: any) => {
 				if (payment.amount > 0) {
@@ -1006,9 +1021,18 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		});
 	}
 
+	// Single-shot retry budget for the "Amount must be negative" auto-recovery
+	// path. Without a cap, a stuck doc (e.g. multi-currency return where the
+	// server keeps re-stamping a positive amount) burns through retries until
+	// the cashier loses patience. One flip + one retry is enough for the
+	// genuine sign-flip case; anything beyond that means the underlying value
+	// is wrong and the cashier should see the real server error.
+	const RETRY_NEGATIVE_AMOUNTS_BUDGET = 1;
+
 	const submitInvoice = async (
 		print: boolean,
 		callbacks: SubmissionCallbacks = {},
+		retryContext: { negativeAmountRetries?: number } = {},
 	): Promise<any> => {
 		const doc = unref(invoiceDoc);
 		const profile = unref(posProfile);
@@ -1459,28 +1483,43 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 			}
 
 			if (errorMsg.includes("Amount must be negative")) {
-				stores?.toastStore?.show({
-					title: __("Fixing payment amounts for return invoice..."),
-					color: "warning",
-				});
-
-				if (doc.payments) {
-					doc.payments.forEach((payment: any) => {
-						if (payment.amount > 0)
-							payment.amount = -Math.abs(payment.amount);
-						if (payment.base_amount > 0)
-							payment.base_amount = -Math.abs(
-								payment.base_amount,
-							);
+				const usedRetries = retryContext.negativeAmountRetries || 0;
+				if (usedRetries < RETRY_NEGATIVE_AMOUNTS_BUDGET) {
+					stores?.toastStore?.show({
+						title: __("Fixing payment amounts for return invoice..."),
+						color: "warning",
 					});
+
+					if (doc.payments) {
+						doc.payments.forEach((payment: any) => {
+							if (payment.amount > 0)
+								payment.amount = -Math.abs(payment.amount);
+							if (payment.base_amount > 0)
+								payment.base_amount = -Math.abs(
+									payment.base_amount,
+								);
+						});
+					}
+					console.log(
+						"Retrying submission with fixed payment amounts",
+					);
+					return new Promise((resolve) =>
+						setTimeout(
+							() =>
+								resolve(
+									submitInvoice(print, callbacks, {
+										negativeAmountRetries: usedRetries + 1,
+									}),
+								),
+							500,
+						),
+					);
 				}
-				// Retry
-				console.log("Retrying submission with fixed payment amounts");
-				return new Promise((resolve) =>
-					setTimeout(
-						() => resolve(submitInvoice(print, callbacks)),
-						500,
-					),
+				// Retry budget exhausted — fall through to surface the actual
+				// server error instead of looping silently. Most likely a
+				// foreign-currency value swap that the sign-flip can't repair.
+				console.warn(
+					"[usePaymentSubmission] 'Amount must be negative' retry budget exhausted; surfacing original error",
 				);
 			}
 

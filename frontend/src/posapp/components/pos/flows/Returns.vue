@@ -814,16 +814,24 @@ export default {
 				invoice_doc.customer = return_doc.customer;
 				invoice_doc.discount_amount = return_doc.discount_amount;
 				invoice_doc.additional_discount_percentage = return_doc.additional_discount_percentage;
+				// Carry over MOP shape but ZERO the amounts. The original
+				// invoice's `amount` / `base_amount` belong to the original
+				// sale's exchange rate snapshot — reusing them on a return
+				// drafted today produces stale figures, and on a foreign-
+				// currency invoice ERPNext core's `update_multi_mode_option`
+				// can confuse pre-stamped `base_amount` with the invoice-
+				// currency `amount` and land the wrong value in the saved
+				// row. Letting the cashier enter the refund afresh keeps the
+				// payment row in sync with today's `conversion_rate`.
 				invoice_doc.payments = Array.isArray(return_doc.payments)
 					? return_doc.payments.map((payment) => ({
 							mode_of_payment: payment.mode_of_payment,
-							amount: payment.amount,
-							base_amount: payment.base_amount,
+							amount: 0,
+							base_amount: 0,
 							default: payment.default,
 							account: payment.account,
 							type: payment.type,
 							currency: payment.currency,
-							conversion_rate: payment.conversion_rate,
 						}))
 					: [];
 
