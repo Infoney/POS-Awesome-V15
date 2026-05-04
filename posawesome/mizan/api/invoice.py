@@ -174,6 +174,23 @@ def before_validate(doc, method):
     # `> 1.0` separation from grand_total together make this safe
     # against legitimate partial refunds at coincidentally-similar
     # amounts.
+    #
+    # Recovery values: anchor directly to ``doc.grand_total`` /
+    # ``doc.base_grand_total`` instead of inverse-converting
+    # ``payment.amount / conv``. The inverse path drifts because
+    # ``base_grand_total`` is already rounded to invoice precision
+    # before we see it. For ``grand_total = -960.25 SAR`` at
+    # ``conv = 0.082306261``, the rounded ``base_grand_total = -79.035
+    # KWD``; ``-79.035 / 0.082306261 = -960.2550163...``, off by
+    # 0.005 SAR. Stored at field precision that lands as -960.255
+    # vs. the doc's -960.25, leaving a +0.005 SAR ``outstanding_amount``
+    # that breaks downstream (closing-shift sums, GL reconciliation,
+    # printed receipt totals).
+    #
+    # Anchoring is safe because the corrector only fires when
+    # ``payment.amount ≈ base_grand_total`` (i.e. the form filled the
+    # full refund into a single row); doc.grand_total is then exactly
+    # the refund magnitude in invoice currency.
     if (
         doc.get("is_pos")
         and doc.get("party_account_currency")
@@ -190,9 +207,12 @@ def before_validate(doc, method):
                 close_to_base = abs(amount_abs - base_grand_total_abs) < 0.01
                 far_from_invoice = abs(amount_abs - grand_total_abs) > 1
                 if close_to_base and far_from_invoice:
-                    corrected_amount = flt(payment.amount) / conv
-                    payment.amount = corrected_amount
-                    payment.base_amount = corrected_amount * conv
+                    # Preserve the stored sign — the earlier negative-flip
+                    # block already ensured payment.amount is ≤ 0 on a
+                    # return, so flt(payment.amount) is negative here.
+                    sign = -1 if flt(payment.amount) < 0 else 1
+                    payment.amount = sign * grand_total_abs
+                    payment.base_amount = sign * base_grand_total_abs
 
 
 def validate(doc, method):
