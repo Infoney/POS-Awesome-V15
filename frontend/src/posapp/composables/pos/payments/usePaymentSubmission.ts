@@ -709,13 +709,6 @@ export function usePaymentSubmission(options: PaymentSubmissionOptions) {
 		// 1. Ensure return payments are negative
 		if (doc.is_return) {
 			ensureReturnPaymentsAreNegative();
-			// `custom_return_reason` is a mandatory custom field on Sales
-			// Invoice. Catching it here gives the cashier an inline message
-			// instead of a server-side mandatory-field error after the round-trip.
-			const reason = String(doc.custom_return_reason || "").trim();
-			if (!reason) {
-				throw new Error(__("Reason for Return is required"));
-			}
 		}
 
 		let current_total_payments = 0;

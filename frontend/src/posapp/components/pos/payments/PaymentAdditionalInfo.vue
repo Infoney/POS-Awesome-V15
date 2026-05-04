@@ -88,7 +88,7 @@
 				</v-autocomplete>
 			</v-col>
 
-			<!-- Reason for Return (returns only — backs the mandatory
+			<!-- Reason for Return (returns only — backs the
 			     `custom_return_reason` field on Sales Invoice) -->
 			<v-col cols="12" v-if="invoiceDoc.is_return">
 				<v-textarea
@@ -99,9 +99,8 @@
 					color="primary"
 					auto-grow
 					rows="2"
-					:label="$frappe._('Reason for Return *')"
+					:label="$frappe._('Reason for Return')"
 					v-model="invoiceDoc.custom_return_reason"
-					:error="!invoiceDoc.custom_return_reason"
 				></v-textarea>
 			</v-col>
 			<!-- Additional Notes (if enabled in POS profile) -->

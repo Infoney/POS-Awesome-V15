@@ -240,30 +240,6 @@ def _ensure_invoice_payments_linkage(invoice_doc, submitted_payments):
     to preserve their existing handling (negative amounts, refund flow).
     """
 
-    # TEMP DIAG: log entry state of payment linkage helper for foreign-
-    # currency return investigation. Remove once kpgtest confirms fix.
-    try:
-        frappe.log_error(
-            title="POSA linkage entry diag",
-            message=(
-                "doc={name} is_return={ir} currency={c} conv={cr}\n"
-                "submitted={sp}\ndoc.payments={dp}\ncustom_return_reason={crr!r}"
-            ).format(
-                name=getattr(invoice_doc, "name", None),
-                ir=getattr(invoice_doc, "is_return", None),
-                c=getattr(invoice_doc, "currency", None),
-                cr=getattr(invoice_doc, "conversion_rate", None),
-                sp=submitted_payments,
-                dp=[
-                    {"mop": p.mode_of_payment, "amount": flt(p.amount), "base_amount": flt(p.base_amount)}
-                    for p in (invoice_doc.get("payments") or [])
-                ],
-                crr=invoice_doc.get("custom_return_reason"),
-            ),
-        )
-    except Exception:
-        pass
-
     if not submitted_payments:
         return
 
