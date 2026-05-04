@@ -34,6 +34,21 @@ def before_validate(doc, method):
         return
     if not getattr(doc, "payments", None):
         return
+    # TEMP DIAG: capture what we see at validate time so we can pin down
+    # the foreign-currency return regression. Remove once kpgtest confirms
+    # the saved invoice carries the correct payments.
+    try:
+        snapshot_before = [
+            {
+                "idx": p.idx,
+                "mop": p.mode_of_payment,
+                "amount": flt(p.amount),
+                "base_amount": flt(p.base_amount),
+            }
+            for p in doc.payments
+        ]
+    except Exception:
+        snapshot_before = []
     for payment in doc.payments:
         amount = flt(payment.get("amount"))
         if amount > 0:
@@ -41,6 +56,36 @@ def before_validate(doc, method):
         base_amount = flt(payment.get("base_amount"))
         if base_amount > 0:
             payment.base_amount = -base_amount
+    try:
+        snapshot_after = [
+            {
+                "idx": p.idx,
+                "mop": p.mode_of_payment,
+                "amount": flt(p.amount),
+                "base_amount": flt(p.base_amount),
+            }
+            for p in doc.payments
+        ]
+        frappe.log_error(
+            title="POSA before_validate return diag",
+            message=(
+                "doc={name} is_return={ir} currency={c} conv={cr} "
+                "grand_total={gt} base_grand_total={bgt}\n"
+                "before={sb}\nafter={sa}\ncustom_return_reason={crr!r}"
+            ).format(
+                name=doc.name,
+                ir=doc.is_return,
+                c=doc.currency,
+                cr=doc.conversion_rate,
+                gt=doc.grand_total,
+                bgt=doc.base_grand_total,
+                sb=snapshot_before,
+                sa=snapshot_after,
+                crr=doc.get("custom_return_reason"),
+            ),
+        )
+    except Exception:
+        pass
 
 
 def validate(doc, method):
