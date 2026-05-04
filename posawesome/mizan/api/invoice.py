@@ -56,28 +56,36 @@ try:
     def _posa_set_total_amount_to_default_mop(self, total_amount_to_pay):
         if self.doc.get("is_return") and self.doc.get("is_pos"):
             same_currency = self.doc.party_account_currency == self.doc.currency
-            # Multi-currency: ALWAYS skip ERPNext's rebuild. The path
-            # compares a rounded `total_amount_to_pay` (in company
-            # currency, derived from `base_grand_total`) against an
-            # unrounded sum of `payment.base_amount` (computed without
-            # precision in `calculate_paid_amount`). On a foreign-
-            # currency return the drift consistently produces a
-            # positive `pending_amount`, even when the cashier's
-            # payments fully refund the invoice. The rebuild then
-            # wipes the cashier's payments table and inserts a single
-            # row carrying that pending value WRITTEN INTO `amount` —
-            # which the table treats as invoice currency, not company
-            # currency — so the saved row's `amount` ends up holding
-            # what should have been a base-currency value (the bug
-            # observed on kpgtest: SAR -575.500 refund saved as
-            # SAR -47.367, which is the KWD value of that refund).
-            # The cashier's typed amounts are the source of truth on
-            # a multi-currency return; do not re-derive them.
+            # TEMP DIAG: log every entry into this method while the
+            # manual-return regression is being traced. Remove once
+            # confirmed fixed end-to-end.
+            try:
+                frappe.log_error(
+                    title="POSA mop-rebuild entry",
+                    message=(
+                        "doc={n} same_currency={sc} total_amount_to_pay={t} "
+                        "doc.currency={c} party_currency={pc} conv={cr} "
+                        "payments={p}"
+                    ).format(
+                        n=self.doc.name,
+                        sc=same_currency,
+                        t=total_amount_to_pay,
+                        c=self.doc.currency,
+                        pc=self.doc.party_account_currency,
+                        cr=self.doc.conversion_rate,
+                        p=[
+                            {"mop": p.mode_of_payment, "amount": flt(p.amount), "base_amount": flt(p.base_amount)}
+                            for p in (self.doc.get("payments") or [])
+                        ],
+                    ),
+                )
+            except Exception:
+                pass
+            # Multi-currency: ALWAYS skip ERPNext's rebuild — see commit
+            # 25d1bd08 for full rationale.
             if not same_currency:
                 return
-            # Single-currency: keep a small tolerance check. The drift
-            # can still occur under unusual rounding configs; 0.01
-            # absorbs it without masking real under-refunds.
+            # Single-currency: small-tolerance check.
             total_paid_amount = sum(
                 p.amount for p in self.doc.get("payments") or []
             )
@@ -108,6 +116,33 @@ def before_validate(doc, method):
     """
     if not getattr(doc, "is_return", 0):
         return
+    # TEMP DIAG: capture state at hook entry for the manual-return
+    # regression investigation. Remove once confirmed fixed.
+    try:
+        frappe.log_error(
+            title="POSA before_validate entry",
+            message=(
+                "doc={n} is_return={ir} is_pos={ip} currency={c} "
+                "party_currency={pc} conv={cr} grand_total={gt} "
+                "base_grand_total={bgt} docstatus={ds}\npayments={p}"
+            ).format(
+                n=doc.name,
+                ir=doc.is_return,
+                ip=doc.get("is_pos"),
+                c=doc.currency,
+                pc=doc.get("party_account_currency"),
+                cr=doc.conversion_rate,
+                gt=doc.grand_total,
+                bgt=doc.base_grand_total,
+                ds=getattr(doc, "docstatus", "?"),
+                p=[
+                    {"mop": p.mode_of_payment, "amount": flt(p.amount), "base_amount": flt(p.base_amount)}
+                    for p in (doc.payments or [])
+                ],
+            ),
+        )
+    except Exception:
+        pass
     if not getattr(doc, "payments", None):
         return
     for payment in doc.payments:
@@ -120,6 +155,33 @@ def before_validate(doc, method):
 
 
 def validate(doc, method):
+    # TEMP DIAG: log post-validate state. If this fires for a return,
+    # validate succeeded and we can see the final payment values right
+    # before save commit. If it doesn't fire, something inside
+    # doc.validate() threw. Remove once confirmed fixed.
+    if getattr(doc, "is_return", 0):
+        try:
+            frappe.log_error(
+                title="POSA validate entry",
+                message=(
+                    "doc={n} is_pos={ip} docstatus={ds} grand_total={gt} "
+                    "paid_amount={pa} base_paid_amount={bpa}\npayments={p}"
+                ).format(
+                    n=doc.name,
+                    ip=doc.get("is_pos"),
+                    ds=getattr(doc, "docstatus", "?"),
+                    gt=doc.grand_total,
+                    pa=getattr(doc, "paid_amount", None),
+                    bpa=getattr(doc, "base_paid_amount", None),
+                    p=[
+                        {"mop": p.mode_of_payment, "amount": flt(p.amount), "base_amount": flt(p.base_amount)}
+                        for p in (doc.payments or [])
+                    ],
+                ),
+            )
+        except Exception:
+            pass
+
     validate_shift(doc)
     set_patient(doc)
     auto_set_delivery_charges(doc)
