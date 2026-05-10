@@ -26,6 +26,8 @@
   "valid_upto",
   "coupon_based",
   "auto",
+  "qualifying_groups_section",
+  "qualifying_groups",
   "quantity_and_amount_section",
   "min_qty",
   "max_qty",
@@ -40,6 +42,8 @@
   "apply_item_code",
   "apply_item_group",
   "less_then",
+  "give_groups_section",
+  "give_groups",
   "product_discount_scheme_section",
   "given_qty",
   "price_discount_scheme_section",
@@ -48,6 +52,7 @@
   "rate",
   "discount_amount",
   "discount_percentage",
+  "offer_price",
   "loyalty_point_scheme_section",
   "loyalty_program",
   "loyalty_points"
@@ -79,7 +84,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Qualifying Transaction / Item",
-   "options": "\nItem Code\nItem Group\nBrand\nTransaction",
+   "options": "\nItem Code\nItem Group\nBrand\nMulti Item Group\nTransaction",
    "reqd": 1
   },
   {
@@ -175,7 +180,7 @@
    "fieldname": "apply_type",
    "fieldtype": "Select",
    "label": "Apply Type",
-   "options": "\nItem Code\nItem Group"
+   "options": "\nItem Code\nItem Group\nMulti Item Group"
   },
   {
    "fieldname": "column_break_15",
@@ -202,7 +207,7 @@
    "fieldname": "discount_type",
    "fieldtype": "Select",
    "label": "Discount Type",
-   "options": "\nRate\nDiscount Percentage\nDiscount Amount"
+   "options": "\nRate\nDiscount Percentage\nDiscount Amount\nOffer Price"
   },
   {
    "fieldname": "column_break_26",
@@ -222,6 +227,41 @@
    "fieldname": "discount_percentage",
    "fieldtype": "Float",
    "label": "Discount Percentage"
+  },
+  {
+   "depends_on": "eval:doc.discount_type==\"Offer Price\"",
+   "description": "Set the invoice grand total to this fixed amount.",
+   "fieldname": "offer_price",
+   "fieldtype": "Currency",
+   "label": "Offer Price"
+  },
+  {
+   "depends_on": "eval:doc.apply_on==\"Multi Item Group\"",
+   "fieldname": "qualifying_groups_section",
+   "fieldtype": "Section Break",
+   "label": "Qualifying Item Groups"
+  },
+  {
+   "depends_on": "eval:doc.apply_on==\"Multi Item Group\"",
+   "description": "Each row contributes to the qualifying total. The offer fires once the cart's combined quantity across these item groups meets the section's Min Quantity.",
+   "fieldname": "qualifying_groups",
+   "fieldtype": "Table",
+   "label": "Qualifying Groups",
+   "options": "POS Offer Qualifying Group"
+  },
+  {
+   "depends_on": "eval:doc.apply_type==\"Multi Item Group\"",
+   "fieldname": "give_groups_section",
+   "fieldtype": "Section Break",
+   "label": "Give Item Groups"
+  },
+  {
+   "depends_on": "eval:doc.apply_type==\"Multi Item Group\"",
+   "description": "Cashier picks the free item from any of these groups.",
+   "fieldname": "give_groups",
+   "fieldtype": "Table",
+   "label": "Give Groups",
+   "options": "POS Offer Give Group"
   },
   {
    "fieldname": "product_discount_scheme_section",
@@ -308,7 +348,7 @@
   }
  ],
  "index_web_pages_for_search": 1,
- "modified": "2021-07-25 17:09:55.634113",
+ "modified": "2026-05-10 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Mizan",
  "name": "POS Offer",

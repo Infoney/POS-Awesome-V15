@@ -456,6 +456,17 @@ export function useInvoiceOffers() {
 		const applyOn = offer.apply_on;
 		const normalizedBrandStr =
 			applyOn === "Brand" ? normalizeBrand(offer.brand) : null;
+		const qualifyingGroupSet =
+			applyOn === "Multi Item Group"
+				? new Set(
+						(Array.isArray(offer.qualifying_groups)
+							? offer.qualifying_groups
+							: []
+						)
+							.map((row: any) => row?.item_group)
+							.filter(Boolean),
+					)
+				: null;
 
 		for (const rowId of changedSet) {
 			const item = itemMap.get(rowId);
@@ -500,6 +511,14 @@ export function useInvoiceOffers() {
 					if (!meta.brand) return true;
 					if (meta.brand === normalizedBrandStr) return true;
 					break;
+				case "Multi Item Group":
+					if (
+						qualifyingGroupSet &&
+						meta.item_group &&
+						qualifyingGroupSet.has(meta.item_group)
+					)
+						return true;
+					break;
 				case "Transaction":
 					return true;
 				default:
@@ -524,7 +543,9 @@ export function useInvoiceOffers() {
 			(offer) => offer.apply_on === "Item Code",
 		);
 		const needGroup = offers.some(
-			(offer) => offer.apply_on === "Item Group",
+			(offer) =>
+				offer.apply_on === "Item Group" ||
+				offer.apply_on === "Multi Item Group",
 		);
 		const needBrand = offers.some((offer) => offer.apply_on === "Brand");
 		const needTransaction = offers.some(
@@ -604,6 +625,8 @@ export function useInvoiceOffers() {
 			return getGroupOffer({ ...offer }, context);
 		if (offer.apply_on === "Brand")
 			return getBrandOffer({ ...offer }, context);
+		if (offer.apply_on === "Multi Item Group")
+			return getMultiGroupOffer({ ...offer }, context);
 		if (offer.apply_on === "Transaction")
 			return getTransactionOffer({ ...offer }, context);
 		return null;
@@ -650,7 +673,8 @@ export function useInvoiceOffers() {
 				offer.give_item = itemCode;
 				offer.apply_item_code = itemCode;
 			} else if (
-				offer.apply_type == "Item Group" &&
+				(offer.apply_type == "Item Group" ||
+					offer.apply_type == "Multi Item Group") &&
 				offer.replace_cheapest_item
 			) {
 				const cheapest = getCheapestItem(offer);
@@ -864,6 +888,61 @@ export function useInvoiceOffers() {
 			totalAmount += qty * rate;
 			items.push(item.posa_row_id);
 		});
+		if (!totalQty && !totalAmount) return null;
+		const res = checkQtyAnountOffer(offer, totalQty, totalAmount);
+		if (!res.apply) return null;
+		return _finalizeOffer(offer, items);
+	};
+
+	const getMultiGroupOffer = (offer: any, context: any = {}) => {
+		if (!offer || offer.apply_on !== "Multi Item Group") return null;
+		if (!checkOfferCoupon(offer)) return null;
+
+		const qualifyingRows = Array.isArray(offer.qualifying_groups)
+			? offer.qualifying_groups
+			: [];
+		if (!qualifyingRows.length) return null;
+
+		const items: string[] = [];
+		let totalQty = 0;
+		let totalAmount = 0;
+
+		// Each row must independently meet its own min_qty (AND semantics).
+		// Aggregate across all qualifying groups for the section-level min/max
+		// amount checks and to record which cart rows the offer is "consuming".
+		for (const row of qualifyingRows) {
+			const groupName = row?.item_group;
+			if (!groupName) return null;
+			const bucket = context.itemGroupBuckets
+				? context.itemGroupBuckets.get(groupName)
+				: null;
+			const rowMinQty = parseFiniteNumber(row?.min_qty, 0);
+			if (!bucket) {
+				if (rowMinQty > 0) return null;
+				continue;
+			}
+			let groupQty = 0;
+			let groupAmount = 0;
+			bucket.items.forEach((item: any) => {
+				if (!item || item.posa_is_offer) return;
+				if (
+					offer.offer === "Item Price" &&
+					item.posa_offer_applied &&
+					!checkOfferIsAppley(item, offer)
+				)
+					return;
+				const qty = _resolveOfferQty(item);
+				const rate =
+					item.original_price_list_rate ?? item.price_list_rate ?? 0;
+				groupQty += qty;
+				groupAmount += qty * rate;
+				if (!items.includes(item.posa_row_id)) items.push(item.posa_row_id);
+			});
+			if (groupQty < rowMinQty) return null;
+			totalQty += groupQty;
+			totalAmount += groupAmount;
+		}
+
 		if (!totalQty && !totalAmount) return null;
 		const res = checkQtyAnountOffer(offer, totalQty, totalAmount);
 		if (!res.apply) return null;
@@ -1300,6 +1379,67 @@ export function useInvoiceOffers() {
 			}
 		}
 
+		if (!normalizedCandidates.length && offer?.apply_type === "Multi Item Group") {
+			const groupRows = Array.isArray(offer?.give_groups)
+				? offer.give_groups
+				: [];
+			const groupNames = groupRows
+				.map((row: any) => row?.item_group)
+				.filter(Boolean);
+			const groupMaxRate: Record<string, number> = {};
+			groupRows.forEach((row: any) => {
+				if (row?.item_group) {
+					groupMaxRate[row.item_group] = parseFiniteNumber(row.max_rate, 0);
+				}
+			});
+
+			const passesThreshold = (entry: any) => {
+				const threshold = groupMaxRate[entry?.item_group] || 0;
+				if (threshold <= 0) return true;
+				const rate = parseFiniteNumber(
+					entry.price_list_rate ?? entry.rate,
+					0,
+				);
+				return rate < threshold;
+			};
+
+			const combined = [...(items.value || []), ...(packed_items.value || [])]
+				.filter((entry) => {
+					if (!entry || entry.posa_is_offer || entry.posa_is_replace) {
+						return false;
+					}
+					if (!groupNames.includes(entry.item_group)) return false;
+					return passesThreshold(entry);
+				})
+				.sort((a, b) => {
+					const rateA = parseFiniteNumber(a.price_list_rate ?? a.rate, 0);
+					const rateB = parseFiniteNumber(b.price_list_rate ?? b.rate, 0);
+					return rateA - rateB;
+				});
+
+			if (combined.length) {
+				addCandidate(combined[0]?.item_code);
+			}
+
+			if (!normalizedCandidates.length) {
+				const catalog = (allItems.value || [])
+					.filter(
+						(entry) =>
+							entry &&
+							groupNames.includes(entry.item_group) &&
+							passesThreshold(entry),
+					)
+					.sort((a, b) => {
+						const rateA = parseFiniteNumber(a.price_list_rate ?? a.rate, 0);
+						const rateB = parseFiniteNumber(b.price_list_rate ?? b.rate, 0);
+						return rateA - rateB;
+					});
+				if (catalog.length) {
+					addCandidate(catalog[0]?.item_code);
+				}
+			}
+		}
+
 		return normalizedCandidates[0] || "";
 	};
 
@@ -1634,6 +1774,16 @@ export function useInvoiceOffers() {
 			invoiceStore.setAdditionalDiscount(
 				parseFiniteNumber(offer?.discount_amount, 0),
 			);
+		} else if (offerDiscountType === "Offer Price") {
+			// "Offer Price" sets the invoice grand total to a fixed amount.
+			// We translate that into an additional-discount equal to the
+			// gap between the current gross total and the target price so
+			// the rest of the invoice math stays untouched.
+			const total = parseFiniteNumber(Total.value, 0);
+			const target = Math.max(parseFiniteNumber(offer?.offer_price, 0), 0);
+			const discount = Math.max(total - target, 0);
+			invoiceStore.setAdditionalDiscount(discount);
+			discount_percentage_offer_name.value = offer.name;
 		}
 	};
 

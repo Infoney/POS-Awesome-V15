@@ -19,9 +19,29 @@ frappe.ui.form.on("POS Offer", {
 				frappe.throw("Min Amount most be more then zero");
 			}
 		}
+		if (frm.doc.apply_on === "Multi Item Group") {
+			if (!(frm.doc.qualifying_groups || []).length) {
+				frappe.throw(
+					"Add at least one qualifying group when Apply On is Multi Item Group",
+				);
+			}
+		}
 		if (frm.doc.offer === "Give Product") {
 			if (!frm.doc.given_qty > 0) {
 				frappe.throw("Given Quantity most be more then zero");
+			}
+			if (
+				frm.doc.apply_type === "Multi Item Group" &&
+				!(frm.doc.give_groups || []).length
+			) {
+				frappe.throw(
+					"Add at least one Give Group when Apply Type is Multi Item Group",
+				);
+			}
+		}
+		if (frm.doc.offer === "Grand Total" && frm.doc.discount_type === "Offer Price") {
+			if (!(frm.doc.offer_price > 0)) {
+				frappe.throw("Offer Price must be more than zero");
 			}
 		}
 		if (frm.doc.offer === "Loyalty Point") {
@@ -30,7 +50,8 @@ frappe.ui.form.on("POS Offer", {
 			}
 		}
 		if (
-			frm.doc.apply_type === "Item Group" &&
+			(frm.doc.apply_type === "Item Group" ||
+				frm.doc.apply_type === "Multi Item Group") &&
 			frm.doc.offer === "Give Product" &&
 			!frm.doc.replace_item &&
 			!frm.doc.replace_cheapest_item
@@ -59,6 +80,8 @@ frappe.ui.form.on("POS Offer", {
 });
 
 const controllers = (frm) => {
+	const isMultiGroup = frm.doc.apply_on === "Multi Item Group";
+
 	frm.toggle_display("item", frm.doc.apply_on === "Item Code");
 	frm.toggle_reqd("item", frm.doc.apply_on === "Item Code");
 
@@ -67,6 +90,14 @@ const controllers = (frm) => {
 
 	frm.toggle_display("brand", frm.doc.apply_on === "Brand");
 	frm.toggle_reqd("brand", frm.doc.apply_on === "Brand");
+
+	frm.toggle_display("qualifying_groups_section", isMultiGroup);
+	frm.toggle_display("qualifying_groups", isMultiGroup);
+	frm.toggle_reqd("qualifying_groups", isMultiGroup);
+
+	// Min/Max Qty are derived from the per-group rows in Multi Item Group mode,
+	// so the section-level Min Qty doesn't apply.
+	frm.toggle_display("quantity_and_amount_section", !isMultiGroup);
 
 	frm.toggle_reqd("min_amt", frm.doc.apply_on === "Transaction");
 
@@ -81,9 +112,9 @@ const controllers = (frm) => {
 	);
 	frm.toggle_display(
 		"replace_cheapest_item",
-		frm.doc.apply_on === "Item Group" &&
+		(frm.doc.apply_on === "Item Group" || frm.doc.apply_on === "Multi Item Group") &&
 			frm.doc.offer === "Give Product" &&
-			frm.doc.apply_type === "Item Group",
+			(frm.doc.apply_type === "Item Group" || frm.doc.apply_type === "Multi Item Group"),
 	);
 
 	frm.toggle_display("apply_item_code", frm.doc.apply_type === "Item Code" && !frm.doc.replace_item);
@@ -99,6 +130,14 @@ const controllers = (frm) => {
 	);
 
 	frm.toggle_display("less_then", frm.doc.apply_type === "Item Group" && !frm.doc.replace_cheapest_item);
+
+	const giveGroupsVisible =
+		frm.doc.offer === "Give Product" &&
+		frm.doc.apply_type === "Multi Item Group" &&
+		!frm.doc.replace_cheapest_item;
+	frm.toggle_display("give_groups_section", giveGroupsVisible);
+	frm.toggle_display("give_groups", giveGroupsVisible);
+	frm.toggle_reqd("give_groups", giveGroupsVisible);
 
 	frm.toggle_display("product_discount_scheme_section", frm.doc.offer === "Give Product");
 	frm.toggle_display("given_qty", frm.doc.offer === "Give Product");
@@ -117,6 +156,9 @@ const controllers = (frm) => {
 	frm.toggle_display("discount_percentage", frm.doc.discount_type === "Discount Percentage");
 	frm.toggle_reqd("discount_percentage", frm.doc.discount_type === "Discount Percentage");
 
+	frm.toggle_display("offer_price", frm.doc.discount_type === "Offer Price");
+	frm.toggle_reqd("offer_price", frm.doc.discount_type === "Offer Price");
+
 	frm.toggle_display("loyalty_point_scheme_section", frm.doc.offer === "Loyalty Point");
 	frm.toggle_display("loyalty_program", frm.doc.offer === "Loyalty Point");
 	frm.toggle_reqd("loyalty_program", frm.doc.offer === "Loyalty Point");
@@ -125,7 +167,12 @@ const controllers = (frm) => {
 	frm.toggle_reqd("loyalty_points", frm.doc.offer === "Loyalty Point");
 
 	if (frm.doc.offer === "Grand Total") {
-		frm.set_df_property("discount_type", "options", ["Discount Percentage"]);
+		frm.set_df_property("discount_type", "options", [
+			"",
+			"Discount Percentage",
+			"Discount Amount",
+			"Offer Price",
+		]);
 	} else {
 		frm.set_df_property("discount_type", "options", [
 			"",
@@ -148,7 +195,7 @@ const controllers = (frm) => {
 	}
 
 	if (
-		frm.doc.apply_type === "Item Group" &&
+		(frm.doc.apply_type === "Item Group" || frm.doc.apply_type === "Multi Item Group") &&
 		frm.doc.offer === "Give Product" &&
 		!frm.doc.replace_item &&
 		!frm.doc.replace_cheapest_item
@@ -163,9 +210,9 @@ const controllers = (frm) => {
 		frm.set_value("replace_item", 0);
 	}
 	if (
-		frm.doc.apply_on !== "Item Group" ||
+		(frm.doc.apply_on !== "Item Group" && frm.doc.apply_on !== "Multi Item Group") ||
 		frm.doc.offer !== "Give Product" ||
-		frm.doc.apply_type !== "Item Group"
+		(frm.doc.apply_type !== "Item Group" && frm.doc.apply_type !== "Multi Item Group")
 	) {
 		frm.set_value("replace_cheapest_item", 0);
 	}
@@ -202,6 +249,20 @@ const set_filters = (frm) => {
 		};
 	});
 	frm.set_query("apply_item_group", function () {
+		return {
+			filters: {
+				is_group: 0,
+			},
+		};
+	});
+	frm.set_query("item_group", "qualifying_groups", function () {
+		return {
+			filters: {
+				is_group: 0,
+			},
+		};
+	});
+	frm.set_query("item_group", "give_groups", function () {
 		return {
 			filters: {
 				is_group: 0,

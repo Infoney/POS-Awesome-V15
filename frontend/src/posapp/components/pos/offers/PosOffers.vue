@@ -52,7 +52,12 @@
 									     picker. Item Code offers stay locked to
 									     the configured item, so we just show
 									     the item name as a read-only chip. -->
-									<template v-if="item.apply_type == 'Item Group'">
+									<template
+										v-if="
+											item.apply_type == 'Item Group' ||
+											item.apply_type == 'Multi Item Group'
+										"
+									>
 										<button
 											type="button"
 											class="give-item-picker-trigger"
@@ -73,7 +78,9 @@
 													{{
 														item.give_item
 															? giveItemLabel(item)
-															: __("Select an item from this group…")
+															: item.apply_type == "Multi Item Group"
+																? __("Select an item from these groups…")
+																: __("Select an item from this group…")
 													}}
 												</span>
 											</span>
@@ -451,8 +458,10 @@ export default {
 				if (pos_offer) {
 					pos_offer.items = offer.items;
 					if (
-						offer.apply_on == "Item Group" &&
-						offer.apply_type == "Item Group" &&
+						(offer.apply_on == "Item Group" ||
+							offer.apply_on == "Multi Item Group") &&
+						(offer.apply_type == "Item Group" ||
+							offer.apply_type == "Multi Item Group") &&
 						offer.replace_cheapest_item
 					) {
 						pos_offer.give_item = offer.give_item;
@@ -474,7 +483,8 @@ export default {
 						newOffer.offer_applied = !!offer.offer_applied;
 					} else {
 						if (
-							offer.apply_type == "Item Group" &&
+							(offer.apply_type == "Item Group" ||
+								offer.apply_type == "Multi Item Group") &&
 							offer.offer == "Give Product" &&
 							!offer.replace_cheapest_item &&
 							!offer.replace_item
@@ -552,6 +562,40 @@ export default {
 					}
 				});
 				return unique;
+			} else if (offer.apply_type === "Multi Item Group") {
+				const groupRows = Array.isArray(offer.give_groups) ? offer.give_groups : [];
+				if (!groupRows.length) return [];
+
+				const unique = [];
+				const seen = new Set();
+				let stillFetching = false;
+
+				groupRows.forEach((row) => {
+					const group = row?.item_group;
+					if (!group) return;
+					if (!this.groupItemCache[group]) {
+						this.fetchGroupItems(group);
+						stillFetching = true;
+						return;
+					}
+					const max_rate = Number(row?.max_rate) || 0;
+					this.groupItemCache[group].forEach((item) => {
+						if (max_rate > 0 && Number(item.rate) >= max_rate) return;
+						if (seen.has(item.item_code)) return;
+						seen.add(item.item_code);
+						unique.push({
+							item_code: item.item_code,
+							item_name: item.item_name || item.item_code,
+							actual_qty: Number(item.actual_qty) || 0,
+							stock_uom: item.stock_uom || "",
+							image: item.image || "",
+							source_group: group,
+						});
+					});
+				});
+
+				if (stillFetching && !unique.length) return [];
+				return unique;
 			}
 			return [];
 		},
@@ -562,11 +606,10 @@ export default {
 			return match?.item_name || offer.give_item;
 		},
 		openGiveItemPicker(offer) {
-			if (
-				offer.apply_type !== "Item Group" ||
-				offer.replace_item ||
-				offer.replace_cheapest_item
-			) {
+			const supportsPicker =
+				offer.apply_type === "Item Group" ||
+				offer.apply_type === "Multi Item Group";
+			if (!supportsPicker || offer.replace_item || offer.replace_cheapest_item) {
 				return;
 			}
 			// Pre-warm the cache so the dialog opens populated.

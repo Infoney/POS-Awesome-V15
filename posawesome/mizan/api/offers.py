@@ -91,6 +91,9 @@ def get_offers(profile):
         offer["max_qty"] = flt(offer.get("max_qty") or 0)
         offer["min_amt"] = flt(offer.get("min_amt") or 0)
         offer["max_amt"] = flt(offer.get("max_amt") or 0)
+        offer["offer_price"] = flt(offer.get("offer_price") or 0)
+        offer["qualifying_groups"] = _fetch_qualifying_groups(offer.get("name"))
+        offer["give_groups"] = _fetch_give_groups(offer.get("name"))
         if not cstr(offer.get("discount_type")).strip():
             inferred_discount_type = _infer_discount_type_from_values(offer)
             if inferred_discount_type:
@@ -386,7 +389,42 @@ def _normalize_discount_fields(offer):
     if discount_type != "Discount Percentage":
         offer["discount_percentage"] = flt(0)
 
+    if discount_type != "Offer Price":
+        offer["offer_price"] = flt(0)
+
     return offer
+
+
+def _fetch_qualifying_groups(offer_name):
+    if not offer_name or not frappe.db.table_exists("POS Offer Qualifying Group"):
+        return []
+    rows = frappe.get_all(
+        "POS Offer Qualifying Group",
+        filters={"parent": offer_name, "parenttype": "POS Offer"},
+        fields=["item_group", "min_qty"],
+        order_by="idx asc",
+    )
+    return [
+        {"item_group": cstr(row.get("item_group")), "min_qty": flt(row.get("min_qty"))}
+        for row in rows
+        if row.get("item_group")
+    ]
+
+
+def _fetch_give_groups(offer_name):
+    if not offer_name or not frappe.db.table_exists("POS Offer Give Group"):
+        return []
+    rows = frappe.get_all(
+        "POS Offer Give Group",
+        filters={"parent": offer_name, "parenttype": "POS Offer"},
+        fields=["item_group", "max_rate"],
+        order_by="idx asc",
+    )
+    return [
+        {"item_group": cstr(row.get("item_group")), "max_rate": flt(row.get("max_rate"))}
+        for row in rows
+        if row.get("item_group")
+    ]
 
 
 def _make_offer_identifier(*parts):
