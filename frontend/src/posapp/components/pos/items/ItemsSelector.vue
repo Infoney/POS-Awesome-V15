@@ -958,17 +958,23 @@ onMounted(async () => {
 		uiPosProfile,
 		async (newProfile) => {
 			if (newProfile && newProfile.name && !isInitialized.value) {
-				// Safety timeout to prevent infinite loading if memoryInit or store init hangs
+				// Slow-boot diagnostic. Must NOT set isInitialized — the real init
+				// promise below is the single source of truth for ready state.
 				if (initTimeout.value) clearTimeout(initTimeout.value);
 				// @ts-ignore
 				initTimeout.value = setTimeout(() => {
 					if (!isInitialized.value) {
 						console.warn(
-							"ItemsSelector: Initialization taking too long, forcing isInitialized to true.",
+							"ItemsSelector: Initialization taking longer than 15s; still waiting on memoryInit/store hydration.",
 						);
-						isInitialized.value = true;
+						toastStore.show({
+							title: __(
+								"Items panel is still loading. If this continues, please refresh the page (Ctrl+R).",
+							),
+							color: "warning",
+						});
 					}
-				}, 10000);
+				}, 15000);
 
 				try {
 					await memoryInitPromise;
